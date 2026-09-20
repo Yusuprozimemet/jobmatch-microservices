@@ -201,6 +201,11 @@ decoder. Full suite: 63 tests in ~45 seconds.
   un-normalised email while storing the lowercase one.
 - Two flows were identified as unreachable over HTTP and deliberately left uncovered, with the
   reasoning written down — rather than covered with a test that reaches past the contract.
+- **Reviewing the suite against Day 13 found it would not have survived.** Three contract classes
+  named `JSESSIONID` outright, while Day 13 requires that nothing sets that cookie — two
+  acceptance criteria that could not both hold. The name is now one line in `support/`, fixed in
+  a spec-change pull request before the day rather than during it. The criterion it was measured
+  by ("assert `Set-Cookie` attributes only") was satisfied to the letter throughout.
 
 **Early read on the hypothesis.** Across two days the agent's implementation has been sound and
 its most useful output has been *disagreement with the spec* — three of the findings above are
@@ -212,7 +217,7 @@ rewrite must pass these 49 tests unchanged.
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Day 2–4 tests passing, unmodified, after Day 13 and again after Days 17–28 |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/` after Day 13, and again after Days 17–28 — target: zero in `contract/` |
 | How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3) |
 | Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 1 harness, 1 production) |
 | How often do specifications need revision once work starts? | Spec-change pull requests per day spec |

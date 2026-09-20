@@ -91,8 +91,8 @@ public final class ApiClient {
                 .orElseThrow();
     }
 
-    // Only the name and value are kept. Path, Max-Age and the rest are assertions a test
-    // makes on the Set-Cookie header itself, not state this client needs.
+    // Only the name and value are kept. Path and the rest are assertions a test makes on the
+    // Set-Cookie header itself, not state this client needs.
     private void storeCookies(HttpHeaders responseHeaders) {
         for (String header : responseHeaders.getOrEmpty(HttpHeaders.SET_COOKIE)) {
             String pair = header.split(";", 2)[0];
@@ -102,8 +102,8 @@ public final class ApiClient {
             }
             String name = pair.substring(0, equals).trim();
             String value = pair.substring(equals + 1).trim();
-            // An empty value is how a server deletes a cookie; a browser would drop it here too.
-            if (value.isEmpty()) {
+            // A browser drops a cookie the server deleted, however the deletion was spelled.
+            if (Cookies.deletes(header)) {
                 cookieJar.remove(name);
             } else {
                 cookieJar.put(name, value);

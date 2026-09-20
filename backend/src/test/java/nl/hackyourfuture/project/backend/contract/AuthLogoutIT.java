@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.contract;
 
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
+import nl.hackyourfuture.project.backend.support.Cookies;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
@@ -17,8 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AuthLogoutIT extends IntegrationTest {
 
-    private static final String SESSION_COOKIE = "JSESSIONID";
-
     @Test
     void returnsJsonRatherThanARedirect() {
         ApiClient client = authenticatedAs(aUser().create());
@@ -30,15 +29,16 @@ class AuthLogoutIT extends IntegrationTest {
     }
 
     @Test
-    void clearsTheSessionCookie() {
+    void clearsTheAuthCookie() {
         ApiClient client = authenticatedAs(aUser().create());
 
         ApiResponse response = client.post("/api/auth/logout", null);
 
-        // An empty value with an expiry in the past is how a cookie is deleted.
-        assertThat(response.setCookie(SESSION_COOKIE)).startsWith("JSESSIONID=;");
-        assertThat(response.setCookie(SESSION_COOKIE)).contains("Expires=Thu, 01 Jan 1970");
-        assertThat(client.cookies()).doesNotContainKey(SESSION_COOKIE);
+        // How the deletion is spelled is the server's business; that it deletes is the contract.
+        assertThat(Cookies.deletes(response.setCookie(Cookies.AUTH)))
+                .as("logout deletes the %s cookie", Cookies.AUTH)
+                .isTrue();
+        assertThat(client.cookies()).doesNotContainKey(Cookies.AUTH);
     }
 
     @Test
@@ -52,10 +52,10 @@ class AuthLogoutIT extends IntegrationTest {
         assertThat(client.get("/api/users/me").status()).isEqualTo(401);
     }
 
-    // Logging out twice, or without a session at all, is not an error - the frontend calls it
-    // whenever it wants to be sure the caller is signed out.
+    // Logging out twice, or without being signed in at all, is not an error - the frontend
+    // calls it whenever it wants to be sure the caller is signed out.
     @Test
-    void succeedsWithoutASession() {
+    void succeedsWithoutBeingSignedIn() {
         ApiResponse response = anonymous().post("/api/auth/logout", null);
 
         assertThat(response.status()).isEqualTo(200);

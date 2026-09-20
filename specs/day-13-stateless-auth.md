@@ -14,8 +14,10 @@ The backend authenticates from a token and holds no server-side session.
   and the refresh token in a second cookie scoped to the refresh path only.
 - `POST /api/auth/refresh`: rotates the refresh token, issues a new access token.
 - Logout revokes the refresh token and clears both cookies.
-- `PATCH /api/auth/password` still requires authentication and now revokes all refresh
-  tokens for that user.
+- `PATCH /api/auth/password` still requires authentication, revokes all refresh tokens
+  for that user, and **re-issues the access cookie**. Day 02 pins that a credential
+  captured before the change is no longer the one in play; the session rewrite should
+  preserve that property, not drop it along with the session.
 - Every authorisation rule in `SecurityConfig` keeps its exact current behaviour.
 
 ## Out of scope
@@ -32,8 +34,9 @@ The backend authenticates from a token and holds no server-side session.
 
 ## Acceptance criteria
 - [ ] No response anywhere sets `JSESSIONID`.
-- [ ] Day 02's auth tests pass **unedited** — this is the whole point of writing them
-      against the contract.
+- [ ] No assertion in `backend/src/test/java/.../contract/` changes. The auth cookie's
+      *name* is mechanism, not contract: it lives in `support/Cookies.AUTH`, and that one
+      line is the only edit Phase 2 may make to the Day 01–04 suite.
 - [ ] An expired access token plus a valid refresh token yields a new access token.
 - [ ] A refresh token cannot be used twice (rotation).
 - [ ] Changing the password invalidates every existing refresh token.
@@ -48,6 +51,20 @@ docker compose restart backend
 ```
 
 ## Notes
-- If Day 02's tests need editing, either the tests were written against internals or
-  behaviour has actually changed. Both are stop-and-investigate.
+- If anything beyond `Cookies.AUTH` needs editing, either the tests were written against
+  internals or behaviour has actually changed. Both are stop-and-investigate.
+- **Why that criterion changed.** It used to read "Day 02's auth tests pass unedited",
+  which contradicted the first criterion above: `JSESSIONID` was a literal in three
+  contract classes, so four tests failed by construction the moment no response set that
+  cookie any more. Hoisting the name to `support/Cookies.AUTH` — done in a spec-change PR
+  before this day — is what makes both criteria satisfiable at once. The general rule it
+  produced: a test may assert that a cookie exists, what it carries and what it reaches,
+  but never its name.
+- **The old access token outlives the password change.** Revoking refresh tokens caps the
+  window at the access token's 15 minutes; killing it sooner needs a denylist, which is
+  not in this day. Decide explicitly rather than by omission, and write the decision here.
+- **The harness ignores `Path` and `Secure`.** `ApiClient`'s cookie jar keeps name and
+  value only, so it will send the refresh cookie to every route and will not notice
+  `Secure` over plain HTTP. The refresh cookie's path scoping therefore needs its own
+  assertion on the `Set-Cookie` header, not a round-trip through the jar.
 - Keep the old session code on the branch until acceptance passes. Delete it on Day 16.
