@@ -1,254 +1,287 @@
-# JobMatch — HackYourFuture Final Project
+# JobMatch → Microservices
 
-This is our final project for the [HackYourFuture program](https://hackyourfuture.net/program), built as a
-team with three roles — frontend, backend, and data engineering. We worked in an agile way, in short
-sprints, supported by a group of mentors: a Product Manager and a a Tech Lead. The project is open source and available on GitHub.
+**An experiment in spec-driven development: can a working monolith be migrated to microservices
+by an AI agent, when the work is governed by written specifications instead of conversation?**
 
-### 🌐 [Live demo](https://c55c.hyf.dev/)
+This repository takes [JobMatch](docs/original-readme.md) — a deployed, six-person
+HackYourFuture final project — and rebuilds it as a set of independently deployable services.
+Every change is driven by a numbered day specification with acceptance criteria written *before*
+any code exists. The implementer is [Claude Opus 5](https://www.anthropic.com/claude) running at
+high reasoning effort; the architecture, the specifications and every merge decision are mine.
 
-Create an account and search real job postings, or browse them without signing in. The API reference
-is at [c55c.hyf.dev/api/docs](https://c55c.hyf.dev/api/docs).
+> **Status:** in progress — Phase 0, Day 2 of 37 complete. This is an open lab notebook, not a
+> finished system. Findings so far are in [Results to date](#results-to-date).
 
-**Or run the whole stack locally.** Copy `.env.example` to `.env`, start database, API and web app
-with Docker, and open [http://localhost:3000](http://localhost:3000):
+---
+
+## Table of contents
+
+- [Why this repository exists](#why-this-repository-exists)
+- [The system being migrated](#the-system-being-migrated)
+- [Method: spec-driven development](#method-spec-driven-development)
+- [The migration plan](#the-migration-plan)
+- [Target architecture](#target-architecture)
+- [Results to date](#results-to-date)
+- [What is being measured](#what-is-being-measured)
+- [Running it](#running-it)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [Credits](#credits)
+
+---
+
+## Why this repository exists
+
+Two goals, deliberately paired because each makes the other harder to fake.
+
+**1. Learn distributed systems by doing the migration, not by reading about it.**
+The interesting parts of microservices are not the ones that appear in tutorials. They are the
+ones a real codebase forces on you: a session-cookie auth model that cannot survive a stateless
+gateway, two SQL joins that reach across a schema boundary that is about to become a network
+boundary, and a `ON DELETE CASCADE` that has to become a distributed, eventually-consistent
+delete before it stops being GDPR compliance. JobMatch has all four. They are documented as
+"the four hard parts" in [`plan.md`](plan.md), and the phase order exists to attack them.
+
+**2. Find out where an LLM agent's competence actually ends on long-horizon engineering work.**
+Agents are good at bounded tasks. A monolith migration is the opposite: thirty-seven days of
+work where a mistake on day 8 is discovered on day 20, and where the correct answer is often
+"do not build that yet." The hypothesis under test is that the binding constraint is not model
+capability but **specification quality** — that an agent given a spec with third-party-checkable
+acceptance criteria and a hard review gate produces reviewable, correct work, while the same
+agent given a conversational prompt produces plausible work that quietly drifts.
+
+The deliverable is therefore twofold: a migrated system, and an honest record of where the
+method held and where it did not. Negative results are recorded in the specs' *Notes* sections
+rather than edited out.
+
+## The system being migrated
+
+JobMatch is a job-search application: a daily data pipeline ingests postings, cleans and
+deduplicates them and extracts skills and locations; the application lets a user build a skills
+profile, search the cleaned set, and see matches ranked 0–100 with an explanation of the score.
+It was built by a team of six over a HackYourFuture cohort, deployed, and is documented in full
+in the [preserved original README](docs/original-readme.md).
+
+The starting point is a snapshot of `HackYourFutureProjects/c55-final-project-group-C`
+at commit `d43a24d`, committed here unmodified as the first commit so that every subsequent
+change is visible in the diff.
+
+| Layer | Stack | Migration status |
+| --- | --- | --- |
+| **Backend** | Java 25, Spring Boot 4.1, Spring Security (sessions + Google OAuth2), PostgreSQL, Flyway, Maven | **The subject of the migration** |
+| **Frontend** | Next.js 16, React 19, TypeScript | Unchanged; consumes the gateway from Phase 2 |
+| **Data** | Python, dbt, Airflow, Databricks, Azure | Unchanged; already owns its own schema |
+| **Matching** | Skill-overlap SQL rescored by an LLM | Extracted in Phase 4 |
+| **Infrastructure** | Docker Compose, GitHub Actions, GHCR | Kubernetes + Terraform/Pulumi in Phase 7 |
+
+Why this codebase is a good subject: it is small enough to migrate (52 backend source files) but not
+a toy — real auth with two identity paths, a cross-team database contract, an external LLM call
+on the request path, GDPR export and erasure, and a package layout that *already* maps almost
+one-to-one onto the target services. That last point matters: it means the split itself is
+mechanical, so the experiment is not testing whether the agent can move files. It is testing
+whether the agent can handle the four things around the split that are not mechanical.
+
+## Method: spec-driven development
+
+The governing rule, from [`specs/README.md`](specs/README.md):
+
+> **No code without a spec. No spec without checkable acceptance criteria.**
+
+**The chain.** [`plan.md`](plan.md) sets seven phases and names the hard parts. Each phase is
+decomposed into day-sized specs in [`specs/`](specs/) — 37 of them, one file each, from a
+[common template](specs/_template.md). Every spec states a one-sentence goal, what is **in
+scope**, what is explicitly **out of scope** and which day owns it instead, parallel tracks, the
+acceptance criteria, and a `Verify` command anyone can run. Work happens on a branch per track
+(`day-04/track-b-saved-jobs-tests`), and the acceptance criteria are copied into the pull request
+description and ticked there.
+
+**Division of labour.** I write the plan and the specs, review every diff, and decide what
+merges. Opus 5 implements against the spec — and, where a spec turns out to be wrong, says so in
+writing rather than working around it. The agent's authority ends at the spec boundary: work
+found outside it is added to that day's *Notes* and raised, not absorbed into the current pull
+request.
+
+**What is enforced by machine rather than by good intentions.** This is the part that makes the
+experiment repeatable:
+
+| Gate | Mechanism | What it prevents |
+| --- | --- | --- |
+| Diff size ≤ 400 changed lines | [`pr-checks.yml`](.github/workflows/pr-checks.yml) | The large agent-authored pull request that gets approved instead of reviewed |
+| Pull request uses the template | [`pr-checks.yml`](.github/workflows/pr-checks.yml) | Checks skipped by `gh pr create --body`, the path most AI tooling takes |
+| Tests, lint and build are green | Per-area CI workflows | Work declared done that does not run |
+| Contract tests assert HTTP only | Day 2–4 acceptance criteria | Tests coupled to internals, which cannot survive the rewrite they exist to protect |
+
+The 400-line limit is the load-bearing one. It forces the agent to sequence its own work, and it
+is the reason a day that was estimated at three pull requests can legitimately take six — which
+is a finding, not a failure.
+
+**Changing a spec is normal.** It happens in a pull request *before* the work, not as a
+retroactive edit afterwards. Days 17–37 are marked `provisional` precisely because they were
+written from the plan rather than from experience, and must be re-read and revised before their
+phase begins.
+
+## The migration plan
+
+Seven phases. The ordering principle is that everything reversible and testable happens before
+anything that requires a network.
+
+| Phase | Days | Outcome | Status |
+| --- | --- | --- | --- |
+| **0 — Make the split safe** | 1–5 | Integration tests over the five public API surfaces, asserting the HTTP contract only, so they survive the split unchanged. Actuator, Micrometer, OpenTelemetry. | **in progress** |
+| **1 — Modularise in place** | 6–11 | Maven modules that may only call each other through published interfaces; the two cross-schema joins replaced by interfaces; migrations split per module. No network yet. | ready |
+| **2 — Gateway + JWT** | 12–16 | Spring Cloud Gateway in front; session auth rewritten to RS256 JWT with JWKS, refresh tokens in the database, Google sign-in without a session. | ready |
+| **3 — Extract job-service** | 17–20 | First independent service: read-only, no user data, own database and image. | provisional |
+| **4 — Extract matching-service** | 21–24 | Isolates the 20-second LLM timeout from job search; match scores move to NoSQL with a native TTL. | provisional |
+| **5 — Extract application-service** | 25–28 | Saved jobs to its own store; message bus with a transactional outbox; `user.deleted` cascade across four databases. | provisional |
+| **6 — Functions + uploads** | 29–31 | CV parsing and mail off the request path; direct-to-blob uploads via short-lived SAS URLs. | provisional |
+| **7 — Kubernetes + IaC** | 32–37 | Terraform, Pulumi add-ons, a Helm library chart, GitOps with Argo CD, external secrets, KEDA. | provisional |
+
+Two phases stand on their own as stopping points. **Day 16** leaves a working monolith with a
+real test suite and stateless auth behind a gateway — valuable even if nothing further is built.
+**Day 28** leaves a complete microservice system with no Kubernetes.
+
+Phase 1 is where the real work is, and it is fully reversible: if the boundaries do not hold
+while everything is still one process, they will not hold over HTTP.
+
+## Target architecture
+
+```
+services/
+  api-gateway/          routing, JWT verification, rate limiting
+  identity-service/     auth + user + profile
+  job-service/          jobs + mart (read-only)
+  application-service/  saved jobs + application tracker
+  matching-service/     shortlist + LLM scorer
+functions/
+  cv-parse/  mailer/
+charts/                 Helm library chart + one thin chart per service
+deploy/argocd/          GitOps
+infra/terraform/
+frontend/               unchanged
+data/                   unchanged
+```
+
+Each service gets its own `Dockerfile`, `pom.xml`, Flyway migrations, database and CI workflow.
+
+Decisions recorded as deliberately **not** taken, with reasons, in [`plan.md`](plan.md): no
+Postgres inside Kubernetes, no separate profile-service, no managed API gateway, and an explicit
+acknowledgement that running both Terraform and Pulumi is a cost rather than a benefit.
+
+## Results to date
+
+Recorded as they happen, including the ones that make the method look worse.
+
+**Day 1 — integration test harness.** Testcontainers Postgres shared across the run, an
+`IntegrationTest` base class, builders (`aUser()`, `aProfile()`, `aPosting()`), and fixtures for
+the three `analytics` mart tables the pipeline owns and Flyway therefore does not create.
+
+- *Estimated 3 pull requests, took 6.* The harness is ~1,400 lines against a 400-line gate, and
+  the pieces have a compile order. The estimate was mine and it was wrong; the gate exposed it
+  rather than the review missing it.
+- The agent sourced the mart column types from `data/sql/job_schema.sql` rather than from the
+  dbt model the spec pointed at, correctly noting that the model is Databricks SQL and the sync
+  script remaps those types to Postgres on the way in. The spec was wrong; the correction is
+  recorded in the spec.
+
+**Day 2 — auth contract tests.** 49 tests across six classes covering register, login, logout,
+the password-reset lifecycle, password change, and all three Google sign-in branches. The OIDC
+provider is stubbed as a *real* RS256 signing provider with a JWKS endpoint rather than a mocked
+bean, so issuer, audience, signature, expiry and nonce are still validated by the production
+decoder. Full suite: 63 tests in ~45 seconds.
+
+- **The suite the spec asked for would have been green by never running.** Surefire's default
+  includes stop at `*Test`/`*Tests` and no Failsafe plugin was configured, so `mvnw verify`
+  matched no `*IT` class. Found and fixed during the day. This is the exact failure mode the
+  method exists to catch — a CI gate that passes because it is testing nothing.
+- A harness bug from Day 1 surfaced: `UserBuilder.googleAccount()` wrote `oauth_provider =
+  'google'` where the application writes and matches on `'GOOGLE'`, so the fixture built a row
+  no Google sign-in could ever match. Day 1's own self-tests never exercised it.
+- One production wart found in the monolith and pinned rather than fixed, per the spec's "if a
+  test reveals a bug, file it; do not fix it here": `POST /api/auth/register` echoes back the
+  un-normalised email while storing the lowercase one.
+- Two flows were identified as unreachable over HTTP and deliberately left uncovered, with the
+  reasoning written down — rather than covered with a test that reaches past the contract.
+
+**Early read on the hypothesis.** Across two days the agent's implementation has been sound and
+its most useful output has been *disagreement with the spec* — three of the findings above are
+the agent reporting that the instruction was wrong. The constraint so far is specification
+quality and estimation, as predicted. The hard evidence comes at Day 13, when the session-auth
+rewrite must pass these 49 tests unchanged.
+
+## What is being measured
+
+| Question | Evidence it will be judged on |
+| --- | --- |
+| Do contract tests written against the monolith survive the split? | Day 2–4 tests passing, unmodified, after Day 13 and again after Days 17–28 |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 1 harness, 1 production) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec |
+| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0) |
+| Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
+
+## Running it
+
+The monolith still runs as it always did. Copy the environment file, bring up database, API and
+web app, and open [http://localhost:3000](http://localhost:3000):
 
 ```bash
 cp .env.example .env
 scripts/dev-up.sh          # or: docker compose up --build
 ```
 
-Job listings come from the data pipeline, so a fresh local database shows an empty job list until the
-pipeline publishes into it — see [`data/README.md`](data/README.md).
+Run the contract test suite that Phase 0 is building:
 
----
-
-## Table of contents
-
-- [About the project](#about-the-project)
-- [Screenshots](#screenshots)
-- [Features](#features)
-- [Tech stack](#tech-stack)
-- [Architecture](#high-level-architecture)
-- [Project structure](#project-structure)
-- [Documentation](#documentation)
-- [CI/CD](#cicd)
-- [Team](#team)
-- [Roadmap](#roadmap)
-
----
-
-## About the project
-
-**JobMatch is a job search app for people who are tired of scrolling through listings that are stale,
-duplicated, or a bad fit.**
-
-Job boards are noisy. The same role is reposted under three titles, a listing that looks new was
-first published months ago, and nothing tells you whether your skills actually line up with what an
-employer asks for. Job seekers end up comparing roles by hand and losing track of what they applied
-to.
-
-JobMatch narrows that down. A data pipeline collects postings from the [FreeHire](https://freehire.me)
-job board every day, cleans them, extracts the skills and locations out of free text, and marks how
-fresh a listing really is. The application then lets you search that cleaned set, fill in a profile
-with the skills you have, and see your matches ranked and explained — including which required skills
-you are still missing. Jobs worth a second look can be saved and tracked through the stages of an
-application, from *saved* to *applied* to an offer accepted or declined.
-
-It is built for job seekers, and in particular for career switchers like us, for whom "is this role
-realistic for me?" is the expensive question. Matching is decision support: it never claims a job is
-right for you, it shows you what it based the score on.
-
-## Screenshots
-
-![The JobMatch home page, with the search bar and a match preview](screenshots/screenshot.png)
-
-## Features
-
-- Search jobs by title, keyword, or skill, and filter by category, work mode, and city
-- See how fresh a listing is, so reposts and stale ads do not cost you time
-- Open a job's full details — description, skills, salary, employment type — and apply on the source site
-- Create an account with email and password, or sign in with Google
-- Build a profile: your skills, category, preferred city, work mode, experience level, and salary expectation
-- Get your top job matches ranked 0–100, each with a short explanation of why it matches
-- See your match score on any individual job page
-- Save jobs and track each one through *saved*, *applied*, *rejected*, *accepted*, and *declined*
-- Review your saved jobs per status, with a count of where your applications stand
-- Reset a forgotten password by email, or change the password you have
-- Read the terms and privacy policy, and agree to them explicitly before any personal data is stored
-- Download everything the app holds about you as a JSON file, or delete your account entirely
-
-## Tech stack
-
-| Layer | Technologies |
-| --- | --- |
-| **Frontend** | Next.js 16, React 19, TypeScript, Biome |
-| **Backend** | Java 25, Spring Boot 4.1, Spring Security (sessions + Google OAuth2), PostgreSQL, Flyway, springdoc-openapi (Scalar), Maven |
-| **Data** | Python, SQL, dbt, Databricks (Unity Catalog), Airflow, Azure (Container Apps, ADLS, Key Vault), PostgreSQL |
-| **Matching** | Skill-overlap SQL, rescored by an LLM over an OpenAI-compatible API (Gemini by default) |
-| **Infrastructure** | Docker, Docker Compose, GitHub Actions, GitHub Container Registry, Azure Container Registry |
-
-## High-level Architecture
-
-Three tracks, three layers, and one database where two of them meet.
-
-```mermaid
-flowchart LR
-    EXT["FreeHire job board API"]
-
-    subgraph de["Data"]
-        ING["Ingest raw postings, daily"]
-        MODEL["dbt: clean, deduplicate, extract skills and cities, classify discipline"]
-        MART[("fct_postings_enriched")]
-    end
-
-    subgraph be["Backend"]
-        API["REST API"]
-        subgraph db["One PostgreSQL database"]
-            ANA[("analytics schema: data writes")]
-            APP[("app schema: backend writes")]
-            ANA ~~~ APP
-        end
-    end
-
-    subgraph fe["Frontend"]
-        UI["JobMatch web app"]
-    end
-
-    LLM["Language model: scores the shortlist"]
-
-    EXT --> ING --> MODEL --> MART
-    MART -->|"outbound sync, daily"| ANA
-    ANA -->|"read only"| API
-    API -->|"read and write"| APP
-    API -.->|"top matches"| LLM
-    UI -->|"HTTP, JSON"| API
-    User([Job seeker]) --> UI
-
-    classDef d fill:#e8f4ea,stroke:#4a8055
-    classDef b fill:#e8eef7,stroke:#4a6080
-    classDef f fill:#f7f0e8,stroke:#806a4a
-    class ING,MODEL,MART d
-    class ANA,APP,API b
-    class UI f
+```bash
+cd backend && ./mvnw verify
 ```
 
-The application database holds two schemas. **`analytics`** holds the published job postings: it is
-written by the data pipeline and read by the backend. **`app`** holds accounts, profiles, saved jobs
-and cached match scores, and only the backend writes it.
+Job listings come from the data pipeline, so a fresh local database shows an empty job list until
+the pipeline publishes into it — see [`data/README.md`](data/README.md).
 
-Three rules are worth reading off that picture, because they are the ones teams
-get wrong:
-
-- **The two schemas have two owners.** The data pipeline writes `analytics` and
-  nothing else. The backend writes `app` and nothing else. Neither side has
-  permission to write the other's, which is enforced by two database roles
-  rather than by everyone remembering.
-- **The data track publishes finished tables, not raw material.** `fct_postings` is the contract:
-  the backend fills a screen with one `SELECT`, without joining sources or knowing where a row came
-  from.
-- **User data stays on the application's side.** A profile, a saved job or a match score never
-  crosses into the pipeline. Ranking a posting against a user's skills is application logic; it
-  happens behind the API.
-
-Matching itself runs in two steps. SQL narrows the postings down to the user's preferred city —
-equality on the resolved city, so a remote posting elsewhere does not qualify — and to real skill
-overlap, one row per title and company so a reposted job cannot appear twice. That shortlist is then
-scored 0–100 by a language model, which is what lets `postgres` match a job asking for `postgresql`.
-Verdicts are cached in `job_match_scores`, keyed on the skill set rather than on the user, and
-purged on a schedule. If no model is configured the skill-overlap order is returned as it is, and
-every row says so.
-
-## Project structure
+## Repository layout
 
 ```
 .
-├── backend/            Spring Boot REST API (Java, Maven, Flyway)
-│   └── docs/           How each feature works, and where it falls short
-├── frontend/           Next.js web app (TypeScript, React)
-├── data/               Data pipeline (Python, dbt, Airflow)
-├── scripts/            Scripts for local development and deployment
-├── screenshots/        Images used in this README
-├── .github/workflows/  CI/CD pipelines and other workflows
-├── docker-compose.yml  The local stack: database, backend, frontend
+├── plan.md             The migration plan: seven phases, four hard parts, what we are not doing
+├── specs/              37 day specs — the contract for every change in this repository
+├── docs/
+│   └── original-readme.md   The monolith's own README, preserved
+├── backend/            Spring Boot monolith — the subject of the migration
+│   ├── src/test/.../contract/   Contract tests that must survive the split unchanged
+│   └── src/test/.../support/    The Phase 0 test harness
+├── frontend/           Next.js web app (unchanged)
+├── data/               Data pipeline (unchanged)
+├── scripts/            Local development and deployment scripts
+├── .github/workflows/  CI/CD and the pull request gates
+└── docker-compose.yml  The local stack
 ```
 
 ## Documentation
 
-**Start here** — one guide per part of the stack, covering how to run it.
+**The experiment**
 
 | What | Where |
 | --- | --- |
-| Frontend guide | [`frontend/README.md`](frontend/README.md) |
+| The migration plan, phase by phase | [`plan.md`](plan.md) |
+| The spec workflow and its rules | [`specs/README.md`](specs/README.md) |
+| The 37 day specs | [`specs/`](specs/) |
+
+**The system under migration**
+
+| What | Where |
+| --- | --- |
+| The monolith's original README | [`docs/original-readme.md`](docs/original-readme.md) |
 | Backend guide | [`backend/README.md`](backend/README.md) |
-| Data pipeline guide | [`data/README.md`](data/README.md) |
-| Local and deployment scripts | [`scripts/README.md`](scripts/README.md) |
-
-**How the features work** — one document per feature, written from the code and honest about
-what is missing. Each ends with a list of known gaps.
-
-| Feature | Where |
-| --- | --- |
 | Every endpoint: request, response, status codes, error shapes | [`backend/docs/api.md`](backend/docs/api.md) |
-| Sign-in, sessions, Google OAuth, and the password flows | [`backend/docs/auth.md`](backend/docs/auth.md) |
-| Job search, filters, locations, freshness and the detail page | [`backend/docs/jobs-search.md`](backend/docs/jobs-search.md) |
-| The profile, and how jobs are ranked and scored against it | [`backend/docs/matching-profile.md`](backend/docs/matching-profile.md) |
-| Saving jobs and tracking applications through their stages | [`backend/docs/saving-tracking.md`](backend/docs/saving-tracking.md) |
-| Personal data: what is stored, consent, export and erasure | [`backend/docs/privacy-data.md`](backend/docs/privacy-data.md) |
-
-**Reference**
-
-| What | Where |
-| --- | --- |
-| Every environment variable, across all three services | [`backend/docs/configuration.md`](backend/docs/configuration.md) |
+| Sign-in, sessions, Google OAuth and the password flows | [`backend/docs/auth.md`](backend/docs/auth.md) |
+| How jobs are ranked and scored against a profile | [`backend/docs/matching-profile.md`](backend/docs/matching-profile.md) |
 | Both database schemas, their tables, and who owns which | [`backend/docs/schema.md`](backend/docs/schema.md) |
-| The mart the backend reads | [`data/docs/mart_contract.md`](data/docs/mart_contract.md) |
-| Running the pipeline day to day | [`data/docs/dev_flow.md`](data/docs/dev_flow.md) |
-| Live API reference (Scalar) | https://c55c.hyf.dev/api/docs (locally: http://localhost:8080/api/docs) |
+| Frontend guide · Data pipeline guide | [`frontend/README.md`](frontend/README.md) · [`data/README.md`](data/README.md) |
 
-**Data marts** — published by dbt under [`data/dbt/models/marts/`](data/dbt/models/marts/), each with a
-`.yml` file naming its columns. `fct_postings_enriched` is the one the backend reads; the rest back
-specific filters and stats.
+## Credits
 
-| Mart | Grain | What it's for |
-| --- | --- | --- |
-| `fct_postings` | One row per posting | Base fact table: the deduplicated, cleaned postings |
-| `fct_postings_enriched` | One row per posting, plus discipline | The mart the backend reads |
-| `fct_postings_cities` | One row per posting × city | Filtering postings by city |
-| `fct_postings_skills` | One row per posting × skill | Filtering postings by skill |
-| `fct_postings_requirements` | One row per posting × requirement | Filtering postings by requirement, split into required vs preferred |
-| `fct_skill_popularity` | One row per skill | How many postings mention each skill, and when it was first/last seen |
-| `fct_title_discipline` *(optional, disabled by default)* | One row per distinct title | LLM-classified discipline, as an alternative to the rule-based one |
-
-## CI/CD
-
-Four GitHub Actions workflows run automatically:
-
-| Workflow | Triggers on | What it does |
-| --- | --- | --- |
-| [Backend CI/CD](.github/workflows/backend-ci-cd.yaml) | changes under `backend/**` | Checkstyle, tests, Docker build; pushes the image to GHCR on `main` |
-| [Frontend CI/CD](.github/workflows/frontend-ci-cd.yaml) | changes under `frontend/**` | Lint, build, Docker build; pushes the image to GHCR on `main` |
-| [Data CI/CD](.github/workflows/data-ci-cd.yaml) | changes under `data/**` | Lint, tests, dbt and DAG checks, Docker build; deploys the ingestion job to Azure on `main` |
-| [PR checks](.github/workflows/pr-checks.yml) | every pull request | The description follows the template, and the diff stays under 400 changed lines |
-
-Pull requests are only merged when their checks pass.
-
-
-## Team
-
-| Name | Role | GitHub |
-| --- | --- | --- |
-| Hamed Razizadeh | Frontend | [@HamedRazizadeh-hub](https://github.com/HamedRazizadeh-hub) |
-| Monerh Al Sqyan | Backend | [@Miuroro](https://github.com/Miuroro) |
-| Yusup Rozimemet | Backend | [@Yusuprozimemet](https://github.com/Yusuprozimemet) |
-| Halyna Romanyshyn | Data engineering | [@halyna1995](https://github.com/halyna1995) |
-| Baraah Alshiaani | Data engineering | [@thebaraah](https://github.com/thebaraah) |
-| Mohamad Bader Almsaddi alzin | Data engineering | [@noneeeed](https://github.com/noneeeed) |
-
-## Roadmap
-
-What is designed or wanted but not built yet:
-
-- [ ] Rate limiting on sign-in, profile saves, and the model-backed match endpoint — nothing answers 429 today
-- [ ] Let users change the email address they sign in with, which needs a verification flow
-- [ ] Serve the data export from the API instead of assembling it in the browser, so it covers everything the database holds
-- [ ] Upload a CV and read the skills off it, instead of picking every skill by hand
+JobMatch was built by Hamed Razizadeh, Monerh Al Sqyan, Yusup Rozimemet, Halyna Romanyshyn,
+Baraah Alshiaani and Mohamad Bader Almsaddi alzin as a HackYourFuture final project; the full
+team listing is in the [original README](docs/original-readme.md#team). This migration
+repository is my own work — the plan, the specifications and the reviews are mine, the
+implementation is Claude Opus 5's under those specifications, and commits state which.
