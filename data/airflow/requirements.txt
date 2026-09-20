@@ -1,0 +1,34 @@
+# Python packages added to the Airflow image, which already ships Airflow.
+#
+# Why this is not pyproject.toml, which you might reasonably expect:
+#
+#   - Astro builds this image with this folder as the context, so a file one
+#     level up cannot be copied into it.
+#   - These two lists answer different questions. pyproject.toml says what the
+#     container jobs need. This says what to add to an image that already has
+#     Airflow and its own large set of pinned dependencies. Installing a full
+#     lock file here can move those pins and break the image, in a way that
+#     only shows up when a DAG fails to parse.
+#
+# Keep this list short: it is what the tasks import, not everything the project
+# uses. Add a package when a task needs it.
+#
+# dbt is deliberately absent: it runs through uvx on Python 3.11 from the DAG,
+# because the Airflow image ships a newer Python than stable dbt-core supports.
+
+# publish_to_backend, through src/sync.py.
+psycopg[binary]>=3.2.0
+# src/warehouse.py loads .env so the same code runs on your machine.
+python-dotenv>=1.0.0
+# Both src/warehouse.py and src/common/aca.py sign in with
+# DefaultAzureCredential, so a task finds the VM's identity on the VM and the
+# service principal in your .env when you run the DAG in Astro.
+azure-identity>=1.19.0
+# src/ingestion/storage.py imports BlobServiceClient for landing raw files.
+azure-storage-blob>=12.23.0
+
+# Mode 1 local ingest (`INGEST_MODE=local`) imports src/ingestion/pipeline in
+# the worker, which pulls in pydantic and requests via src/ingestion/ingest.py.
+# Keep them listed so a deploy does not drop a dependency the default path needs.
+pydantic>=2.9.0
+requests>=2.32.0

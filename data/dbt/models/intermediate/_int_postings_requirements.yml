@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  - name: int_postings_requirements
+    description: >
+      One row per posting and normalized requirement. Requirement structs are
+      exploded from int_postings.requirements_raw and cleaned conservatively
+      before being used downstream.
+
+      Cleaning includes normalizing priority casing and whitespace, removing
+      script/style content and HTML tags from requirement text, decoding common
+      HTML entities, collapsing repeated whitespace, and removing duplicate
+      requirements within the same posting.
+
+      The original source values are preserved in priority_raw and
+      requirement_text_raw for traceability and debugging. Postings with no
+      valid requirements do not appear in this model.
+
+      This model does not infer new requirement priorities or rewrite the
+      semantic meaning of requirement text.
+
+    # Neither posting_id nor requirement_text is unique on its own.
+    # The expected grain is one row per posting_id + priority +
+    # normalized requirement_text combination.
+    columns:
+      - name: posting_id
+        description: >
+          Surrogate identifier of the posting this requirement belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_postings')
+                field: posting_id
+
+      - name: priority_raw
+        description: >
+          Original requirement priority exactly as received from the source
+          before normalization.
+        tests:
+          - not_null
+
+      - name: priority
+        description: >
+          Normalized requirement priority. Lowercased, trimmed, and
+          whitespace-normalized. Expected source values are usually
+          'required' and 'preferred', but no accepted-values constraint is
+          enforced because additional source values may appear.
+        tests:
+          - not_null
+
+      - name: requirement_text_raw
+        description: >
+          Original requirement text exactly as received from the source before
+          cleaning. Preserved for traceability and data-quality analysis.
+        tests:
+          - not_null
+
+      - name: requirement_text
+        description: >
+          Cleaned requirement text used downstream. Script/style content and
+          HTML tags are removed, common HTML entities are decoded, repeated
+          whitespace is collapsed, and empty results are excluded. Original
+          text casing and semantic content are preserved.
+        tests:
+          - not_null
+
+      - name: posted_at
+        description: >
+          Posting timestamp carried from int_postings so requirement-level
+          models can be filtered or aggregated by posting date.
+        tests:
+          - not_null

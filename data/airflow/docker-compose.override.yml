@@ -1,0 +1,53 @@
+# Local development only. Astro merges this into its own compose stack.
+#
+# Two things happen here:
+#
+# 1. The pipeline code and the dbt project live one level up, next to this
+#    folder, so there is exactly one copy of each. The bind mounts make them
+#    visible inside the Airflow containers rather than duplicating them.
+#
+# 2. Nothing else. The containers reach the outside world normally, which is
+#    all they need: the publish task writes `analytics_dev` on the team's real
+#    Postgres, dbt talks to Databricks, and neither is on this machine.
+#
+#    There used to be a third thing here. The stack joined a "finalproject"
+#    network and pinned BACKEND_PG_HOST to the local `db` container, back when
+#    local runs published to a Postgres in Docker. That is gone: overriding the
+#    host here would silently send a task to a different database than the one
+#    `uv run` writes, which is the opposite of what this file is for. It also
+#    meant `astro dev start` failed unless you had first started a database the
+#    data pipeline no longer touches.
+#
+# When you deploy, bake these paths into the image with COPY.
+x-local: &local
+  volumes:
+    # Beside dags/ and include/, not nested under them. Astro already mounts
+    # ./dags and ./include; overlaying ../src on dags/src (or dbt on
+    # include/dbt) can show correct binds in docker inspect while the path is
+    # empty inside the container on some Docker Desktop versions.
+    # /usr/local/airflow is on sys.path, so `import src` -> /usr/local/airflow/src/.
+    - ../src:/usr/local/airflow/src:ro
+    - ../dbt:/usr/local/airflow/dbt:rw
+  # Your data/.env, so a task running here reads the same settings and
+  # credentials your own `uv run` commands do. On the team VM there is no such
+  # file: settings come from Airflow Variables and secrets from Key Vault. The
+  # DAG tries the environment first, which is what makes one file work in both
+  # places. `required: false` so the stack still starts before you have made
+  # the file.
+  env_file:
+    - path: ../.env
+      required: false
+  environment:
+    # Astro mounts the project here; the team VM uses /opt/airflow. The DAG
+    # reads this rather than hardcoding either one.
+    DBT_PROJECT_DIR: /usr/local/airflow/dbt
+
+services:
+  scheduler:
+    <<: *local
+  dag-processor:
+    <<: *local
+  api-server:
+    <<: *local
+  triggerer:
+    <<: *local

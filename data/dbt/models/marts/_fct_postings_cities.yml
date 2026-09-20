@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: fct_postings_cities
+    description: >
+      One row per open-or-closed posting and city. Backend contract for
+      "filter postings by city" Uses the normalized, exploded city
+      from int_postings_cities
+    columns:
+      - name: posting_id
+        description: The posting this city belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_postings')
+                field: posting_id
+
+      - name: city
+        description: One city, lowercased and trimmed, as provided by the source.
+
+      - name: source
+        tests: [not_null]
+
+      - name: title
+        tests: [not_null]
+
+      - name: posted_at
+        tests: [not_null]
+
+      - name: posted_date
+        tests: [not_null]

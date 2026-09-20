@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: fct_postings_skills
+    description: >
+      One row per open-or-closed posting and skill. Backend contract for
+      "filter postings by skill"
+
+    columns:
+      - name: posting_id
+        description: The posting this skill belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_postings')
+                field: posting_id
+
+      - name: skill
+        description: One skill, lowercased and trimmed, as normalized in int_postings_skills.
+        tests: [not_null]
+
+      - name: source
+        tests: [not_null]
+
+      - name: title
+        tests: [not_null]
+
+      - name: posted_at
+        tests: [not_null]
+
+      - name: posted_date
+        tests: [not_null]

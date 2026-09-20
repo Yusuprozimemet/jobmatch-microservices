@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: fct_postings
+    description: One row per FreeHire job posting.
+
+    columns:
+      - name: posting_id
+        description: Canonical posting identifier created by the data pipeline.
+        tests: [unique, not_null]
+
+      - name: source
+        description: Original source or provider of the job posting.
+        tests: [not_null]
+
+      - name: source_job_id
+        description: Job identifier from the original source.
+        tests: [not_null]
+
+      - name: title
+        tests: [not_null]
+
+      - name: company_name
+        tests: [not_null]
+
+      - name: is_remote
+        tests: [not_null]
+
+      - name: skill_count
+        tests: [not_null]
+
+      - name: posted_at
+        tests: [not_null]
+
+      - name: posted_date
+        tests: [not_null]
+
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["open", "closed"]
+
+      - name: source_url
+        tests: [not_null]
+
+      - name: ingested_at
+        tests: [not_null]

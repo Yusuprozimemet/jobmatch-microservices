@@ -1,0 +1,11 @@
+[sqlfluff]
+dialect = databricks
+templater = jinja
+# Syntax only. sqlfmt owns layout; LT* / CP* rules would fail models sqlfmt accepts.
+exclude_rules = layout, capitalisation, convention, references, structure, ambiguous, aliasing, jinja
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+
+[sqlfluff:templater:jinja:context]
+landing_path = /Volumes/team_c/landing/prod

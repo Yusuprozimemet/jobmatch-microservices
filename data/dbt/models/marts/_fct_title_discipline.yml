@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: fct_title_discipline
+    description: >
+      One row per distinct job title that requires LLM classification.
+      The model classifies titles whose source category is missing and stores the
+      result incrementally so previously classified titles are not sent to the
+      LLM again during normal builds.
+    columns:
+      - name: title
+        description: Distinct job title from int_postings where source_category is null.
+        tests: [unique, not_null]
+      - name: discipline
+        description: >
+          LLM-assigned category. Clamped to the closed list in the model's
+          PROMPT; anything outside becomes `other`.
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - data_engineering
+                - data_science
+                - data_analytics
+                - ai_engineering
+                - ml_ai
+                - software_engineering
+                - backend
+                - frontend
+                - fullstack
+                - mobile
+                - devops
+                - security
+                - qa
+                - architecture
+                - network_engineering
+                - hardware
+                - product
+                - project_management
+                - management
+                - business_analysis
+                - design
+                - sales
+                - marketing
+                - operations
+                - support
+                - solutions_engineering
+                - finance
+                - hr
+                - recruiting
+                - legal
+                - technical_writing
+                - developer_relations
+                - blockchain
+                - other

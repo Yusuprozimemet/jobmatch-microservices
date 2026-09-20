@@ -1,0 +1,50 @@
+name: 'final_project'
+version: '1.0.0'
+profile: 'final_project'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+# Parent landing path (no source folder). Staging models append their source
+# name, e.g. {{ var("landing_path") }}/postings, so a second source is another
+# staging model on the same parent rather than a new LANDING_PATH. Set
+# LANDING_PATH in data/.env (and on the VM via pipeline_settings.yaml).
+#
+# Shape: /Volumes/<catalog>/landing/<volume>/<prefix-or-empty>
+# Examples: .../landing/dev/your-name  |  .../landing/dev/aca-dev  |  .../landing/prod
+# (prod volume is rooted at the container's raw/ blob prefix, so there is no
+# extra "raw" segment in the Volume path.)
+vars:
+  landing_path: "{{ env_var('LANDING_PATH', '/Volumes/team_c/landing/prod') }}"
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  final_project:
+    staging:
+      +materialized: view
+    # Views, so they cost nothing to store and you can query them while you are
+    # working out why a mart looks wrong. `ephemeral` is the other common
+    # choice: it pastes the SQL into whatever selects it, which is tidier in the
+    # warehouse but leaves you nothing to inspect when a number is off. While
+    # you are learning, being able to select from it is worth more.
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+      # Optional, and off. It calls an LLM, so it needs an API key in a secret
+      # scope before it can run at all, and a `dbt build` that fails for a team
+      # who never asked for it would be worse than useless. Set `enabled: true`
+      # and your own `secret_scope` when your team wants it. Disabled models are
+      # parsed and then ignored: it costs nothing to leave this here.
+      # See ../optional/python_model/README.md.
+      fct_title_discipline:
+        # Off until you turn it on. Key is already in Databricks scope team_c.
+        +enabled: true
+        +secret_scope: team_c
+        # LiteLLM aliases: cheap | medium | strong. Start on cheap.
+        +llm_model: cheap

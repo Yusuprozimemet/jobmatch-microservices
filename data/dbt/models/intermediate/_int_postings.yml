@@ -1,0 +1,203 @@
+version: 2
+
+models:
+  - name: int_postings
+    description: >
+      Cleaned postings, one row per posting, same grain as stg_postings.
+      HTML stripped from descriptions, work_mode normalized, and a flag
+      added for postings with no usable location signal. location_raw,
+      countries_raw, and regions_raw are carried through unchanged for
+      fct_postings — no intermediate model derives from them.
+      
+    columns:
+      - name: posting_id
+        description: >
+          Surrogate key, md5 of original_source and source_job_id. Every
+          downstream model (int_posting_skills, int_posting_cities,
+          int_posting_requirements) joins back to this model on this column
+          instead of the two-column natural key.
+        tests:
+          - not_null
+          - unique
+
+      - name: source_job_id
+        description: Job identifier from the original source, carried from stg_postings.
+        tests: [not_null]
+
+      - name: original_source
+        description: The underlying source FreeHire collected the posting from.
+        tests: [not_null]
+
+      - name: public_slug
+        description: Public job slug provided by FreeHire.
+        tests: [not_null]
+
+      - name: title
+        description: Job title as advertised by the source.
+        tests: [not_null]
+
+      - name: company_name
+        description: Hiring company name after basic trimming.
+        tests: [not_null]
+
+      - name: company_slug
+        description: Company slug provided by FreeHire.
+
+      - name: source_url
+        description: URL of the original job posting.
+        tests: [not_null]
+
+      - name: description_raw
+        description: Raw job description from FreeHire, HTML and formatting intact.
+
+      - name: description_clean
+        description: >
+          description_raw with HTML tags stripped, common HTML entities
+          (&amp;#39;, &amp;amp;, &amp;quot;, &amp;lt;, &amp;gt;, &amp;nbsp;)
+          decoded to their literal characters, and whitespace collapsed.
+          Downstream models should read this instead of re-stripping
+          description_raw themselves.
+
+      - name: cities_raw
+        description: >
+          City values provided by FreeHire as an array, unchanged from
+          staging. Not assumed reliable; see has_location_data.
+
+      - name: location_raw
+        description: >
+          Location string exactly as provided by FreeHire, unchanged.
+          Passed through for fct_postings; no intermediate model derives
+          from this.
+
+      - name: countries_raw
+        description: >
+          Country codes provided by FreeHire as an array, unchanged from
+          staging. Passed through for fct_postings; no intermediate model
+          derives from this.
+
+      - name: regions_raw
+        description: >
+          Region codes provided by FreeHire as an array, unchanged from
+          staging. Passed through for fct_postings; no intermediate model
+          derives from this.
+
+      - name: has_location_data
+        description: >
+          True if cities_raw is non-empty, or if cities_raw is empty/null but
+          work_mode is remote or hybrid (city doesn't matter for those).
+          False only when cities_raw is empty/null and the work is onsite
+          (or work_mode is unknown) — that's the case with no usable
+          location signal. This model does not drop or filter on this flag —
+          it exists so marts can decide whether to exclude or surface such
+          postings rather than that decision happening silently upstream.
+        tests: [not_null]
+
+      - name: skills_raw
+        description: >
+          Skills as provided by FreeHire, unchanged. Exploded and cleaned in
+          int_posting_skills, not here.
+
+      - name: requirements_raw
+        description: >
+          Structured requirements (priority + text) as provided by FreeHire,
+          unchanged. Exploded and split by priority in int_posting_requirements,
+          not here.
+
+      - name: work_mode
+        description: >
+          Work mode as provided by FreeHire (e.g. remote, hybrid, onsite),
+          lowercased and trimmed, empty string coerced to null. This is the
+          only work-mode column exposed — the raw source_work_mode isn't
+          carried through since nothing downstream reads anything work_mode
+          doesn't already give it. has_location_data reads this column, and
+          any other consumer that needs to group/filter on work mode should
+          too, rather than re-deriving lower(trim(...)) itself.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['remote', 'hybrid', 'onsite']
+              config:
+                severity: warn
+                where: "work_mode is not null"
+
+      - name: source_category
+        description: Job category assigned by FreeHire enrichment.
+
+      - name: source_employment_type
+        description: Employment type assigned by FreeHire enrichment.
+
+      - name: source_experience_level
+        description: Seniority level assigned by FreeHire enrichment.
+
+      - name: source_experience_years_min
+        description: Minimum years of experience detected by FreeHire enrichment.
+
+      - name: source_education_level
+        description: Education level detected by FreeHire enrichment. May be null.
+
+      - name: source_posting_language
+        description: Language detected for the job posting.
+
+      - name: source_salary_min
+        description: Minimum salary provided by FreeHire enrichment. May be null.
+
+      - name: source_salary_max
+        description: Maximum salary provided by FreeHire enrichment. May be null.
+
+      - name: source_salary_currency
+        description: Currency of the source salary, for example EUR.
+
+      - name: source_salary_period
+        description: Salary period provided by FreeHire, such as month or year.
+
+      - name: source_company_type
+        description: Company type assigned by FreeHire enrichment.
+
+      - name: source_company_size
+        description: Company size assigned by FreeHire enrichment.
+
+      - name: source_is_tech
+        description: FreeHire classification indicating tech or non-tech.
+
+      - name: posted_at
+        description: When the job posting was published at the source.
+        tests: [not_null]
+
+      - name: source_created_at
+        description: When the job record was created by FreeHire.
+
+      - name: updated_at
+        description: When FreeHire last updated the job record.
+
+      - name: last_seen_at
+        description: Last time FreeHire observed the posting.
+
+      - name: closed_at
+        description: Timestamp when FreeHire marked the posting as closed. Null means no closure timestamp was provided.
+
+      - name: source_freshness_class
+        description: Freshness classification supplied by FreeHire.
+
+      - name: source_age_days
+        description: Job age in days reported by FreeHire.
+
+      - name: source_repost_count
+        description: Number of reposts reported by FreeHire.
+
+      - name: source_mass_posting_count
+        description: Mass-posting count reported by FreeHire.
+
+      - name: source_fake_freshness
+        description: Whether FreeHire flagged the posting as having fake freshness.
+
+      - name: source_file
+        description: Raw Azure/Databricks file path from which the row was read.
+        tests: [not_null]
+
+      - name: ingest_date
+        description: The day whose partition folder this row was read from.
+        tests: [not_null]
+
+      - name: ingested_at
+        description: File modification timestamp used to determine the newest snapshot of a posting.
+        tests: [not_null]

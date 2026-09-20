@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: fct_postings_requirements
+    description: >
+      One row per open-or-closed posting and requirement, split by priority
+      (required vs preferred). Backend contract for "filter postings by
+      requirement"
+
+    columns:
+      - name: posting_id
+        description: The posting this requirement belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_postings')
+                field: posting_id
+
+      - name: priority
+        description: >
+          Requirement priority as normalized in int_postings_requirements
+          -- expected values are 'required' and 'preferred', but no value
+          list is enforced here in case a source sends something else.
+        tests: [not_null]
+
+      - name: requirement_text
+        description: One requirement, trimmed. Never empty.
+        tests: [not_null]
+
+      - name: source
+        tests: [not_null]
+
+      - name: title
+        tests: [not_null]
+
+      - name: posted_at
+        tests: [not_null]
+
+      - name: posted_date
+        tests: [not_null]

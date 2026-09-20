@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: hyf-project-backend
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=${DB_SCHEMA:app}
+    username: ${DB_USER:admin}
+    password: ${DB_PASSWORD:password}
+  flyway:
+    schemas: ${DB_SCHEMA:app}
+    # Used for password reset emails
+  mail:
+    host: ${MAIL_HOST:smtp-relay.brevo.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+server:
+  port: 8080
+  error:
+    # Pinned so error responses look the same in dev and prod - devtools would otherwise
+    # toggle these on in development.
+    include-stacktrace: never
+    include-message: never
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
+
+app:
+  base-url: ${APP_BASE_URL:http://localhost:3000}
+  mail:
+    from: ${MAIL_FROM:jobmatch.team2026@gmail.com}
+  oauth2:
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      redirect-uri: ${GOOGLE_REDIRECT_URI:${app.base-url}/api/login/oauth2/code/google}
+    success-redirect: ${OAUTH2_SUCCESS_REDIRECT:${app.base-url}/}
+    failure-redirect: ${OAUTH2_FAILURE_REDIRECT:${app.base-url}/login?error=oauth}
+    link-required-redirect: ${OAUTH2_LINK_REDIRECT:${app.base-url}/login?error=google_link_required}
+    # First Google sign-in lands here instead of home, since Google skips our terms screen.
+    terms-required-redirect: ${OAUTH2_TERMS_REDIRECT:${app.base-url}/accept-terms}
+
+
+  llm:
+    api-key: ${LLM_API_KEY:}
+    base-url: ${LLM_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
+    model: ${LLM_MODEL:gemini-flash-lite-latest}
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:20}
+    # Sent as reasoning_effort - cuts response time for models that reason by default.
+    # Leave empty for a provider that rejects the field.
+    reasoning-effort: ${LLM_REASONING_EFFORT:low}
+    # How long a stored score stays valid. Reads already skip expired ones; the hourly
+    # purge just frees the space.
+    score-retention-days: ${LLM_SCORE_RETENTION_DAYS:1}
+    score-purge-cron: ${LLM_SCORE_PURGE_CRON:0 0 * * * *}
+
+# API Docs
+springdoc:
+  api-docs:
+    path: /api/docs/openapi.yaml
+scalar:
+  enabled: true
+  path: /api/docs
+  url: ${springdoc.api-docs.path}

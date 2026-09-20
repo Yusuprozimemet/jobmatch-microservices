@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: fct_skill_popularity
+    description: >
+      One row per skill, showing how many job postings contain
+      that skill and when the skill was first and most recently seen.
+
+    columns:
+      - name: skill
+        description: Normalised job skill.
+        tests: [unique, not_null]
+
+      - name: postings
+        description: Number of distinct jobs containing the skill.
+        tests: [not_null]
+
+      - name: first_seen_at
+        description: Earliest posting timestamp for this skill.
+        tests: [not_null]
+
+      - name: last_seen_at
+        description: Most recent posting timestamp for this skill.
+        tests: [not_null]

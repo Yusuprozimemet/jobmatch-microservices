@@ -1,0 +1,385 @@
+# Data CI/CD
+#
+# Lints and tests the pipeline on every pull request, and on a merge to main
+# builds the pipeline image and pushes it to your team's Azure Container
+# Registry. The ingestion container job runs that image.
+#
+# Why this pushes to ACR while the backend and frontend push to GHCR: the
+# Container Apps job that runs this image pulls it with a managed identity that
+# holds AcrPull on your team's registry. Pulling from GHCR instead would mean
+# storing a GitHub token in Azure, which is the one thing this setup is built
+# to avoid.
+#
+# There is no password anywhere in this workflow. GitHub gives the job a
+# short-lived token stating which repository and branch is running, Azure has
+# been told in advance to trust exactly that statement, and returns an access
+# token in exchange. Your teacher sets this up once per team; you never handle
+# a credential.
+#
+# Team identifiers live in this file (not GitHub Actions Variables) so a PR
+# can change deploy targets and source URL in one reviewable diff. They are
+# identifiers, not secrets: on their own they grant nothing. OIDC still
+# exchanges a short-lived token; nothing here is a password.
+
+name: Data CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - ".github/workflows/data-ci-cd.yaml"
+  pull_request:
+    paths:
+      - "data/**"
+      - ".github/workflows/data-ci-cd.yaml"
+  # Rebuild and push without a code change: useful when a base image has a
+  # security update, or to check the whole path still works before a demo.
+  workflow_dispatch:
+
+concurrency:
+  group: docker-build-data-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  AZURE_CLIENT_ID: b6de01ed-ee7f-446e-9616-2b84c3f6edaf
+  AZURE_TENANT_ID: 07a14c4e-d88c-42f7-83b3-13af7e57ff3d
+  AZURE_SUBSCRIPTION_ID: 1120c89d-2a5f-4a15-a582-2ea34f0bb5c3
+  AZURE_RESOURCE_GROUP: rg-hyf-fp-team-c
+  ACR_NAME: acrhyffpc
+  ACA_ENVIRONMENT: env-fp-team-c
+  ACA_IDENTITY: id-fp-team-c
+  ACA_INGEST_JOB: job-fp-ingest
+  STORAGE_ACCOUNT: sthyffpteamc
+  DATABRICKS_CATALOG: team_c
+  DATABRICKS_HOST: https://adb-7405619530719547.7.azuredatabricks.net
+  DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/0aae52a375e34214
+  SOURCE_API_URL: https://freehire.me/api/v1/jobs/search
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Need history so the changed-files script can diff against the base.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: ./data
+        run: uv sync --extra dev --extra sync --extra dbt --extra notebook
+
+      # Lint/format/types only the files this change touches under data/. A
+      # full-tree `ruff check .` would fail a clean DAG PR (or merge) because of
+      # someone else's pre-existing issue elsewhere in the tree. Pytest still
+      # runs the whole suite — that is a behaviour gate, not a style gate.
+      - name: List changed data files
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: bash .github/scripts/list-changed-data-files.sh
+
+      # Four tools, four jobs. ruff finds mistakes, black settles Python
+      # layout, sqlfmt settles SQL layout, and ty checks the types. Each runs
+      # as its own step so a failure names itself instead of hiding in a wall
+      # of output.
+      - name: Lint
+        working-directory: ./data
+        env:
+          FILES: ${{ steps.changes.outputs.python }}
+        run: |
+          if [ -z "${FILES}" ]; then
+            echo "No Python files changed under data/; skipping ruff."
+          else
+            printf '%s\n' "$FILES" | xargs uv run ruff check
+          fi
+
+      - name: Format (Python)
+        working-directory: ./data
+        # Fix locally with `uv run black <paths you changed>`
+        env:
+          FILES: ${{ steps.changes.outputs.python }}
+        run: |
+          if [ -z "${FILES}" ]; then
+            echo "No Python files changed under data/; skipping black."
+          else
+            printf '%s\n' "$FILES" | xargs uv run black --check
+          fi
+
+      - name: Format (SQL)
+        working-directory: ./data
+        # Fix locally with `uv run sqlfmt <paths you changed>`
+        env:
+          FILES: ${{ steps.changes.outputs.sql }}
+        run: |
+          if [ -z "${FILES}" ]; then
+            echo "No SQL files changed under data/; skipping sqlfmt."
+          else
+            printf '%s\n' "$FILES" | xargs uv run sqlfmt --check
+          fi
+
+      # Conflict-marker scan, dbt parse, and SQLFluff syntax (PRS) on changed
+      # dbt SQL. No warehouse or GitHub secrets. sqlfmt still owns layout.
+      - name: Check dbt project
+        env:
+          DBT_SCHEMA: ci
+          LANDING_PATH: /Volumes/${{ env.DATABRICKS_CATALOG }}/landing/prod
+          FILES: ${{ steps.changes.outputs.sql }}
+        run: bash .github/scripts/check-dbt-project.sh
+
+      - name: Types
+        working-directory: ./data
+        env:
+          FILES: ${{ steps.changes.outputs.typed }}
+        run: |
+          if [ -z "${FILES}" ]; then
+            echo "No src/ or tests/ Python files changed; skipping ty."
+          else
+            printf '%s\n' "$FILES" | xargs uv run ty check
+          fi
+
+      - name: Test
+        working-directory: ./data
+        run: uv run pytest -q
+
+  dag-integrity:
+    # Catches the mistake that costs the most time: a DAG that does not import
+    # is invisible in Airflow, with no error anywhere except the scheduler log.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Airflow
+        # Pinned to the version your team's VM runs.
+        run: |
+          python -m pip install --upgrade pip
+          pip install "apache-airflow==3.2.*" apache-airflow-providers-standard pytest
+
+      - name: Import every DAG
+        working-directory: ./data/airflow
+        env:
+          AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "True"
+          AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+          # The DAG imports the pipeline package from data/src, the same one
+          # the containers run. On the VM it is mounted next to the dags; here
+          # it is one directory up.
+          PYTHONPATH: ${{ github.workspace }}/data
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+
+          # Airflow's DAG processor puts the dags folder on sys.path before it
+          # parses a file, which is what lets a DAG import a helper sitting next
+          # to it. A bare DagBag() does not, so without this line the check is
+          # stricter than the runtime and fails on an import that works in
+          # production.
+          sys.path.insert(0, os.path.abspath("dags"))
+
+          from airflow.models.dagbag import DagBag
+
+          bag = DagBag("dags", include_examples=False)
+          if bag.import_errors:
+              for path, error in bag.import_errors.items():
+                  print(f"::error file={path}::{error}")
+              sys.exit(1)
+          print(f"{len(bag.dags)} DAG(s) imported cleanly: {', '.join(bag.dags)}")
+          PY
+
+  build:
+    needs: [lint-and-test, dag-integrity]
+    # Never on a pull request. A PR, including one from a fork, cannot mint an
+    # Azure token: the trust is pinned to a branch of this repository, so the
+    # exchange fails rather than the push being blocked after the fact.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for the token exchange. Without it, sign-in fails.
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to the registry
+        run: az acr login --name "${{ env.ACR_NAME }}"
+
+      - name: Build and push
+        working-directory: ./data
+        run: |
+          set -euo pipefail
+          registry="${{ env.ACR_NAME }}.azurecr.io"
+          # One image. The ingestion job runs it as it is, and any container
+          # job you add later runs the same image with a different command:
+          # two images would mean two builds, two tags to keep in step, and two
+          # places for a dependency to drift.
+          #
+          # Two tags. Point your Container Apps jobs at the commit SHA, never at
+          # latest: when a number looks wrong, the tag on the job that wrote it
+          # tells you exactly which code produced it.
+          docker build \
+            -t "$registry/pipeline:${{ github.sha }}" \
+            -t "$registry/pipeline:latest" \
+            .
+          docker push --all-tags "$registry/pipeline"
+          echo "### Pushed \`pipeline:${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Point your Container Apps job at it:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "az containerapp job update -g <your-resource-group> -n <ingest-job> \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  --image $registry/pipeline:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-prod:
+    # The production ingestion job, and the only way to change it.
+    #
+    # Nobody deploys production from a laptop. The trust Azure was given is
+    # pinned to `refs/heads/main` of this repository, so a token minted on a
+    # branch or a pull request cannot update this job: the exchange fails
+    # before any Azure call is made. Merging is the deploy.
+    #
+    # Your own runs write the `dev` container instead, from your machine, with
+    # `job-fp-ingest-dev` or plain `uv run python -m src.ingestion.pipeline`.
+    # Same image, same code, different container and different credential.
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create or update the ingestion job
+        env:
+          RG: ${{ env.AZURE_RESOURCE_GROUP }}
+          JOB: ${{ env.ACA_INGEST_JOB }}
+          ENVIRONMENT: ${{ env.ACA_ENVIRONMENT }}
+          IDENTITY: ${{ env.ACA_IDENTITY }}
+          REGISTRY: ${{ env.ACR_NAME }}.azurecr.io
+          SUBSCRIPTION: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/pipeline:${{ github.sha }}"
+          identity="/subscriptions/$SUBSCRIPTION/resourcegroups/$RG/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$IDENTITY"
+          client_id="$(az identity show --ids "$identity" --query clientId -o tsv)"
+
+          # LANDING_CONTAINER is set here rather than in the image, so the same
+          # image is what you already ran against `dev`. The container name is
+          # the whole difference between a rehearsal and production. It repeats
+          # the code default on purpose: this is the value that actually takes
+          # effect, and it should be readable here without opening storage.py.
+          env_vars="SOURCE_API_URL=${{ env.SOURCE_API_URL }} \
+                    STORAGE_ACCOUNT=${{ env.STORAGE_ACCOUNT }} \
+                    LANDING_CONTAINER=prod \
+                    LANDING_PREFIX=raw \
+                    DATABRICKS_CATALOG=${{ env.DATABRICKS_CATALOG }} \
+                    AZURE_CLIENT_ID=$client_id"
+
+          if az containerapp job show -g "$RG" -n "$JOB" -o none 2>/dev/null; then
+            echo "updating $JOB -> $image"
+            az containerapp job update -g "$RG" -n "$JOB" \
+              --image "$image" --set-env-vars $env_vars -o none
+          else
+            echo "creating $JOB -> $image"
+            az containerapp job create -g "$RG" -n "$JOB" \
+              --environment "$ENVIRONMENT" --trigger-type Manual \
+              --replica-timeout 1800 --replica-retry-limit 1 \
+              --cpu 0.5 --memory 1.0Gi \
+              --image "$image" \
+              --mi-user-assigned "$identity" \
+              --registry-identity "$identity" --registry-server "$REGISTRY" \
+              --env-vars $env_vars -o none
+          fi
+
+          echo "### Deployed \`pipeline:${{ github.sha }}\` to \`$JOB\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Writes to the \`prod\` container. Run it with:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "az containerapp job start -g $RG -n $JOB" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-dev:
+    # Mode 2 dev ingest job: same image as prod, writes dev/aca-dev instead.
+    # Keeps job-fp-ingest-dev in step with every merge to main without a manual
+    # az containerapp job update from a laptop.
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create or update the dev ingestion job
+        env:
+          RG: ${{ env.AZURE_RESOURCE_GROUP }}
+          JOB: job-fp-ingest-dev
+          ENVIRONMENT: ${{ env.ACA_ENVIRONMENT }}
+          IDENTITY: ${{ env.ACA_IDENTITY }}
+          REGISTRY: ${{ env.ACR_NAME }}.azurecr.io
+          SUBSCRIPTION: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/pipeline:${{ github.sha }}"
+          identity="/subscriptions/$SUBSCRIPTION/resourcegroups/$RG/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$IDENTITY"
+          client_id="$(az identity show --ids "$identity" --query clientId -o tsv)"
+
+          env_vars="SOURCE_API_URL=${{ env.SOURCE_API_URL }} \
+                    STORAGE_ACCOUNT=${{ env.STORAGE_ACCOUNT }} \
+                    LANDING_CONTAINER=dev \
+                    LANDING_PREFIX=aca-dev \
+                    DATABRICKS_CATALOG=${{ env.DATABRICKS_CATALOG }} \
+                    AZURE_CLIENT_ID=$client_id"
+
+          if az containerapp job show -g "$RG" -n "$JOB" -o none 2>/dev/null; then
+            echo "updating $JOB -> $image"
+            az containerapp job update -g "$RG" -n "$JOB" \
+              --image "$image" --set-env-vars $env_vars -o none
+          else
+            echo "creating $JOB -> $image"
+            az containerapp job create -g "$RG" -n "$JOB" \
+              --environment "$ENVIRONMENT" --trigger-type Manual \
+              --replica-timeout 1800 --replica-retry-limit 1 \
+              --cpu 0.5 --memory 1.0Gi \
+              --image "$image" \
+              --mi-user-assigned "$identity" \
+              --registry-identity "$identity" --registry-server "$REGISTRY" \
+              --env-vars $env_vars -o none
+          fi
+
+          echo "### Deployed \`pipeline:${{ github.sha }}\` to \`$JOB\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Writes to the \`dev\` container under prefix \`aca-dev\`." >> "$GITHUB_STEP_SUMMARY"

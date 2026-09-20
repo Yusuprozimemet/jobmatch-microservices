@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: int_postings_cities
+    description: >
+      One row per posting and normalized city. City values are exploded from
+      int_postings.cities_raw and cleaned conservatively before being used
+      downstream.
+
+      Cleaning includes lowercasing, trimming, collapsing repeated whitespace,
+      replacing non-breaking spaces, normalizing Unicode dash variants, and
+      removing spaces around hyphens. Duplicate cities within the same posting
+      are removed after normalization.
+
+      The original source value is preserved in city_raw for traceability and
+      debugging. Postings with no valid cities do not appear in this model.
+
+      This model does not infer a city or map aliases such as "the hague" and
+      "den haag" to a single canonical value. Any such mapping should be based
+      on observed source data and handled through an explicit controlled
+      mapping rather than inferred here.
+
+    # Neither posting_id nor city is unique on its own.
+    # The expected grain is one row per posting_id + city pair.
+    columns:
+      - name: posting_id
+        description: >
+          Surrogate identifier of the posting this city belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_postings')
+                field: posting_id
+
+      - name: city_raw
+        description: >
+          Original city value exactly as received from the source before
+          normalization. Preserved for traceability and data-quality analysis.
+        tests:
+          - not_null
+
+      - name: city
+        description: >
+          Normalized city value used downstream. Lowercased, trimmed,
+          whitespace-normalized, and normalized for common Unicode dash and
+          spacing differences. No semantic city alias mapping is applied.
+        tests:
+          - not_null
+
+      - name: posted_at
+        description: >
+          Posting timestamp carried from int_postings so city-level models can
+          be filtered or aggregated by posting date.
+        tests:
+          - not_null

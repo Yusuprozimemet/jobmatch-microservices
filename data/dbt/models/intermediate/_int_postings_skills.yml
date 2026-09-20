@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: int_postings_skills
+    description: >
+      One row per posting and normalized skill. Skills are exploded from
+      int_postings.skills_raw and cleaned consistently before being used
+      downstream. Cleaning includes lowercasing, trimming, collapsing repeated
+      whitespace, normalizing Unicode dash variants, removing spaces around
+      hyphens, applying controlled aliases for known equivalent skill names,
+      and removing duplicate skills within the same posting.
+
+      The original source value is preserved in skill_raw for traceability and
+      debugging. Postings with no valid skills do not appear in this model.
+
+      This model is not published directly to the backend. It provides a
+      consistent skill vocabulary for downstream marts such as fct_postings
+      and fct_skill_popularity.
+
+    # Neither posting_id nor skill is unique on its own.
+    # The model grain is one row per posting_id + skill pair and is checked by
+    # tests/assert_one_row_per_posting_skill.sql.
+    columns:
+      - name: posting_id
+        description: >
+          Surrogate identifier of the posting this skill belongs to.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_postings')
+                field: posting_id
+
+      - name: skill_raw
+        description: >
+          Original skill value as received from the source before
+          normalization. Preserved so cleaning decisions can be inspected
+          and traced back to the source data.
+        tests:
+          - not_null
+
+      - name: skill
+        description: >
+          Canonical skill value used for matching and aggregation.
+          Lowercased, whitespace-normalized, dash-normalized, and mapped
+          through controlled alias rules where equivalent spellings are known.
+        tests:
+          - not_null
+
+      - name: posted_at
+        description: >
+          Posting timestamp carried from int_postings so skill-level models
+          can be filtered or aggregated by posting date.
+        tests:
+          - not_null
