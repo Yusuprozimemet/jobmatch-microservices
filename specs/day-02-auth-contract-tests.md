@@ -45,8 +45,7 @@ cd backend && ./mvnw verify -Dtest='Auth*IT'
 - These tests are the safety net for Day 13, the riskiest change in the plan.
   Assert on the contract, not the mechanism - the mechanism changes.
 - **49 tests over six classes**, in `backend/src/test/java/.../contract/`. Full suite (Day 01
-  and Day 02 together) is 63 tests in ~45s. (The count read 39 here until Day 13's spec-change
-  pull request; 49 is what `mvnw verify` reports and what the README always said.)
+  and Day 02 together) is 63 tests in ~45s.
 - **The `docs/hiearchy-backend.md` this spec cited does not exist.** The three Google branches
   are enumerated in [`backend/docs/auth.md` section 4](../backend/docs/auth.md#4-google-sign-in);
   the criterion above now points there.
