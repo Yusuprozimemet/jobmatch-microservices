@@ -69,10 +69,12 @@ java -jar target/backend-1.0.0-SNAPSHOT.jar
 Run the tests:
 
 ```bash
-./mvnw test
+./mvnw verify
 ```
 
-> `BackendApplicationTests.contextLoads()` boots the whole Spring context, but not against your own database: [`TestcontainersConfiguration`](src/test/java/nl/hackyourfuture/project/backend/TestcontainersConfiguration.java) starts a throwaway `postgres:18.4-alpine` container for the run. So Docker has to be running, and the `DB_*` variables are ignored here.
+> The tests never touch your own database: they start one throwaway `postgres:18.4-alpine`
+> container for the whole run, so Docker has to be running and the `DB_*` variables are ignored
+> here. See [Integration tests](#integration-tests).
 
 Check code style with Checkstyle ([`checkstyle.xml`](checkstyle.xml)):
 
@@ -223,11 +225,57 @@ Name files `V<number>__<description>.sql` (**two** underscores): after `V1__init
 
 ---
 
+## Integration tests
+
+Every test extends [`IntegrationTest`](src/test/java/nl/hackyourfuture/project/backend/support/IntegrationTest.java) and gets the application on a random port, a migrated `app` schema, a seeded mart and a clean slate — with no setup of its own:
+
+```java
+class JobSearchTest extends IntegrationTest {
+
+    @Test
+    void findsAPostingByCity() {
+        TestUser user = aUser().create();
+        aPosting().title("Rust Engineer").cities("delft").skills("rust").create();
+
+        ApiResponse response = authenticatedAs(user).get("/api/jobs?location=Delft");
+
+        assertThat(response.status()).isEqualTo(200);
+        assertThat(response.at("/content/0/title").asString()).isEqualTo("Rust Engineer");
+    }
+}
+```
+
+What the harness gives you:
+
+| | |
+|---|---|
+| `aUser()`, `aProfile()`, `aPosting()` | Chainable builders that write straight to the database. Every field has a sensible default, so a test sets only what it is about. |
+| `anonymous()`, `authenticatedAs(user)` | An HTTP client with a cookie jar. `authenticatedAs` logs in through the real `POST /api/auth/login`. |
+| `jdbc()` | The test's own `JdbcClient`, for state a builder does not cover and for asserting on stored rows. |
+| `ApiResponse` | `status()`, `body()`, `headers()`, and `at("/json/pointer")`. |
+
+Two rules keep these tests usable as the safety net for the [microservices split](../plan.md):
+
+- **Assert on the HTTP contract, not on internals.** No application beans, no application DTOs — a test that deserialises with the same record the controller returned cannot notice a renamed field, and will not survive the endpoint moving to another service.
+- **Set up through the builders or `jdbc()`, never through a service.**
+
+### The mart fixture
+
+`analytics.fct_postings`, `fct_postings_cities` and `fct_postings_skills` are built by the data pipeline and copied in by [`sync.py`](../data/src/publishing/sync.py). **Flyway does not create them**, so the tests do, in [`fixtures/analytics-schema.sql`](src/test/resources/fixtures/analytics-schema.sql) — column for column from [`data/sql/job_schema.sql`](../data/sql/job_schema.sql), including `skills` and `cities` being `text` holding a JSON array rather than a nicer type.
+
+[`fixtures/analytics-seed.sql`](src/test/resources/fixtures/analytics-seed.sql) loads 24 postings before each test, with the edge cases mart queries trip over: a repost, a posting in two cities, a country in the city bridge, an empty skills array, and a closed posting. Add to the seed when a case is generally useful; use `aPosting()` when it belongs to one test.
+
+### The database
+
+One container per run, started by [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) and never restarted. Between tests, [`TestDatabase`](src/test/java/nl/hackyourfuture/project/backend/support/TestDatabase.java) truncates every `app` table — read from the catalogue, so a table a future migration adds is cleaned up without anyone editing that class — and re-seeds the mart.
+
+Do not add a second `@TestConfiguration` with its own container, and do not put `@MockitoBean` on a test that extends `IntegrationTest`: either one makes Spring build a second context, which boots the application again and costs more than the whole suite.
+
 ## CI/CD
 
 Every pull request touching `backend/**` runs [`backend-ci-cd.yaml`](../.github/workflows/backend-ci-cd.yaml), and so does every push to `main` that touches it:
 
-1. **`lint-and-test`** — `./mvnw checkstyle:check` then `./mvnw test`. Both must pass.
+1. **`lint-and-test`** — `./mvnw checkstyle:check` then `./mvnw verify`. Both must pass.
 2. **`build`** — builds the Docker image; only pushes to GHCR when the change lands on `main`.
 
 Images are tagged `latest`, `1.0.<run number>`, and `main-sha-<short sha>`.
@@ -260,7 +308,7 @@ The `user` package is your reference — deliberately small and complete.
 - **Keep classes under `nl.hackyourfuture.project.backend`.** Spring only scans below the package holding `BackendApplication`; anything outside is silently ignored.
 - **Use correct status codes** — `200` read/update, `201` create (see `@ResponseStatus(HttpStatus.CREATED)`), `400` invalid input, `404` not found — then document them with `@ApiResponse`.
 - **Validate at the edge:** constraints on the request DTO, `@Valid` on the controller parameter.
-- **Before opening a PR,** run `./mvnw checkstyle:check` and `./mvnw test` locally — CI runs the same checks and blocks the PR if either fails.
+- **Before opening a PR,** run `./mvnw checkstyle:check` and `./mvnw verify` locally — CI runs the same checks and blocks the PR if either fails.
 
 ### Troubleshooting
 
@@ -271,7 +319,7 @@ The `user` package is your reference — deliberately small and complete.
 | `FATAL: database "project_db" does not exist` | The database was created under another name. Create `project_db`, or set `DB_NAME` to the name you have |
 | `password authentication failed for user "admin"` | Wrong `DB_USER` / `DB_PASSWORD` for this database |
 | `relation "users" does not exist`, or Flyway hits `permission denied for schema app` | `DB_SCHEMA` names a schema your `DB_USER` may not write to — the repository SQL uses unqualified table names and resolves them through it. Point it at a schema the user owns |
-| `Could not find a valid Docker environment` while running `./mvnw test` | Docker isn't running — the tests start their own database container |
+| `Could not find a valid Docker environment` while running `./mvnw verify` | Docker isn't running — the tests start their own database container |
 | `Migration checksum mismatch` | An applied migration was edited. Revert it and add a new `V…` file |
 | `403 Forbidden` on your new endpoint | Not listed in `SecurityConfig`; anything unlisted requires authentication |
 | Endpoint missing from `/api/docs` | Not annotated `@RestController`, or outside the base package |

@@ -45,3 +45,10 @@ cd backend && ./mvnw verify
 - The mart fixture is the piece most likely to be wrong. Mirror the real column types
   from `data/dbt/models/marts/fct_postings.sql`, not from guesses.
 - `scripts/db-setup.py` documents the schema and role layout — read it before writing DDL.
+- **Took 6 PRs, not the 3 estimated.** The harness is ~1,400 changed lines against the
+  400-line gate in `pr-checks.yml`, and the pieces have a compile order, so three PRs would
+  each have needed an `Oversized:` override. Split that keeps every PR green on its own:
+  mart fixtures → container + reset + test profile → `PostingBuilder` + records →
+  `UserBuilder` + `ProfileBuilder` → `IntegrationTest` + HTTP client → self-tests + CI + docs.
+- The exact mart column *types* came from `data/sql/job_schema.sql`, not from the dbt model:
+  the model is Databricks SQL, and `sync.py` maps those types to Postgres ones on the way in.
