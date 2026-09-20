@@ -1,11 +1,13 @@
 package nl.hackyourfuture.project.backend.support;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -17,9 +19,16 @@ import java.util.Map;
  * the session cookie becomes a JWT cookie, nothing here changes.
  *
  * <p>Never throws on a 4xx or 5xx - the status is part of the contract under test, so the
- * test asserts on it rather than catching an exception.
+ * test asserts on it rather than catching an exception. It does not follow redirects either:
+ * the Google sign-in flow answers with a 302 whose {@code Location} <em>is</em> the contract,
+ * and following it would leave the test chasing the frontend, which is not running.
  */
 public final class ApiClient {
+
+    // Pinned rather than left to RestClient's detection, because a request factory that
+    // follows redirects would swallow the 302s the OAuth2 tests assert on.
+    private static final JdkClientHttpRequestFactory REQUEST_FACTORY = new JdkClientHttpRequestFactory(
+            HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build());
 
     private final RestClient http;
     private final Map<String, String> cookieJar = new LinkedHashMap<>();
@@ -31,6 +40,7 @@ public final class ApiClient {
     public static ApiClient onPort(int port) {
         return new ApiClient(RestClient.builder()
                 .baseUrl("http://localhost:" + port)
+                .requestFactory(REQUEST_FACTORY)
                 .defaultStatusHandler(status -> true, (request, response) -> { })
                 .build());
     }

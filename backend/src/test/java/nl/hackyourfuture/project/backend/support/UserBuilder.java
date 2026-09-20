@@ -56,9 +56,14 @@ public final class UserBuilder {
         return this;
     }
 
-    /** A Google-only account: no credentials row, so no password login. */
+    /**
+     * A Google-only account: no credentials row, so no password login.
+     *
+     * <p>The provider name is uppercase because that is the literal the application writes and
+     * looks up by; a lowercase fixture builds a row that no Google sign-in will ever match.
+     */
     public UserBuilder googleAccount(String providerId) {
-        this.oauthProvider = "google";
+        this.oauthProvider = "GOOGLE";
         this.oauthProviderId = providerId;
         this.password = null;
         return this;
