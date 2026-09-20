@@ -34,6 +34,15 @@ public record ApiResponse(int status, HttpHeaders headers, String body) {
         return json().at(jsonPointer);
     }
 
+    /** The {@code Location} of a redirect. Fails the test if the response is not one. */
+    public String location() {
+        String location = headers.getFirst(HttpHeaders.LOCATION);
+        if (location == null) {
+            throw new AssertionError("Expected a Location header but the response had none (status " + status + ")");
+        }
+        return location;
+    }
+
     public List<String> setCookieHeaders() {
         return headers.getOrEmpty(HttpHeaders.SET_COOKIE);
     }
