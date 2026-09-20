@@ -169,6 +169,23 @@
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Surefire's defaults, plus *IT. The contract tests are named *IT because
+					     they drive the application over HTTP, and a plain `mvnw verify` - which is
+					     what CI runs - has to run them. Listing the defaults is not optional:
+					     <includes> replaces them rather than adding to them. -->
+					<includes>
+						<include>**/Test*.java</include>
+						<include>**/*Test.java</include>
+						<include>**/*Tests.java</include>
+						<include>**/*TestCase.java</include>
+						<include>**/*IT.java</include>
+					</includes>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-checkstyle-plugin</artifactId>
 				<version>3.6.0</version>
 				<configuration>
