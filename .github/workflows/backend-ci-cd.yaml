@@ -38,9 +38,12 @@ jobs:
         working-directory: ./backend
         run: ./mvnw -B checkstyle:check
 
+      # `verify`, not `test`: the integration tests are the safety net for the microservices
+      # split, so a pull request that breaks one has to fail here. They need a Docker daemon
+      # for Testcontainers, which ubuntu-latest has.
       - name: Run tests
         working-directory: ./backend
-        run: ./mvnw -B test
+        run: ./mvnw -B verify
 
   build:
     needs: lint-and-test

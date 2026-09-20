@@ -1,0 +1,45 @@
+# Test profile. The datasource is not here: IntegrationTest points it at the Testcontainers
+# Postgres with @DynamicPropertySource, which wins over anything in this file.
+#
+# Everything below pins a value that would otherwise come from the developer's environment.
+# A test run must not depend on who is running it, and must not reach the internet.
+
+spring:
+  flyway:
+    schemas: app
+  mail:
+    # Nothing is listening here, so a stray send fails in half a second instead of
+    # connecting to the real relay.
+    host: localhost
+    port: 1025
+    properties:
+      mail:
+        smtp:
+          auth: false
+          connectiontimeout: 500
+          timeout: 500
+          writetimeout: 500
+          starttls:
+            enable: false
+
+app:
+  base-url: http://localhost:3000
+  oauth2:
+    google:
+      # Empty means GoogleOAuth2Config does not register, so tests never redirect to Google.
+      client-id: ""
+      client-secret: ""
+  llm:
+    # Empty means MatchScorer is off and top-matches ranks by skill overlap alone: a
+    # deterministic result, and no calls to a model from a test run.
+    api-key: ""
+    # Scheduled purge off. "-" is Spring's disabled-cron value.
+    score-purge-cron: "-"
+
+logging:
+  level:
+    root: WARN
+    nl.hackyourfuture.project.backend: INFO
+    org.testcontainers: WARN
+    tc: WARN
+    com.github.dockerjava: WARN
