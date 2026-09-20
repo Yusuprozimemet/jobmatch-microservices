@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.contract;
 
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
+import nl.hackyourfuture.project.backend.support.Cookies;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
@@ -38,18 +39,19 @@ class AuthPasswordUpdateIT extends IntegrationTest {
         assertThat(login(user.email(), user.password()).status()).isEqualTo(401);
     }
 
-    // The session is re-established as part of the change, so the caller stays signed in and
-    // a cookie captured before the change is no longer the one in play.
+    // The credential is re-issued as part of the change, so the caller stays signed in and a
+    // cookie captured before the change is no longer the one in play. Day 13 has to keep that
+    // true for the JWT cookie, which is why its spec now says so in scope.
     @Test
     void leavesTheCallerSignedIn() {
         TestUser user = aUser().create();
         ApiClient client = authenticatedAs(user);
-        String cookieBefore = client.cookies().get("JSESSIONID");
+        String cookieBefore = client.cookies().get(Cookies.AUTH);
 
         client.patch("/api/auth/password",
                 Map.of("currentPassword", user.password(), "newPassword", "BrandNewPassword1!"));
 
-        assertThat(client.cookies().get("JSESSIONID")).isNotEqualTo(cookieBefore);
+        assertThat(client.cookies().get(Cookies.AUTH)).isNotEqualTo(cookieBefore);
         assertThat(client.get("/api/users/me").status()).isEqualTo(200);
     }
 

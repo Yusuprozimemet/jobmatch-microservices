@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.contract;
 
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
+import nl.hackyourfuture.project.backend.support.Cookies;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
@@ -13,13 +14,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@code POST /api/auth/login} — the wire contract.
  *
- * <p>The session cookie is asserted by name and attributes, not by what is inside it. Phase 2
- * replaces the contents with a JWT; the assertions below are about {@code HttpOnly} and
- * {@code SameSite}, which have to keep holding either way.
+ * <p>The auth cookie is asserted by its attributes and by what it can reach, never by its name
+ * or its contents — both are mechanism. Phase 2 replaces it with a JWT cookie under a different
+ * name; {@link Cookies#AUTH} moves and the assertions below have to keep holding either way.
  */
 class AuthLoginIT extends IntegrationTest {
-
-    private static final String SESSION_COOKIE = "JSESSIONID";
 
     @Test
     void logsInAndReturnsTheAccount() {
@@ -34,10 +33,10 @@ class AuthLoginIT extends IntegrationTest {
     }
 
     @Test
-    void setsASessionCookieThatJavascriptCannotReadAndOtherSitesCannotSend() {
+    void setsAnAuthCookieThatJavascriptCannotReadAndOtherSitesCannotSend() {
         TestUser user = aUser().create();
 
-        String cookie = login(user.email(), user.password()).setCookie(SESSION_COOKIE);
+        String cookie = login(user.email(), user.password()).setCookie(Cookies.AUTH);
 
         assertThat(cookie).containsIgnoringCase("HttpOnly");
         assertThat(cookie).containsIgnoringCase("SameSite=Lax");
@@ -45,13 +44,13 @@ class AuthLoginIT extends IntegrationTest {
     }
 
     @Test
-    void theSessionCookieReachesAnAuthenticatedEndpoint() {
+    void theAuthCookieReachesAnAuthenticatedEndpoint() {
         TestUser user = aUser().create();
         ApiClient client = anonymous();
 
         client.post("/api/auth/login", Map.of("email", user.email(), "password", user.password()));
 
-        assertThat(client.cookies()).containsKey(SESSION_COOKIE);
+        assertThat(client.cookies()).containsKey(Cookies.AUTH);
         assertThat(client.get("/api/users/me").status()).isEqualTo(200);
     }
 

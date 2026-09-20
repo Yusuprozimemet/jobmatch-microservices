@@ -44,8 +44,9 @@ cd backend && ./mvnw verify -Dtest='Auth*IT'
 ## Notes
 - These tests are the safety net for Day 13, the riskiest change in the plan.
   Assert on the contract, not the mechanism - the mechanism changes.
-- **39 tests over six classes**, in `backend/src/test/java/.../contract/`. Full suite (Day 01
-  and Day 02 together) is 63 tests in ~45s.
+- **49 tests over six classes**, in `backend/src/test/java/.../contract/`. Full suite (Day 01
+  and Day 02 together) is 63 tests in ~45s. (The count read 39 here until Day 13's spec-change
+  pull request; 49 is what `mvnw verify` reports and what the README always said.)
 - **The `docs/hiearchy-backend.md` this spec cited does not exist.** The three Google branches
   are enumerated in [`backend/docs/auth.md` section 4](../backend/docs/auth.md#4-google-sign-in);
   the criterion above now points there.
@@ -64,6 +65,14 @@ cd backend && ./mvnw verify -Dtest='Auth*IT'
   all still validated by the production decoder. It is wired in with a `@Primary`
   `ClientRegistrationRepository`, which leaves `GoogleOAuth2Config`'s verified-email check in
   place as the thing under test.
+- **The auth cookie's name was hard-coded in three contract classes.** `JSESSIONID` as a
+  literal in `AuthLoginIT`, `AuthLogoutIT` and `AuthPasswordUpdateIT`, plus a logout
+  assertion on `Expires=Thu, 01 Jan 1970`, which pins Spring's spelling of a deleted cookie
+  rather than the deletion. Both contradict Day 13's "no response anywhere sets
+  `JSESSIONID`": four tests would have failed the moment the rewrite landed, on the day the
+  plan calls the riskiest. Hoisted to `support/Cookies.AUTH` in a spec-change PR before Day
+  13. Found by review, not by a test — the criterion "tests assert `Set-Cookie` attributes
+  only" was met to the letter and still left the name coupled.
 - Two flows are unreachable over HTTP and are deliberately not covered: `PATCH
   /api/auth/password` on a Google-only account (it cannot authenticate in the first place) and
   the `linkProvider` race where a second identity tries to displace one already attached.
