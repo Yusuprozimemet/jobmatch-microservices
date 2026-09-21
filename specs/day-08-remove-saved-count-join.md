@@ -11,10 +11,9 @@
 - Implement it in `applications` with one batched query — **not** one query per posting.
 - `JobRepository` drops the correlated subquery
   (`SELECT COUNT(DISTINCT user_id) FROM saved_jobs WHERE posting_id = f.posting_id`)
-  and fills `savedCount` from the interface after the page is fetched.
-- Same for the three other places that subquery appears in `JobRepository`.
+  and fills `savedCount` from the interface after the rows are fetched.
+- It appears **twice**: once in `searchJobs`, once in `getJobById`. Both go.
 - A posting with no saved rows returns 0, not null.
-- Remove the `// TODO day-08` marker.
 
 ## Out of scope
 - Making the call over HTTP — that is the extraction in Phase 3. Today it is a Java call.
@@ -28,18 +27,29 @@
 | B | | Rewrite `JobRepository`, all call sites |
 
 ## Acceptance criteria
-- [ ] `grep -rn "saved_jobs" jobs/` returns nothing.
-- [ ] Day 03's `savedCount` test passes **unedited**.
+- [ ] `saved_jobs` appears nowhere under the `jobs` module.
+- [ ] Day 03's `JobSavedCountIT` passes **unedited** — all six tests.
 - [ ] One extra query per page, regardless of page size (assert the query count).
 - [ ] A posting nobody saved reports `savedCount: 0`.
-- [ ] `grep -rn "TODO day-08"` returns nothing.
+- [ ] `getJobById` fetches its one count without a second round trip per posting.
 
 ## Verify
 ```bash
 cd backend && ./mvnw verify -Dtest='Job*IT'
-grep -rn "saved_jobs" jobs/ || echo "clean"
+# Adjust the path to wherever Day 06 put the jobs module.
+grep -rn "saved_jobs" backend/src/main/java/nl/hackyourfuture/project/backend/jobs/ || echo "clean"
 ```
 
 ## Notes
 - This is the first real proof the boundary works. If `savedCount` needs the test edited,
   the interface is wrong, not the test.
+- **Spec corrected on Day 03, before the work.** This spec asked for "the three other places"
+  the subquery appears in `JobRepository` — there is one other place, not three — and to remove
+  a `// TODO day-08` marker that does not exist anywhere in the repository. That marker had an
+  acceptance criterion of its own, `grep -rn "TODO day-08"` returning nothing, which was already
+  true and would have ticked itself. The same failure mode as Day 02's surefire gate: a check
+  that passes because it is checking nothing. Found by reading the spec against the code while
+  writing Day 03's `savedCount` tests.
+- The `grep` path was `jobs/`, which is not where the code lives. Day 06 creates the Maven
+  modules, so whoever works this day should point the check at whatever path Day 06 produced
+  rather than trusting the one written here.
