@@ -1,6 +1,7 @@
 package nl.hackyourfuture.project.backend.support;
 
 import org.springframework.http.HttpHeaders;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -16,7 +17,13 @@ import java.util.List;
  */
 public record ApiResponse(int status, HttpHeaders headers, String body) {
 
-    private static final ObjectMapper JSON = JsonMapper.builder().build();
+    // Decimals are read as BigDecimal, not double. A response carrying 45000.00 parses back
+    // to 45000.0 by default, so a test asserting on the number could not see the scale the
+    // API actually sends - and a currency scale changing underneath is exactly the kind of
+    // drift these tests exist to catch.
+    private static final ObjectMapper JSON = JsonMapper.builder()
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .build();
 
     /** The body parsed as JSON. Fails the test if the body is absent or not JSON. */
     public JsonNode json() {
