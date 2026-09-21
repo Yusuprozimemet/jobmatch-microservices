@@ -207,21 +207,51 @@ decoder. Full suite: 63 tests in ~45 seconds.
   a spec-change pull request before the day rather than during it. The criterion it was measured
   by ("assert `Set-Cookie` attributes only") was satisfied to the letter throughout.
 
-**Early read on the hypothesis.** Across two days the agent's implementation has been sound and
-its most useful output has been *disagreement with the spec* — three of the findings above are
-the agent reporting that the instruction was wrong. The constraint so far is specification
-quality and estimation, as predicted. The hard evidence comes at Day 13, when the session-auth
-rewrite must pass these 49 tests unchanged.
+**Day 3 — profile and job search contract tests.** 68 tests across seven classes covering the
+profile round trip and its skill normalisation, job search with paging and all four filters the
+endpoint accepts, the filter options endpoint, job detail, the `savedCount` field, and which
+`/api/jobs` routes a logged-out visitor may reach. Full suite: 131 tests in ~60 seconds.
+
+- **The spec named a filter the endpoint does not have.** It asked for a filter on employment
+  type and called the city filter "city"; the search takes `category`, `workMode`, `location` and
+  `q`. One criterion could not be ticked without writing the feature it tested, and the free-text
+  filter the search page leads with was missing from the spec entirely. Corrected in a
+  spec-change pull request *before* the work, which is now the second time review of a spec
+  against the code it describes has been worth more than the code review after it.
+- **Another harness blind spot, same shape as Day 2's.** `ApiResponse` read JSON floats as
+  doubles, so a response carrying `45000.00` parsed back to `45000.0` and no assertion on a
+  number could have seen a currency scale change. The API was correct throughout; only the test
+  client's view of it was lossy. Found by writing the assertion, not by reviewing the harness.
+- **Two disagreements inside the monolith, pinned rather than fixed.** `/api/jobs/filters` offers
+  employment type and experience level as options that the search silently ignores, because
+  Spring drops a query parameter no `@RequestParam` declares. And search returns closed postings
+  while matching excludes them. Both are product questions; pinning them turns the answer into a
+  visible decision instead of a silent drift during the split.
+- **A defect found in a spec three days ahead.** Checking what `savedCount` has to survive turned
+  up two items in Day 8 that do not match the code: "the three other places" the join appears in
+  is one other place, and a `// TODO day-08` marker it asks to remove does not exist, so that
+  acceptance criterion ticks itself. The same failure mode as Day 2's CI gate — a check that
+  passes because it is checking nothing.
+- *Estimated 3 pull requests, took 4.* Track A came to 406 lines against the 400-line gate and
+  was split. The gate has now bitten twice and has still not been overridden.
+
+**Early read on the hypothesis.** Across three days the agent's implementation has been sound and
+its most useful output has been *disagreement with the spec* — five of the findings above are the
+agent reporting that the instruction was wrong, one of them about a spec three days ahead of the
+work. The constraint so far is specification quality and estimation, as predicted. Worth noting
+what has not happened: no finding yet has come from reviewing the agent's code. Every one came
+from the agent reading the system, or from checking a spec against it. The hard evidence comes at
+Day 13, when the session-auth rewrite must pass Day 2's 49 tests unchanged.
 
 ## What is being measured
 
 | Question | Evidence it will be judged on |
 | --- | --- |
 | Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/` after Day 13, and again after Days 17–28 — target: zero in `contract/` |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 1 harness, 1 production) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec |
-| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0) |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 1 production, 1 spec that ticks itself) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 2 of 3 days worked) |
+| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split twice) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
 ## Running it
