@@ -235,23 +235,57 @@ endpoint accepts, the filter options endpoint, job detail, the `savedCount` fiel
 - *Estimated 3 pull requests, took 4.* Track A came to 406 lines against the 400-line gate and
   was split. The gate has now bitten twice and has still not been overridden.
 
-**Early read on the hypothesis.** Across three days the agent's implementation has been sound and
-its most useful output has been *disagreement with the spec* — five of the findings above are the
-agent reporting that the instruction was wrong, one of them about a spec three days ahead of the
-work. The constraint so far is specification quality and estimation, as predicted. Worth noting
-what has not happened: no finding yet has come from reviewing the agent's code. Every one came
-from the agent reading the system, or from checking a spec against it. The hard evidence comes at
-Day 13, when the session-auth rewrite must pass Day 2's 49 tests unchanged.
+**Day 4 — saved jobs and matching contract tests.** 53 tests across six classes covering the
+saved-job tracker, the posting details it hydrates, and `/api/jobs/top-matches` with the language
+model replaced by a real HTTP stub. Full suite: 184 tests in ~90 seconds.
+
+- **Three of the day's six acceptance criteria could not have been met, and one was a hazard.**
+  The spec asked for the model to be stubbed, for a stub error to fall back to a 200, and for a
+  repeat request to hit the stub exactly once. `application-test.yaml` blanks `app.llm.api-key`,
+  which makes `MatchScorer` return before it makes any call — all three would have gone green
+  testing nothing. Worse, the test profile sets no `app.llm.base-url`, so anyone enabling the key
+  without also overriding the URL would have pointed the suite at a live provider, in a file whose
+  own header says a test run must not reach the internet. Found by reading the spec against the
+  code before starting, and fixed in a spec-change pull request.
+- **The fixture is worse than production in the one path the day tests.** `MatchScorer` maps the
+  model's reply back by the first eight characters of a posting id. Production ids are `md5(...)`
+  and do not collide; every seeded id is `seed-00NN`, so `seed-0001` and `seed-0002` are the same
+  id to the model. A test written against seed postings would have scored one and dropped the
+  other without a word. Day 1 established that a fixture must not be *nicer* than production; this
+  is the same rule from the other side.
+- **Saved jobs and job search disagree about the same posting, twice** — on location, because one
+  reads the free-text column and the other the normalised city bridge, and on skill order. Both
+  are pinned so Day 9's shared `PostingLookup` has to make a decision rather than satisfy one view
+  and quietly break the other.
+- *Estimated 3 pull requests, took 5.* Track C came to 446 lines against the 400-line gate and was
+  split. The gate has now forced a split three times and still has no overrides.
+- Unrelated to the day, and worth recording: the `build` job went red twice on Maven Central
+  rate-limiting. The Dockerfile copies the whole source tree before `mvn package`, so every commit
+  re-downloads the full dependency tree and the layer cache never hits. The tests were never
+  involved.
+
+**Early read on the hypothesis.** Across four days the agent's implementation has been sound and
+its most useful output has been *disagreement with the spec*. The constraint is specification
+quality and estimation, as predicted — but not in the way predicted. The expectation was that
+specs would be found wanting once the code was written against them. Instead, the two most
+valuable findings came from reading a spec against the code **before** writing anything, and Day
+4's would have produced a green suite that tested nothing had it not been caught. Phase 0 now ends
+with 184 tests and a standing practice: review the day's spec against the system first, and change
+it in its own pull request.
+
+Still worth noting what has not happened: **no finding has come from reviewing the agent's code.**
+Every one came from reading the system, or from checking a spec against it. The hard evidence
+comes at Day 13, when the session-auth rewrite must pass Day 2's 49 tests unchanged.
 
 ## What is being measured
 
 | Question | Evidence it will be judged on |
 | --- | --- |
 | Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/` after Day 13, and again after Days 17–28 — target: zero in `contract/` |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 1 production, 1 spec that ticks itself) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 2 of 3 days worked) |
-| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split twice) |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 1 production, 2 specs that could not be met, 1 fixture unlike production) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 3 of 4 days worked) |
+| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
 ## Running it
