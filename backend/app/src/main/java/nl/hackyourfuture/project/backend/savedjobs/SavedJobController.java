@@ -7,7 +7,7 @@ import jakarta.validation.Valid;
 import nl.hackyourfuture.project.backend.savedjobs.dto.SaveJobRequest;
 import nl.hackyourfuture.project.backend.savedjobs.dto.SavedJobResponse;
 import nl.hackyourfuture.project.backend.savedjobs.dto.UpdateJobStateRequest;
-import nl.hackyourfuture.project.backend.jobs.dto.PageResponse;
+import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

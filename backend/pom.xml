@@ -32,12 +32,54 @@
 
 	<properties>
 		<java.version>25</java.version>
+		<springdoc.version>3.1.0</springdoc.version>
 	</properties>
+
+	<!-- Versions for what Spring Boot's parent does not manage. Here rather than in each
+	     module, so two modules cannot end up on two versions of the same library. -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springdoc</groupId>
+				<artifactId>springdoc-openapi-starter-webmvc-scalar</artifactId>
+				<version>${springdoc.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<!-- Inherited by every module. spring-boot-maven-plugin is deliberately not here:
 	     it belongs to `app` alone, or every module tries to produce an executable jar. -->
 	<build>
 		<plugins>
+			<!-- The dependency rule, as a build failure rather than a convention. A feature
+			     module may depend on shared and on nothing else of ours; the moment one needs
+			     another, that is a boundary being crossed and the build says so. `app` is the
+			     exception and switches this off, because it is what assembles them all. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>feature-modules-depend-only-on-shared</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<bannedDependencies>
+									<excludes>
+										<exclude>nl.hackyourfuture.project:*</exclude>
+									</excludes>
+									<includes>
+										<include>nl.hackyourfuture.project:shared</include>
+									</includes>
+									<message>A feature module may depend on shared and on nothing else of ours. Needing another module is a boundary being crossed - publish an interface instead.</message>
+								</bannedDependencies>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

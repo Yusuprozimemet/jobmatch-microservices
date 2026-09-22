@@ -1,4 +1,4 @@
-package nl.hackyourfuture.project.backend.jobs.dto;
+package nl.hackyourfuture.project.backend.shared.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

@@ -9,5 +9,39 @@
 	</parent>
 	<artifactId>shared</artifactId>
 
-	<!-- Everything more than one module needs, and nothing else. Day 07 fills it. -->
+	<!-- Everything more than one module needs, and nothing else. Three classes today:
+	     PageResponse, which jobs and applications both page with; GlobalExceptionHandler,
+	     which turns exceptions into the ProblemDetail bodies every endpoint's contract is
+	     written against; and MartSkills.
+
+	     MartSkills is here under protest. jobs and applications both parse the mart's
+	     skills column today, so it cannot live in either. Day 09 removes applications'
+	     reason to read mart columns at all - take it out of shared then.
+
+	     Every class added here becomes a deployment dependency between services later, so
+	     the bar for adding a fourth is "two modules genuinely need it", not "it felt
+	     general". -->
+	<dependencies>
+		<!-- ProblemDetail, @RestControllerAdvice and the exceptions handled, plus the
+		     Jackson that MartSkills parses with. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<!-- BadCredentialsException, which the handler maps to a 401. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- DuplicateKeyException, which the handler maps to a 409. -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-tx</artifactId>
+		</dependency>
+		<!-- The @Schema annotations on PageResponse. -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-scalar</artifactId>
+		</dependency>
+	</dependencies>
 </project>
