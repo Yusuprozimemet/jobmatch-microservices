@@ -1,6 +1,7 @@
 package nl.hackyourfuture.project.backend.contract;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
@@ -11,6 +12,8 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.TestPropertySource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -79,6 +82,27 @@ class ObservabilityLoggingIT extends IntegrationTest {
         assertThat(lastJsonLineContaining(output, "first thing").get("trace_id").asString())
                 .isEqualTo(lastJsonLineContaining(output, "second thing").get("trace_id").asString())
                 .isEqualTo("0af7651916cd43dd8448eb211c80319c");
+    }
+
+    /**
+     * The half the agent was supposed to provide: a line logged while serving a request
+     * carries the identifier of the trace that request belongs to.
+     *
+     * <p>Driven over HTTP rather than by setting MDC, because the point is that the server
+     * populates it. {@code POST /api/auth/forgot-password} for a Google-only account logs
+     * synchronously inside the request, which makes it the one request in this application
+     * that writes a log line of its own.
+     */
+    @Test
+    void aLineLoggedWhileServingARequestCarriesTheTraceId(CapturedOutput output) {
+        TestUser googleOnly = aUser().googleAccount("google-" + System.nanoTime()).create();
+
+        anonymous().post("/api/auth/forgot-password", Map.of("email", googleOnly.email()));
+
+        JsonNode line = lastJsonLineContaining(output, "Skipping password reset email");
+        assertThat(line.get("traceId")).as("traceId on a request-scoped log line").isNotNull();
+        assertThat(line.get("traceId").asString()).hasSize(32);
+        assertThat(line.get("spanId").asString()).hasSize(16);
     }
 
     private static JsonNode lastJsonLineContaining(CapturedOutput output, String message) {
