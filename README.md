@@ -264,27 +264,66 @@ model replaced by a real HTTP stub. Full suite: 184 tests in ~90 seconds.
   re-downloads the full dependency tree and the layer cache never hits. The tests were never
   involved.
 
-**Early read on the hypothesis.** Across four days the agent's implementation has been sound and
-its most useful output has been *disagreement with the spec*. The constraint is specification
-quality and estimation, as predicted — but not in the way predicted. The expectation was that
-specs would be found wanting once the code was written against them. Instead, the two most
-valuable findings came from reading a spec against the code **before** writing anything, and Day
-4's would have produced a green suite that tested nothing had it not been caught. Phase 0 now ends
-with 184 tests and a standing practice: review the day's spec against the system first, and change
-it in its own pull request.
+**Day 5 — observability baseline.** Actuator on its own unpublished port, Prometheus and OTLP
+registries, structured JSON logs, request tracing, and a Grafana stack behind a compose profile.
+Seven of nine acceptance criteria hold. Full suite: 196 tests.
 
-Still worth noting what has not happened: **no finding has come from reviewing the agent's code.**
-Every one came from reading the system, or from checking a spec against it. The hard evidence
-comes at Day 13, when the session-auth rewrite must pass Day 2's 49 tests unchanged.
+- **The day's central assumption was wrong, and finding out took four pull requests.** The spec
+  said to trace with the OpenTelemetry Java agent. On Spring Framework 7 and Tomcat 11 the agent
+  produces JDBC spans and no request span — and, measured as an A/B against the running stack, it
+  *suppresses* Spring's own instrumentation, so attaching it makes things worse than leaving it
+  off. The agent is gone; traces come from `spring-boot-starter-opentelemetry`. The trade is
+  recorded rather than papered over: we gained the request span and lost the JDBC spans.
+- **Two configuration traps, both silent.** The sampling property is
+  `management.tracing.sampling.probability`; the name without `sampling` binds to nothing and
+  leaves sampling at 0.1. And an OTLP endpoint set to the empty string does not mean "no
+  exporter" — the exporter fails to build and the application does not start, which took out all
+  195 tests at once.
+- **The health endpoint would have taken the application out of the load balancer.** The mail
+  indicator opens an SMTP connection on every check and reports DOWN when the relay is
+  unreachable, dragging the whole endpoint down. Phase 7 makes that the Kubernetes readiness
+  probe, so an undeliverable password-reset email would have stopped everyone browsing jobs.
+- **`docker compose up` could never start the backend.** `DB_PORT` was read by the prod profile
+  and set by nothing, so the container died on an invalid JDBC URL. Pre-existing, unrelated to
+  this day, and found only because the day's Verify block required the stack to come up.
+- **I got two readings wrong and corrected both in the open.** I reported that the starter
+  instruments requests on evidence that turned out to come from the agent being attached too; and
+  I reported that log correlation did not work, from a Tomcat error line written after the span
+  scope closes. Both corrections are in the pull requests that made them.
+- *Estimated 3 pull requests, took 7.*
+
+**Phase 0 is complete.** 196 tests, a metrics endpoint, structured logs, and a trace you can find
+from a log line. The contract tests that Days 2 to 4 built are the thing the rest of the migration
+is measured against.
+
+**Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
+been sound and its most useful output has been *disagreement with the spec*. The constraint is
+specification quality and estimation, as predicted — but not in the way predicted. The expectation
+was that specs would be found wanting once code was written against them. For Days 3 and 4 the
+most valuable findings came earlier still, from reading a spec against the code before writing
+anything.
+
+Day 5 is the counter-example, and the more honest one. Its central assumption — trace with the
+Java agent — could not be checked by reading anything. It needed the stack running, a request
+made, and the result looked at; and the answer was that the tool the spec named does not work on
+this stack and makes things worse when present. That cost four pull requests and produced two
+intermediate conclusions that were themselves wrong and had to be corrected in public. **Days
+written from documentation are checked by reading; days written from assumption are only checked
+by running.**
+
+What still has not happened: **no finding has come from reviewing the agent's code.** Every one
+came from reading the system, checking a spec against it, or running the thing and looking. The
+hard evidence comes at Day 13, when the session-auth rewrite must pass Day 2's 49 tests
+unchanged.
 
 ## What is being measured
 
 | Question | Evidence it will be judged on |
 | --- | --- |
 | Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/` after Day 13, and again after Days 17–28 — target: zero in `contract/` |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 1 production, 2 specs that could not be met, 1 fixture unlike production) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 3 of 4 days worked) |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 3 specs that could not be met, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 4 of 5 days worked, and Day 5 needed two) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
