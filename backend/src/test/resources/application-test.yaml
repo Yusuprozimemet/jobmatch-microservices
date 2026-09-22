@@ -36,6 +36,19 @@ app:
     # Scheduled purge off. "-" is Spring's disabled-cron value.
     score-purge-cron: "-"
 
+management:
+  server:
+    # 0 means a random port, the way the application server already gets one, so the
+    # actuator tests can reach it without two runs colliding. @LocalManagementPort reads it.
+    port: 0
+  otlp:
+    metrics:
+      export:
+        # Belt and braces: application.yaml already defaults this off, and leaving it on
+        # would have every test run post metrics at a collector that is not there, once per
+        # export interval, exactly as the mail and LLM settings above prevent.
+        enabled: false
+
 logging:
   level:
     root: WARN

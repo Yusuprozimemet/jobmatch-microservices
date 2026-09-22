@@ -3,8 +3,10 @@ package nl.hackyourfuture.project.backend.config;
 import lombok.extern.slf4j.Slf4j;
 import nl.hackyourfuture.project.backend.auth.OAuth2LoginSuccessHandler;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -30,7 +32,30 @@ public class SecurityConfig {
     private static final String AUTHORIZATION_BASE_URI = "/api/oauth2/authorization";
     private static final String REDIRECTION_BASE_URI = "/api/login/oauth2/code/*";
 
+    /**
+     * Actuator, on its own port.
+     *
+     * <p>{@code EndpointRequest} only matches inside the management context when the
+     * management port differs from the application port, so this chain governs the actuator
+     * port alone. On the application port every {@code /actuator/**} path falls through to the
+     * chain below and its {@code anyRequest().authenticated()}, which is what keeps the
+     * metrics off the public surface without a second set of credentials to manage.
+     *
+     * <p>Ordered ahead of the application chain because the first matching chain wins.
+     */
     @Bean
+    @Order(1)
+    public SecurityFilterChain actuatorFilterChain(HttpSecurity http) {
+        http
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                // Nothing here reads a cookie, and the scraper does not have one.
+                .csrf(AbstractHttpConfigurer::disable);
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             ObjectProvider<ClientRegistrationRepository> clientRegistrations,
