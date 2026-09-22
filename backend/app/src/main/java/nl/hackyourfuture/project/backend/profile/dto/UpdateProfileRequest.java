@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import nl.hackyourfuture.project.backend.shared.identity.ProfileSnapshot;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -54,7 +55,10 @@ public record UpdateProfileRequest(
         BigDecimal salaryPreference
 ) {
 
-    // Matching needs at least this many skills to rank on.
-    public static final int MIN_SKILLS = 5;
+    // Matching needs at least this many skills to rank on, and enforces the same floor when
+    // it refuses to rank a short profile. Defined once in shared so the form and the ranking
+    // cannot drift apart - the symptom of that would be a form accepting a profile that
+    // matching then rejects.
+    public static final int MIN_SKILLS = ProfileSnapshot.MINIMUM_SKILLS;
     public static final int MAX_SKILLS = 20;
 }
