@@ -296,6 +296,22 @@ Seven of nine acceptance criteria hold. Full suite: 196 tests.
 from a log line. The contract tests that Days 2 to 4 built are the thing the rest of the migration
 is measured against.
 
+**Day 6 — Maven multi-module skeleton.** `backend` becomes a parent over six modules. The feature
+modules are created empty and the code moves wholesale into `app`; Day 7 distributes it. All seven
+criteria hold, 196 tests still green.
+
+- **The dependency rule is enforced, not documented.** `maven-enforcer` fails the build when a
+  feature module reaches for another, with a message saying to publish an interface instead. Proved
+  by breaking it on purpose and watching it fail — a rule nobody has seen fail is a comment.
+- **A green test suite does not mean the image builds.** The Dockerfile copied one module's sources,
+  so the moment `shared` had code the container could not compile it, while `mvnw verify` — which
+  builds the tree that is actually on disk — stayed green. Day 7 gives five more modules their first
+  sources, so the bug was queued to recur five times.
+- **Reading the spec against the code first found three classes with no module to go to**, including
+  one used by two future services that therefore cannot live in either. It is in `shared` with an
+  expiry date written into the pom.
+- *Estimated 2 pull requests, took 2.* The first day that landed on its estimate.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -321,9 +337,9 @@ unchanged.
 | Question | Evidence it will be judged on |
 | --- | --- |
 | Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/` after Day 13, and again after Days 17–28 — target: zero in `contract/` |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7) |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2) |
 | Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 3 specs that could not be met, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 4 of 5 days worked, and Day 5 needed two) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 5 of 6 days worked, and Day 5 needed two) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 

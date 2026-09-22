@@ -45,15 +45,15 @@
 | B | | `app` module: main class, config, Dockerfile path, CI build path |
 
 ## Acceptance criteria
-- [ ] `./mvnw verify` builds all modules and runs the Day 1–5 suites: 196 tests, all green.
-- [ ] `./mvnw -B checkstyle:check` passes from `backend/`, for every module.
-- [ ] Exactly one module produces a Spring Boot jar.
-- [ ] No module lists another feature module as a dependency (only `shared`).
-- [ ] `docker compose up` works with no change to `docker-compose.yml`, and
+- [x] `./mvnw verify` builds all modules and runs the Day 1–5 suites: 196 tests, all green.
+- [x] `./mvnw -B checkstyle:check` passes from `backend/`, for every module.
+- [x] Exactly one module produces a Spring Boot jar.
+- [x] No module lists another feature module as a dependency (only `shared`).
+- [x] `docker compose up` works with no change to `docker-compose.yml`, and
   `curl localhost:8080/api/jobs` answers.
-- [ ] A second image build, after touching one source file, does not re-download the
+- [x] A second image build, after touching one source file, does not re-download the
   dependency tree — the same check the Docker build fix introduced.
-- [ ] Backend CI builds and pushes the same image as before.
+- [x] Backend CI builds and pushes the same image as before.
 
 ## Verify
 ```bash
@@ -64,6 +64,25 @@ docker compose up -d --build backend && curl -s localhost:8080/api/jobs | head -
 ## Notes
 - Keep `shared` small and boring. Every class added to it becomes a deployment
   dependency between services later.
+- **Seven of seven criteria hold.** 196 tests across the reactor, checkstyle clean in every
+  module, one boot jar of six, the dependency rule enforced, `docker compose up` unchanged, the
+  dependency layer still cached, and CI building the same image.
+- **The dependency rule is `maven-enforcer`, not a comment.** A feature module reaching for
+  another fails the build. Proved by adding `identity` to `jobs` and watching it fail, then
+  reverting — a rule nobody has seen fail is a comment with extra steps, and this one has to
+  hold for five days before it protects anything.
+- **`MartSkills` is in `shared` with an expiry date.** Day 09 removes `applications`' reason to
+  read mart columns; take it out then. The reasoning is in `shared/pom.xml`, where the next
+  person to consider adding a fourth class will see it.
+- **A green `mvnw verify` does not mean the image builds.** The Dockerfile copied `app/src` and
+  nothing else, so the moment `shared` gained sources the container could not compile the
+  application — while the local build, which has the whole tree, stayed green. Now it copies
+  everything after the pom layer. Day 07 gives five more modules their first sources, so this
+  would have recurred five times.
+- `springdoc`'s version moved to `dependencyManagement`; Spring Boot's parent does not manage it,
+  and two modules needing it meant one version written twice.
+- *Estimated 2 pull requests, took 2* — the first day that landed on its estimate. The spec
+  change was extra, and by now that is the method rather than an overrun.
 - **Spec corrected before the work, on the pattern of Days 3 to 5.** Three things had no home
   in the module list and would have been discovered mid-move:
   - `MartSkills` is used by `jobs` and by `savedjobs`, so it cannot live in either. It is in
