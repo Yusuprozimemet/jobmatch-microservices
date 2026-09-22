@@ -5,25 +5,37 @@
 FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /app
 
-# Dependencies first, keyed on pom.xml alone. Docker reuses this layer for as long as the
-# pom does not change, so editing a source file no longer re-downloads the dependency tree
-# on every commit. That download is what kept tripping Maven Central's rate limit and
-# turning the build red on changes that never touched a dependency.
+# Dependencies first, keyed on the poms alone. Docker reuses this layer for as long as no
+# pom changes, so editing a source file no longer re-downloads the dependency tree on every
+# commit. That download is what kept tripping Maven Central's rate limit and turning the
+# build red on changes that never touched a dependency.
+#
+# Every module's pom, not just the parent's: `dependency:go-offline` resolves what the
+# reactor declares, and a parent listing modules that are not there fails outright. Listing
+# them one by one rather than with a wildcard is deliberate - a wildcard silently skips a
+# new module, and the first symptom would be the full download quietly coming back.
 COPY pom.xml .
+COPY shared/pom.xml shared/
+COPY identity/pom.xml identity/
+COPY jobs/pom.xml jobs/
+COPY applications/pom.xml applications/
+COPY matching/pom.xml matching/
+COPY app/pom.xml app/
 RUN mvn -B -e dependency:go-offline
 
 # Sources last, because they change on every commit and invalidate whatever follows.
 # checkstyle.xml is not needed by `package` today - the plugin has no phase binding - but
 # it is copied so that binding it later does not break the image build.
 COPY checkstyle.xml ./
-COPY src ./src
+COPY app/src app/src
 RUN mvn -B package -DskipTests
 
 # Stage 2: run the JAR (JRE is enough)
 FROM eclipse-temurin:25-jre
 USER 1000
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+# Only `app` produces a Spring Boot jar; the rest are plain module jars inside it.
+COPY --from=build /app/app/target/*.jar app.jar
 EXPOSE 8080
 # The management port. Publish it only where a scraper can reach it - never to the internet.
 EXPOSE 9090
