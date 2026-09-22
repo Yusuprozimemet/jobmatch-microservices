@@ -1,12 +1,12 @@
-package nl.hackyourfuture.project.backend.savedjobs;
+package nl.hackyourfuture.project.backend.applications;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import nl.hackyourfuture.project.backend.savedjobs.dto.SaveJobRequest;
-import nl.hackyourfuture.project.backend.savedjobs.dto.SavedJobResponse;
-import nl.hackyourfuture.project.backend.savedjobs.dto.UpdateJobStateRequest;
+import nl.hackyourfuture.project.backend.applications.dto.SaveJobRequest;
+import nl.hackyourfuture.project.backend.applications.dto.SavedJobResponse;
+import nl.hackyourfuture.project.backend.applications.dto.UpdateJobStateRequest;
 import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

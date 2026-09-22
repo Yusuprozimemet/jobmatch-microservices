@@ -1,4 +1,4 @@
-package nl.hackyourfuture.project.backend.savedjobs;
+package nl.hackyourfuture.project.backend.applications;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
