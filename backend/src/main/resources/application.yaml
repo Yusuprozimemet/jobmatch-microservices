@@ -73,3 +73,42 @@ scalar:
   enabled: true
   path: /api/docs
   url: ${springdoc.api-docs.path}
+
+# Observability. Actuator listens on its own port, which compose and the ingress do not
+# publish, so nothing here is reachable from the internet: on the application port every
+# /actuator/** path falls through to SecurityConfig's anyRequest().authenticated() and
+# answers 401. That is what lets Prometheus scrape without the app growing a public
+# metrics endpoint or a second set of credentials.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        # Only these two. Nothing else is worth the surface, and /actuator/env in
+        # particular would hand out the whole configuration, secrets included.
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      # Safe because this port is not published. It is also the only way an operator can
+      # see which dependency is the reason the application says it is unhealthy.
+      show-details: always
+      show-components: always
+  health:
+    mail:
+      # Off on purpose. The mail indicator opens an SMTP connection on every health check
+      # and reports DOWN when the relay is unreachable, which drags the whole endpoint
+      # DOWN with it. Phase 7 wires /actuator/health up as the Kubernetes readiness probe,
+      # so leaving this on would pull the application out of the load balancer - nobody
+      # could browse jobs - because password-reset email is undeliverable. Sending mail is
+      # not a condition for serving traffic, and Day 31 moves it onto a queue regardless.
+      enabled: false
+  otlp:
+    metrics:
+      export:
+        # Export is enabled by default and aims at a local collector, so an unset endpoint
+        # means "retry forever against nothing", not "off". Off unless an endpoint is given.
+        enabled: ${OTEL_METRICS_ENABLED:false}
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
