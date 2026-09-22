@@ -26,11 +26,12 @@ so we can compare before and after.
 - Structured JSON logs carrying the trace identifiers. Spring Boot 4.1 does this on its own
   with `logging.structured.format.console: logstash`, which flattens MDC into the JSON — no
   encoder dependency and no `logback-spring.xml`.
-- **Getting the trace identifiers into the JSON logs is unfinished.** Micrometer Tracing does not
-  populate MDC on its own here, and structured logging bypasses
-  `logging.pattern.correlation`, so a request's log lines carry no identifier yet.
-  `ObservabilityLoggingIT` sets MDC by hand and so is unaffected either way — it pins that MDC
-  reaches the JSON, not who put it there.
+- **The MDC keys are `traceId` and `spanId`**, camel case, because Micrometer's
+  `Slf4JEventListener` writes them. The agent's were `trace_id` and `span_id`.
+- Only lines logged *inside* the span scope carry them. Tomcat's own error log for a failed
+  request is written after the scope closes and has no identifier, which is easy to mistake for
+  correlation being broken. Assert against a line the application logs, not one the container
+  does.
 - `OTEL_EXPORTER_OTLP_ENDPOINT` configurable, and the app boots with it unset.
 - **Turn OTLP metric export off in `application-test.yaml`.** It defaults to *enabled*, pointed
   at a local consumer, so an unset endpoint is not "telemetry off": every test run would post
@@ -64,7 +65,7 @@ Checkable by `./mvnw verify`, so the day leaves a gate behind rather than a walk
   and the test run makes no outbound metric export.
 - [ ] A log line written during a request carries `trace_id`, and JSON logging is on.
 
-- [ ] A request's log lines carry a `traceId`, and two lines from one request carry the same one.
+- [x] A request's log lines carry a `traceId`, and two lines from one request carry the same one.
 
 Checkable by hand, with the commands in Verify:
 - [ ] `GET /api/jobs` produces one trace whose root is the request, with its JDBC calls beneath it.
@@ -130,9 +131,9 @@ curl -s localhost:8080/actuator/health
     https://" and the application does not start — every test errored. Use
     `management.tracing.export.enabled` to switch export off instead; spans are still created and
     still correlate.
-  - **Corrected from the earlier spec change:** the `traceId` seen in log lines during the spike
-    came from having the agent attached as well, not from the starter. With the starter alone
-    there is no identifier in MDC, and log correlation is still open.
+  - Log correlation does work with the starter alone, and the identifiers in the JSON come from
+    Micrometer rather than from the agent. An earlier reading that said otherwise was taken from
+    Tomcat's error log, which is written outside the span scope.
 - Four criteria moved from "open Grafana and look" to `./mvnw verify`. A Phase 0 day exists to
   leave behind repeatable evidence, and the original Verify block could only be run by a person
   with Docker and a browser — it would not have failed in CI if someone later removed the
