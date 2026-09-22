@@ -9,5 +9,26 @@
 	</parent>
 	<artifactId>jobs</artifactId>
 
-	<!-- Job search and the mart it reads. Empty until Day 07. -->
+	<!-- Job search: the only module that reads the analytics mart the data pipeline
+	     publishes. It owns no tables of its own - the mart is written from outside the
+	     application entirely - which is what makes it the easiest service to extract. -->
+	<dependencies>
+		<dependency>
+			<groupId>nl.hackyourfuture.project</groupId>
+			<artifactId>shared</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-scalar</artifactId>
+		</dependency>
+	</dependencies>
 </project>
