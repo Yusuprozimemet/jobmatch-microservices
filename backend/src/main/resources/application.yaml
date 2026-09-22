@@ -105,6 +105,24 @@ management:
       # could browse jobs - because password-reset email is undeliverable. Sending mail is
       # not a condition for serving traffic, and Day 31 moves it onto a queue regardless.
       enabled: false
+  tracing:
+    sampling:
+      # Every request, while we are still learning what the traces look like. The default is
+      # 0.1, and Phase 7 is where sampling becomes a cost decision rather than a learning one.
+      probability: ${TRACING_PROBABILITY:1.0}
+    export:
+      # Off unless somewhere to send spans is configured, the same rule as the metrics
+      # registry above. This switch rather than an empty endpoint: an endpoint set to the
+      # empty string does not mean "no exporter", it means the exporter fails to build with
+      # "Invalid endpoint, must start with http:// or https://" and the application does not
+      # start at all. Spans are still created and still correlate requests with export off.
+      enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # The full OTLP path, not the collector's base URL. Only read when export is on.
+          endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
   metrics:
     distribution:
       percentiles-histogram:
