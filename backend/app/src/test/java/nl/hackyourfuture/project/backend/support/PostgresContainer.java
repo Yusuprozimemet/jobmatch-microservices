@@ -34,9 +34,17 @@ public final class PostgresContainer {
         CONTAINER = new PostgreSQLContainer(DockerImageName.parse(IMAGE))
                 .withDatabaseName("project_db")
                 .withUsername("app_user")
-                .withPassword("password");
+                .withPassword("password")
+                // pg_stat_statements lets a test count the statements a request ran without
+                // touching the application's DataSource - see StatementCounter. Setting the
+                // command replaces Testcontainers' default, so fsync=off is repeated here.
+                .withCommand("postgres", "-c", "fsync=off",
+                        "-c", "shared_preload_libraries=pg_stat_statements");
         CONTAINER.start();
         DATA_SOURCE = buildDataSource();
+        // In public, not app: the connection's currentSchema=app would otherwise put the
+        // extension's view inside the schema Flyway owns.
+        execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA public");
         execute(SqlScripts.read("fixtures/analytics-schema.sql"));
     }
 
