@@ -24,10 +24,11 @@ COPY app/pom.xml app/
 RUN mvn -B -e dependency:go-offline
 
 # Sources last, because they change on every commit and invalidate whatever follows.
-# checkstyle.xml is not needed by `package` today - the plugin has no phase binding - but
-# it is copied so that binding it later does not break the image build.
-COPY checkstyle.xml ./
-COPY app/src app/src
+# The whole tree rather than a list of module source directories: this copy is invalidated
+# by every commit anyway, so naming the modules buys nothing and costs a broken build the
+# first time one of them gains code. It already did - `COPY app/src` alone compiled locally,
+# where the full tree is present, and failed in the image the moment shared had sources.
+COPY . .
 RUN mvn -B package -DskipTests
 
 # Stage 2: run the JAR (JRE is enough)
