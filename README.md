@@ -312,6 +312,27 @@ criteria hold, 196 tests still green.
   expiry date written into the pom.
 - *Estimated 2 pull requests, took 2.* The first day that landed on its estimate.
 
+**Day 7 — move the code into the modules.** Roughly seventy classes move into `identity`, `jobs`,
+`applications` and `matching`, leaving `app` with five files. `applications` and `matching` stop
+reading `identity`'s tables and ask through two interfaces in `shared`. 202 tests green.
+
+- **Not one test file was edited.** The 196 contract tests never name an application class, so a
+  seventy-class package move was invisible to them. That claim was made throughout Phase 0 and
+  this is the first time it was put under load. It held.
+- **The spec's central instruction was wrong in a way that would have looked like success.** It
+  said to expect three compile failures; two of them were SQL strings, which no compiler can see.
+  Following it, you would have moved the code, found one kind of failure instead of three, had
+  nothing to unblock for Days 8 and 9, and concluded the boundary was clean while two modules
+  still read each other's tables. The corrected spec has a criterion that runs backwards: after
+  the move, those joins must **still be there**.
+- **`UserLookup`, the class the spec said to break the coupling on, does not exist** anywhere in
+  the repository. Day 10 is titled "Delete `UserLookup`" and rests on the same premise.
+- **I tested my own justification for a file and it was false.** The ArchUnit rules were
+  introduced as catching what `maven-enforcer` cannot; adding a dependency and an import together
+  fails at the enforcer first. They earn their place as an independent record of the boundary —
+  with the enforcer skipped they still fail — which is a smaller claim and the true one.
+- *Estimated 4 pull requests, took 5.*
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -336,10 +357,10 @@ unchanged.
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/` after Day 13, and again after Days 17–28 — target: zero in `contract/` |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`.** Day 13 and Days 17–28 are the remaining tests |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5) |
 | Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 3 specs that could not be met, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 5 of 6 days worked, and Day 5 needed two) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 6 of 7 days worked, and Day 5 needed two) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
