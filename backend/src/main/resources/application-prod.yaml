@@ -9,5 +9,14 @@ spring:
 logging:
   level:
     root: INFO
+  # One JSON object per line, so a log collector can index the fields instead of parsing
+  # a message. Spring Boot writes this itself since 3.4 - no encoder dependency and no
+  # logback-spring.xml. The formatter flattens MDC into the object, which is how trace_id
+  # and span_id get there: the OpenTelemetry agent puts them in MDC on every request.
+  #
+  # Only in prod. Local development keeps the readable one-line format.
+  structured:
+    format:
+      console: logstash
 
 # Add any additional configuration for the production environment
