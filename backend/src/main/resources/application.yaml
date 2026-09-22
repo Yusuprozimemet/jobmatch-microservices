@@ -105,6 +105,13 @@ management:
       # could browse jobs - because password-reset email is undeliverable. Sending mail is
       # not a condition for serving traffic, and Day 31 moves it onto a queue regardless.
       enabled: false
+  metrics:
+    distribution:
+      percentiles-histogram:
+        # Publishes the _bucket series Prometheus needs to compute a quantile. Without it
+        # there is a request count and a total time but no p95, and the latency panels on
+        # the dashboard are empty rather than wrong.
+        http.server.requests: true
   otlp:
     metrics:
       export:
