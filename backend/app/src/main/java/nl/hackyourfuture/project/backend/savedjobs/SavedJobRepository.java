@@ -1,8 +1,8 @@
 package nl.hackyourfuture.project.backend.savedjobs;
 
-import nl.hackyourfuture.project.backend.mart.MartSkills;
+import nl.hackyourfuture.project.backend.shared.mart.MartSkills;
 import nl.hackyourfuture.project.backend.savedjobs.dto.SavedJobResponse;
-import nl.hackyourfuture.project.backend.jobs.dto.PageResponse;
+import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 

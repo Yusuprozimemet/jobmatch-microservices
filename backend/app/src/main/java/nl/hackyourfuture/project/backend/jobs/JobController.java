@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import nl.hackyourfuture.project.backend.jobs.dto.JobDetailResponse;
 import nl.hackyourfuture.project.backend.jobs.dto.JobFiltersResponse;
 import nl.hackyourfuture.project.backend.jobs.dto.JobSearchResponse;
-import nl.hackyourfuture.project.backend.jobs.dto.PageResponse;
+import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

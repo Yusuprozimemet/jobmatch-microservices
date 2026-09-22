@@ -1,4 +1,4 @@
-package nl.hackyourfuture.project.backend.config;
+package nl.hackyourfuture.project.backend.shared.web;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
