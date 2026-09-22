@@ -2,10 +2,9 @@ package nl.hackyourfuture.project.backend.matching;
 
 import lombok.RequiredArgsConstructor;
 import nl.hackyourfuture.project.backend.matching.dto.JobMatchResponse;
-import nl.hackyourfuture.project.backend.identity.profile.Profile;
-import nl.hackyourfuture.project.backend.identity.profile.ProfileRepository;
-import nl.hackyourfuture.project.backend.identity.profile.dto.UpdateProfileRequest;
-import nl.hackyourfuture.project.backend.identity.user.UserRepository;
+import nl.hackyourfuture.project.backend.shared.identity.ProfileDirectory;
+import nl.hackyourfuture.project.backend.shared.identity.ProfileSnapshot;
+import nl.hackyourfuture.project.backend.shared.identity.UserDirectory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -28,8 +27,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class JobMatchService {
 
-    // The same floor the profile form and UpdateProfileRequest enforce.
-    static final int MINIMUM_PROFILE_SKILLS = UpdateProfileRequest.MIN_SKILLS;
+    // The same floor the profile form enforces when saving, defined once in shared.
+    static final int MINIMUM_PROFILE_SKILLS = ProfileSnapshot.MINIMUM_SKILLS;
     static final int SHORTLIST_SIZE = 40;
     static final int RESULT_LIMIT = 25;
     // Where "strong match" starts, per the label's documented contract.
@@ -40,13 +39,13 @@ public class JobMatchService {
 
     private final JobMatchRepository jobMatchRepository;
     private final JobMatchScoreRepository jobMatchScoreRepository;
-    private final ProfileRepository profileRepository;
-    private final UserRepository userRepository;
+    private final ProfileDirectory profileDirectory;
+    private final UserDirectory userDirectory;
     private final MatchScorer matchScorer;
 
     public List<JobMatchResponse> getTopMatches(String email) {
-        Profile profile = loadProfile(email);
-        List<String> skills = canonicalise(profile.getSkills());
+        ProfileSnapshot profile = loadProfile(email);
+        List<String> skills = canonicalise(profile.skills());
 
         if (skills.size() < MINIMUM_PROFILE_SKILLS) {
             // Validation keeps new saves above the floor, but older profiles can be short.
@@ -56,7 +55,7 @@ public class JobMatchService {
         }
 
         List<JobMatchRepository.JobMatchRow> shortlist =
-                jobMatchRepository.findTopMatches(profile.getPreferredCity(), skills, SHORTLIST_SIZE);
+                jobMatchRepository.findTopMatches(profile.preferredCity(), skills, SHORTLIST_SIZE);
         if (shortlist.isEmpty()) {
             return List.of();
         }
@@ -96,9 +95,11 @@ public class JobMatchService {
         return scores;
     }
 
-    private Profile loadProfile(String email) {
-        return userRepository.getUserByEmail(email)
-                .flatMap(user -> profileRepository.findByUserId(user.getId()))
+    // No account and no profile are the same answer to the caller: there is nothing to rank
+    // against. Asking identity for both keeps the users and user_profiles tables out of here.
+    private ProfileSnapshot loadProfile(String email) {
+        return userDirectory.findUserIdByEmail(email)
+                .flatMap(profileDirectory::forUser)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                         "Fill in your profile to see matching jobs."));
     }

@@ -1,7 +1,7 @@
-package nl.hackyourfuture.project.backend.savedjobs;
+package nl.hackyourfuture.project.backend.applications;
 
-import nl.hackyourfuture.project.backend.savedjobs.dto.SavedJobResponse;
-import nl.hackyourfuture.project.backend.identity.user.UserRepository;
+import nl.hackyourfuture.project.backend.applications.dto.SavedJobResponse;
+import nl.hackyourfuture.project.backend.shared.identity.UserDirectory;
 import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -14,18 +14,18 @@ import java.util.UUID;
 public class SavedJobService {
 
     private final SavedJobRepository savedJobRepository;
-    private final UserRepository userRepository;
+    private final UserDirectory userDirectory;
 
-    public SavedJobService(SavedJobRepository savedJobRepository, UserRepository userRepository) {
+    public SavedJobService(SavedJobRepository savedJobRepository, UserDirectory userDirectory) {
         this.savedJobRepository = savedJobRepository;
-        this.userRepository = userRepository;
+        this.userDirectory = userDirectory;
     }
 
-    // Resolves user email to UUID or fails if not found
+    // Resolves user email to UUID or fails if not found. Asks identity rather than reading
+    // its table: this module no longer knows that users have a table at all.
     private UUID getUserIdByEmail(String email) {
-        return userRepository.getUserByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"))
-                .getId();
+        return userDirectory.findUserIdByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
     // Save a new job for a user if not already saved

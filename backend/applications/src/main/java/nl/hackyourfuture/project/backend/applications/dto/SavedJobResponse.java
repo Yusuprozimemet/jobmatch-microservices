@@ -1,7 +1,7 @@
-package nl.hackyourfuture.project.backend.savedjobs.dto;
+package nl.hackyourfuture.project.backend.applications.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import nl.hackyourfuture.project.backend.savedjobs.JobState;
+import nl.hackyourfuture.project.backend.applications.JobState;
 
 import java.time.LocalDate;
 import java.util.List;

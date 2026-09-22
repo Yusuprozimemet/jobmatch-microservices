@@ -1,4 +1,4 @@
-package nl.hackyourfuture.project.backend.savedjobs.dto;
+package nl.hackyourfuture.project.backend.applications.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
