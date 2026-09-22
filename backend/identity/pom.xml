@@ -9,5 +9,51 @@
 	</parent>
 	<artifactId>identity</artifactId>
 
-	<!-- auth, user and profile. Empty until Day 07 moves the code in. -->
+	<!-- Accounts, sign-in and the profile a user is matched on: the only module that reads
+	     the users, user_credentials and user_profiles tables. Everything another module needs
+	     from it goes through an interface in shared. -->
+	<dependencies>
+		<dependency>
+			<groupId>nl.hackyourfuture.project</groupId>
+			<artifactId>shared</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- Google sign-in. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+		</dependency>
+		<!-- Password reset email. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+		<!-- JdbcClient. The driver stays in app: which database this talks to is a
+		     deployment decision, not this module's. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-scalar</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+	</dependencies>
 </project>

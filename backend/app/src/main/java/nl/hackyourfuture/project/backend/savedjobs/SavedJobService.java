@@ -1,7 +1,7 @@
 package nl.hackyourfuture.project.backend.savedjobs;
 
 import nl.hackyourfuture.project.backend.savedjobs.dto.SavedJobResponse;
-import nl.hackyourfuture.project.backend.user.UserRepository;
+import nl.hackyourfuture.project.backend.identity.user.UserRepository;
 import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

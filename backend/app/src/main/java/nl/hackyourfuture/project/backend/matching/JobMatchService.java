@@ -2,10 +2,10 @@ package nl.hackyourfuture.project.backend.matching;
 
 import lombok.RequiredArgsConstructor;
 import nl.hackyourfuture.project.backend.matching.dto.JobMatchResponse;
-import nl.hackyourfuture.project.backend.profile.Profile;
-import nl.hackyourfuture.project.backend.profile.ProfileRepository;
-import nl.hackyourfuture.project.backend.profile.dto.UpdateProfileRequest;
-import nl.hackyourfuture.project.backend.user.UserRepository;
+import nl.hackyourfuture.project.backend.identity.profile.Profile;
+import nl.hackyourfuture.project.backend.identity.profile.ProfileRepository;
+import nl.hackyourfuture.project.backend.identity.profile.dto.UpdateProfileRequest;
+import nl.hackyourfuture.project.backend.identity.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;

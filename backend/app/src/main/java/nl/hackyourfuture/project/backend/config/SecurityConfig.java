@@ -1,7 +1,7 @@
 package nl.hackyourfuture.project.backend.config;
 
 import lombok.extern.slf4j.Slf4j;
-import nl.hackyourfuture.project.backend.auth.OAuth2LoginSuccessHandler;
+import nl.hackyourfuture.project.backend.identity.auth.OAuth2LoginSuccessHandler;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
