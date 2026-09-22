@@ -19,12 +19,27 @@ services:
     build: ./backend
     environment:
       DB_HOST: db
+      # application-prod.yaml builds the JDBC URL from DB_PORT and nothing set it, so the
+      # backend could not start under compose at all: "JDBC URL invalid port number:
+      # ${DB_PORT}". Pre-existing, found while bringing up the obs stack for this day.
+      DB_PORT: "5432"
       DB_NAME: ${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SCHEMA: app
+      # Telemetry is opt-in. The agent defaults to a collector on localhost and retries
+      # against nothing, so it stays disabled unless you ask for it:
+      #
+      #   OTEL_SDK_DISABLED=false docker compose --profile obs up
+      #
+      # The endpoint already points at the Tempo below, so that one variable is enough.
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318}
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     ports:
       - "8080:8080"
+      # 9090 is the management port and is deliberately NOT published. Prometheus reaches
+      # it over the compose network; publishing it would put the metrics on the host.
     depends_on:
       db:
         condition: service_healthy
@@ -68,8 +83,52 @@ services:
       db:
         condition: service_healthy
 
+  # The local observability stack. Started only by `docker compose --profile obs up`, so
+  # `docker compose up` is exactly what it was for everyone who does not want it.
+  #
+  # Grafana is at http://localhost:3001 - 3000 belongs to the frontend - and needs no
+  # login. Phase 7 replaces all three with the real thing; this is for a laptop.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: [obs]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9091:9090"
+
+  tempo:
+    image: grafana/tempo:2.7.0
+    profiles: [obs]
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    profiles: [obs]
+    environment:
+      # A laptop stack behind no network. Asking for a password here only means everyone
+      # types admin/admin, which teaches the wrong habit more effectively than no login.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./observability/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./observability/grafana/jobmatch.json:/etc/grafana/provisioning/dashboards/jobmatch.json:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - tempo
+
 volumes:
   db-data:
+  tempo-data:
 
 networks:
   default:

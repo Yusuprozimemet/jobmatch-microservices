@@ -24,7 +24,7 @@ RUN mvn -B package -DskipTests
 # JDBC and outgoing HTTP without a line of application code, which is the whole reason it
 # is an agent and not a library.
 FROM --platform=$BUILDPLATFORM curlimages/curl:8.11.1 AS otel
-ARG OTEL_AGENT_VERSION=2.11.0
+ARG OTEL_AGENT_VERSION=2.31.1
 RUN curl -sSLo /tmp/opentelemetry-javaagent.jar     https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${OTEL_AGENT_VERSION}/opentelemetry-javaagent.jar
 
 # Stage 3: run the JAR (JRE is enough)
