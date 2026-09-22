@@ -21,14 +21,16 @@ so we can compare before and after.
   `management.opentelemetry.tracing.export.otlp.endpoint`, and the sampling rate is
   `management.tracing.probability`, which defaults to 0.10 and should be 1.0 while we are
   learning what the traces look like.
-- The agent stays in `backend/Dockerfile` for its JDBC spans, disabled unless an endpoint is
-  configured. Removing it is a separate decision and not this day's.
+- **The agent is removed from `backend/Dockerfile`.** Keeping it was the plan until the work
+  showed it actively suppresses Spring's HTTP instrumentation — see the Notes.
 - Structured JSON logs carrying the trace identifiers. Spring Boot 4.1 does this on its own
   with `logging.structured.format.console: logstash`, which flattens MDC into the JSON — no
   encoder dependency and no `logback-spring.xml`.
-- **The MDC keys are `traceId` and `spanId`**, camel case, because Micrometer Tracing writes
-  them. The agent's are `trace_id` and `span_id`. `ObservabilityLoggingIT` asserts on the agent's
-  spelling today and has to change with this.
+- **Getting the trace identifiers into the JSON logs is unfinished.** Micrometer Tracing does not
+  populate MDC on its own here, and structured logging bypasses
+  `logging.pattern.correlation`, so a request's log lines carry no identifier yet.
+  `ObservabilityLoggingIT` sets MDC by hand and so is unaffected either way — it pins that MDC
+  reaches the JSON, not who put it there.
 - `OTEL_EXPORTER_OTLP_ENDPOINT` configurable, and the app boots with it unset.
 - **Turn OTLP metric export off in `application-test.yaml`.** It defaults to *enabled*, pointed
   at a local consumer, so an unset endpoint is not "telemetry off": every test run would post
@@ -66,6 +68,9 @@ Checkable by `./mvnw verify`, so the day leaves a gate behind rather than a walk
 
 Checkable by hand, with the commands in Verify:
 - [ ] `GET /api/jobs` produces one trace whose root is the request, with its JDBC calls beneath it.
+  Half done: the request is the root and its security and dispatch spans sit beneath it, but the
+  JDBC spans are gone with the agent. Restoring them needs datasource instrumentation, which is
+  a decision this day did not take.
 - [ ] That trace is findable in Tempo by the `traceId` printed in the logs.
 - [x] `docker compose up` does not start Grafana; `--profile obs` does.
 - [ ] A slow `top-matches` request shows the LLM call as a distinct span.
@@ -110,9 +115,24 @@ curl -s localhost:8080/actuator/health
   - Adding `spring-boot-starter-opentelemetry` instead instruments requests immediately. Proof
     without a collector: request-scoped log lines start carrying `traceId` and `spanId`, which
     they never did under the agent.
-  - **Not verified in that spike: the OTLP export itself.** Spans were created but did not reach
-    Tempo, and the exporter logged nothing. Finishing that wiring is part of this day's work, not
-    a settled fact — treat the endpoint property as the first thing to check.
+  - Two reasons the spike did not export, both found afterwards and both worth knowing. The
+    sampling property is `management.tracing.sampling.probability`, not
+    `management.tracing.probability`, so sampling silently stayed at the 0.1 default. And the
+    agent suppresses Spring's HTTP instrumentation: with the agent attached, `/api/jobs`
+    produces only loose JDBC spans; with it removed, the same request produces
+    `GET /api/jobs`. That A/B is why the agent is gone rather than kept for JDBC spans.
+  - **The trade is real and should be taken deliberately.** The agent gave JDBC spans and no
+    request span; Spring gives the request span, the security filter chain and dispatch, and no
+    JDBC span. `http get /api/jobs` now arrives as a root with eight children. Getting both needs
+    datasource instrumentation on top, which is outside this day.
+  - **An empty endpoint is not "no exporter".** `management.opentelemetry.tracing.export.otlp.endpoint`
+    set to the empty string fails the exporter with "Invalid endpoint, must start with http:// or
+    https://" and the application does not start — every test errored. Use
+    `management.tracing.export.enabled` to switch export off instead; spans are still created and
+    still correlate.
+  - **Corrected from the earlier spec change:** the `traceId` seen in log lines during the spike
+    came from having the agent attached as well, not from the starter. With the starter alone
+    there is no identifier in MDC, and log correlation is still open.
 - Four criteria moved from "open Grafana and look" to `./mvnw verify`. A Phase 0 day exists to
   leave behind repeatable evidence, and the original Verify block could only be run by a person
   with Docker and a browser — it would not have failed in CI if someone later removed the

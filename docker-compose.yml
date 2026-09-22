@@ -27,15 +27,14 @@ services:
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SCHEMA: app
-      # Telemetry is opt-in. The agent defaults to a collector on localhost and retries
-      # against nothing, so it stays disabled unless you ask for it:
+      # Tracing is opt-in: empty means no exporter, so the application still starts with
+      # nowhere to send spans. Point it at the Tempo below to turn it on:
       #
-      #   OTEL_SDK_DISABLED=false docker compose --profile obs up
+      #   TRACING_EXPORT_ENABLED=true docker compose --profile obs up
       #
       # The endpoint already points at the Tempo below, so that one variable is enough.
-      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318}
-      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
+      OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     ports:
       - "8080:8080"
       # 9090 is the management port and is deliberately NOT published. Prometheus reaches

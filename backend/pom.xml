@@ -62,6 +62,14 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
+		<!-- Traces. The OpenTelemetry Java agent does not instrument HTTP on Spring
+		     Framework 7 and Tomcat 11 - it produces JDBC spans and no server span - so the
+		     request spans come from Spring's own instrumentation instead. The agent stays
+		     in the image for the JDBC spans. See the Day 05 spec notes. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-opentelemetry</artifactId>
+		</dependency>
 		<!-- Pull: creates /actuator/prometheus for a Prometheus server to scrape. OTLP below
 		     does not provide that endpoint, only the push. -->
 		<dependency>
