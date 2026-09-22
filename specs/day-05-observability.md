@@ -57,24 +57,26 @@ so we can compare before and after.
 ## Acceptance criteria
 
 Checkable by `./mvnw verify`, so the day leaves a gate behind rather than a walk-through:
-- [ ] `/actuator/health` returns 200 with no credentials.
-- [ ] `/actuator/prometheus` exposes `http_server_requests_seconds` after a request to
+- [x] `/actuator/health` returns 200 with no credentials.
+- [x] `/actuator/prometheus` exposes `http_server_requests_seconds` after a request to
   `/api/jobs`, and is **not** reachable anonymously on the application port.
-- [ ] No other `/actuator/**` endpoint is public: `/actuator/env` returns 401.
-- [ ] With no OTLP endpoint configured the application still starts and serves `/api/jobs`,
+- [x] No other `/actuator/**` endpoint is public: `/actuator/env` returns 401.
+- [x] With no OTLP endpoint configured the application still starts and serves `/api/jobs`,
   and the test run makes no outbound metric export.
-- [ ] A log line written during a request carries `trace_id`, and JSON logging is on.
-
-- [x] A request's log lines carry a `traceId`, and two lines from one request carry the same one.
+- [x] Logs are JSON, and a line written during a request carries a `traceId` and `spanId`.
 
 Checkable by hand, with the commands in Verify:
 - [ ] `GET /api/jobs` produces one trace whose root is the request, with its JDBC calls beneath it.
   Half done: the request is the root and its security and dispatch spans sit beneath it, but the
   JDBC spans are gone with the agent. Restoring them needs datasource instrumentation, which is
   a decision this day did not take.
-- [ ] That trace is findable in Tempo by the `traceId` printed in the logs.
+- [x] That trace is findable in Tempo by the `traceId` printed in the logs. Verified:
+  `e0f889221dc82d39b76e66ec85a50162` from a log line returned the five spans of
+  `http post /api/auth/forgot-password`.
 - [x] `docker compose up` does not start Grafana; `--profile obs` does.
-- [ ] A slow `top-matches` request shows the LLM call as a distinct span.
+- [ ] A slow `top-matches` request shows the LLM call as a distinct span. **Not checked.** The
+  compose stack has no mart data, so the shortlist is empty and the model is never called. It
+  needs a published mart or a seeded database, which is Day 17's ground rather than this day's.
 
 ## Verify
 ```bash
@@ -134,6 +136,13 @@ curl -s localhost:8080/actuator/health
   - Log correlation does work with the starter alone, and the identifiers in the JSON come from
     Micrometer rather than from the agent. An earlier reading that said otherwise was taken from
     Tomcat's error log, which is written outside the span scope.
+- **Seven of nine criteria hold; two do not and are left unticked.** The request trace is a
+  real root with its security and dispatch spans beneath it, but without the JDBC spans the
+  agent used to provide. The LLM span was never checkable here at all.
+- **Estimated 3 pull requests, took 7.** Six of them were the tracing detour: the day assumed an
+  agent that does not work on this stack, and finding that out, proving the alternative, and
+  correcting two wrong readings along the way cost four pull requests on their own. The estimate
+  was not unreasonable for the day as written; it was wrong about the day that actually existed.
 - Four criteria moved from "open Grafana and look" to `./mvnw verify`. A Phase 0 day exists to
   leave behind repeatable evidence, and the original Verify block could only be run by a person
   with Docker and a browser — it would not have failed in CI if someone later removed the
