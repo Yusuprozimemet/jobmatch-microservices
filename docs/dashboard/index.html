@@ -30,6 +30,77 @@
 
   <div class="stats" id="stats"></div>
 
+  <div class="scrubber" role="group" aria-label="Choose a point in the history">
+    <button id="play" type="button" aria-label="Replay the history">▶ Replay</button>
+    <input id="pr-scrub" type="range" min="0" max="1" value="1" aria-label="Merge to inspect">
+    <div class="scrub-now" id="scrub-now" aria-live="polite"></div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Two vectors, one plane</h2>
+      <p>Each dot is one merge, projected from <span class="num vocab-n"></span> code names (the backticked identifiers the specs use) onto the two directions that separate the snapshots best. Blue is the spec, orange is the code. The dashed line is the gap at the selected merge.</p>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--spec)"></i>Spec path (plan.md + specs/)</span>
+      <span><i style="background:var(--code)"></i>Code path (everything but *.md)</span>
+      <span><i class="dash"></i>Gap at selected merge</span>
+    </div>
+    <div class="two">
+      <div id="traj"></div>
+      <div class="readout" id="readout"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Drift and gap, merge by merge</h2>
+      <p>Drift is the angle between today's spec text and the spec as written on Sep 20. Gap is the angle between the whole spec and the code, over the shared code-name vocabulary. Both are in degrees, so they share one axis. The strip under the axis shows what kind of PR each merge was.</p>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--spec)"></i>Drift: spec vs plan as written</span>
+      <span><i style="background:var(--gap)"></i>Gap: spec vs code</span>
+      <span><i class="dot" style="background:var(--spec)"></i>Spec change</span>
+      <span><i class="dot" style="background:var(--code)"></i>Code track</span>
+      <span><i class="dot" style="background:var(--close)"></i>Close the day</span>
+      <span><i class="dot" style="background:var(--other)"></i>Other (docs, CI)</span>
+    </div>
+    <div id="lines"></div>
+    <div class="panel-head" style="margin-top:6px">
+      <h2 style="font-size:17px">The sawtooth, up close</h2>
+      <p>The share of code names in the specs for days already reached that exist in the code. It dips when a day starts, because the spec names things not built yet, and climbs back as that day's tracks land.</p>
+    </div>
+    <div id="cover"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Where the corrections landed</h2>
+      <p>Lines edited in each spec file (rows) by each merge (columns). The stepped line marks the day being worked on. Cells <em>below</em> it are edits to days not reached yet: what was learned today, rewriting the path ahead.</p>
+    </div>
+    <div class="scroll-x" id="heat"></div>
+  </section>
+
+  <section class="panel">
+    <h2>What the vectors say</h2>
+    <div class="findings" id="findings"></div>
+    <details>
+      <summary>How the vectors are built</summary>
+      <div class="method" style="margin-top:10px">
+        <p><b>Snapshots.</b> The initial commit plus every first-parent merge on <code>main</code> (<span id="pr-range"></span>). Code PRs, spec-change PRs and close-the-day PRs are told apart by branch name and title.</p>
+        <p><b>Drift</b> uses the full spec text: word frequencies (log-scaled) of <code>plan.md</code> and <code>specs/*.md</code>, compared by angle with the Sep 20 version. 0° means unchanged, 90° means nothing in common.</p>
+        <p><b>Gap</b> needs a space both sides share. It is built from the <span class="num vocab-n"></span> code-like names the specs put in backticks (<code>SavedJobCounts</code>, <code>saved_jobs</code>, <code>JobRepository</code>…). The spec vector counts how often each name appears in the specs. The code vector counts how often it appears in the code, with Markdown, <code>data/</code> and screenshots left out. Both are log-scaled and compared by angle. The vocabulary grows as specs name new things, so earlier gap values can shift slightly from one refresh to the next.</p>
+        <p><b>The plane</b> is a principal-component projection of all <span class="num" id="n-vectors"></span> vectors (one spec and one code vector per snapshot) together. PC1 holds <span class="num" id="pc1"></span> of the variance and PC2 holds <span class="num" id="pc2"></span>, so distances in the plot are faithful but not exact.</p>
+        <p><b>Refresh.</b> <code>python scripts/spec-drift.py --build</code> in the repository writes this page with its data. It is rerun after every merge, before the next step starts.</p>
+        <p><b>Limits.</b> Names in a spec that should <em>disappear</em> (like <code>saved_jobs</code> leaving <code>jobs/</code>) still count as shared vocabulary. The gap measures shared language, not correctness; correctness lives in the acceptance criteria and the tests.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Every merge as a table</summary>
+      <div class="scroll-x"><table id="tbl"></table></div>
+    </details>
+  </section>
+
   <section class="panel" id="conclusion">
     <div class="panel-head">
       <div class="eyebrow" id="conclusion-eyebrow">Conclusion</div>

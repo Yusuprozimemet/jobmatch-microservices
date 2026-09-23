@@ -13,6 +13,16 @@ const md = s => esc(s)
   .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
   .replace(/\*([^*\s][^*]*)\*/g, "<em>$1</em>");
 const dd = n => String(n).padStart(2, "0");
+const prLabel = r => r.pr ? "#" + r.pr : "start";
+const dayOfFile = f => { const m = f.match(/day-(\d+)/); return m ? +m[1] : 0; };
+const NS = "http://www.w3.org/2000/svg";
+let sel = N - 1;
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
 
 /* ---------- tooltip ---------- */
 const tip = document.getElementById("tip");
@@ -25,6 +35,14 @@ function showTip(ev, html) {
   tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
 }
 const hideTip = () => { tip.hidden = true; };
+function rowTip(r) {
+  return `<b>${prLabel(r)} · ${KIND[r.kind]}</b><div style="margin:3px 0 6px">${esc(r.title)}</div>
+  <div class="row"><span>date</span><span>${r.date}</span></div>
+  <div class="row"><span>day reached</span><span>${r.day || "–"}</span></div>
+  <div class="row"><span>drift</span><span>${fmt(r.drift)}°</span></div>
+  <div class="row"><span>gap</span><span>${fmt(r.gap_full)}°</span></div>
+  <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>`;
+}
 
 /* ---------- derived numbers ---------- */
 const first = R[0], last = R[N - 1];
@@ -33,6 +51,15 @@ for (let i = 1; i < N; i++) byKind[R[i].kind] += R[i].gap_full - R[i - 1].gap_fu
 const gapClosed = first.gap_full - last.gap_full;
 const specShare = -byKind.spec / gapClosed;
 const nKind = k => R.filter(r => r.kind === k).length;
+let forward = 0, specEdits = 0;
+R.forEach(r => {
+  for (const [f, n] of Object.entries(r.spec_files || {})) {
+    const d = dayOfFile(f);
+    if (!d) continue;
+    specEdits += n;
+    if (d > r.day) forward += n;
+  }
+});
 
 /* ---------- stats ---------- */
 document.getElementById("stats").innerHTML = `
@@ -48,6 +75,259 @@ document.getElementById("stats").innerHTML = `
   <div class="stat"><span class="k">Spec text since Sep 20</span>
     <span class="v num">−${last.deleted} <small>/ +${last.added} lines</small></span>
     <span class="n">of ${DATA.origin_lines} lines as written: ${Math.round(last.deleted / DATA.origin_lines * 100)}% rewritten, the rest kept</span></div>`;
+document.querySelectorAll(".vocab-n").forEach(e => { e.textContent = DATA.vocab_size; });
+document.getElementById("n-vectors").textContent = 2 * N;
+const merged = R.filter(r => r.pr).map(r => r.pr);
+document.getElementById("pr-range").textContent = `${N - 1} merges, #${Math.min(...merged)}–#${Math.max(...merged)}`;
+document.getElementById("pc1").textContent = Math.round(DATA.pca_var[0] * 100) + "%";
+document.getElementById("pc2").textContent = Math.round(DATA.pca_var[1] * 100) + "%";
+
+/* ---------- scrubber ---------- */
+const scrub = document.getElementById("pr-scrub");
+scrub.max = N - 1; scrub.value = sel;
+scrub.addEventListener("input", () => setSel(+scrub.value));
+let timer = null;
+const playBtn = document.getElementById("play");
+function stop() { clearInterval(timer); timer = null; playBtn.textContent = "▶ Replay"; }
+playBtn.addEventListener("click", () => {
+  if (timer) return stop();
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { setSel(N - 1); return; }
+  playBtn.textContent = "❚❚ Pause";
+  let i = sel >= N - 1 ? 0 : sel;
+  setSel(i);
+  timer = setInterval(() => { i++; if (i >= N) return stop(); setSel(i); }, 260);
+});
+
+/* ---------- trajectory ---------- */
+const trajBox = document.getElementById("traj");
+const TW = 600, TH = 440, TP = 34;
+const pts = R.flatMap(r => [r.spec_xy, r.code_xy]);
+const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+const k = Math.min((TW - 2 * TP) / (x1 - x0), (TH - 2 * TP) / (y1 - y0));
+const ox = (TW - (x1 - x0) * k) / 2, oy = (TH - (y1 - y0) * k) / 2;
+const tx = x => ox + (x - x0) * k, ty = y => TH - (oy + (y - y0) * k);
+
+function drawTraj() {
+  trajBox.innerHTML = "";
+  const svg = el("svg", { viewBox: `0 0 ${TW} ${TH}`, role: "img", "aria-label": "Spec and code paths projected onto two principal components" }, trajBox);
+  el("rect", { x: 0.5, y: 0.5, width: TW - 1, height: TH - 1, rx: 8, fill: "none", stroke: "var(--grid)" }, svg);
+  el("line", { x1: tx(0), x2: tx(0), y1: 8, y2: TH - 8, stroke: "var(--grid)" }, svg);
+  el("line", { x1: 8, x2: TW - 8, y1: ty(0), y2: ty(0), stroke: "var(--grid)" }, svg);
+  el("text", { x: TW - 12, y: TH - 12, "text-anchor": "end" }, svg).textContent = `PC1 · ${Math.round(DATA.pca_var[0] * 100)}% of variance`;
+  el("text", { x: tx(0) + 6, y: 20 }, svg).textContent = `PC2 · ${Math.round(DATA.pca_var[1] * 100)}%`;
+  for (const side of ["spec", "code"]) {
+    const key = side + "_xy", col = `var(--${side})`;
+    const path = rs => rs.map(r => `${tx(r[key][0])},${ty(r[key][1])}`).join(" ");
+    el("polyline", { points: path(R), fill: "none", stroke: col, "stroke-width": 1.5, "stroke-opacity": 0.2, "stroke-linejoin": "round" }, svg);
+    el("polyline", { points: path(R.slice(0, sel + 1)), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  }
+  const s = R[sel];
+  el("line", { x1: tx(s.spec_xy[0]), y1: ty(s.spec_xy[1]), x2: tx(s.code_xy[0]), y2: ty(s.code_xy[1]), stroke: "var(--gap)", "stroke-width": 1.5, "stroke-dasharray": "5 4" }, svg);
+  const mx = (tx(s.spec_xy[0]) + tx(s.code_xy[0])) / 2, my = (ty(s.spec_xy[1]) + ty(s.code_xy[1])) / 2;
+  el("text", { x: mx, y: my - 8, "text-anchor": "middle", class: "lbl-strong" }, svg).textContent = `gap ${fmt(s.gap_full)}°`;
+  for (const side of ["spec", "code"]) {
+    R.forEach((r, i) => {
+      const cx = tx(r[side + "_xy"][0]), cy = ty(r[side + "_xy"][1]);
+      el("circle", { cx, cy, r: i === sel ? 6.5 : 3.6, fill: `var(--${side})`, stroke: "var(--surface)", "stroke-width": 2, opacity: i <= sel ? 1 : 0.22 }, svg);
+      const h = el("circle", { cx, cy, r: 9, class: "hit" }, svg);
+      h.addEventListener("mousemove", ev => showTip(ev, `<div style="color:var(--${side});font-weight:600;margin-bottom:2px">${side === "spec" ? "Spec" : "Code"} vector</div>` + rowTip(r)));
+      h.addEventListener("mouseleave", hideTip);
+      h.addEventListener("click", () => setSel(i));
+    });
+  }
+  const lab = (p, txt, dx, dy, anchor, cls = "lbl") => { el("text", { x: tx(p[0]) + dx, y: ty(p[1]) + dy, "text-anchor": anchor, class: cls }, svg).textContent = txt; };
+  lab(R[0].spec_xy, "plan as written, Sep 20", -10, -12, "end");
+  lab(R[0].code_xy, "monolith, Sep 20", 10, -12, "start");
+  if (sel > 3) {
+    lab(s.spec_xy, `spec at ${prLabel(s)}`, 0, 22, "middle", "lbl-strong");
+    lab(s.code_xy, `code at ${prLabel(s)}`, 0, 22, "middle", "lbl-strong");
+  }
+}
+
+function drawReadout() {
+  const s = R[sel], prev = R[Math.max(0, sel - 1)];
+  const dGap = s.gap_full - prev.gap_full, dDrift = s.drift - prev.drift;
+  const sign = x => (x > 0 ? "+" : x < 0 ? "−" : "±") + Math.abs(x).toFixed(2);
+  const edits = Object.entries(s.spec_files || {}).sort((a, b) => b[1] - a[1]);
+  const moved = sel === 0 ? "Starting point: the monolith and the plan written for it." :
+    Math.abs(dDrift) < 0.01 && Math.abs(dGap) < 0.05 ? "Neither vector moved noticeably." :
+    Math.abs(dDrift) < 0.01 ? `Only the code moved. The gap ${dGap < 0 ? "narrowed" : "widened"} by ${Math.abs(dGap).toFixed(2)}°.` :
+    `The spec rotated ${dDrift.toFixed(2)}° and the gap ${dGap < 0 ? "narrowed" : "widened"} by ${Math.abs(dGap).toFixed(2)}°.`;
+  document.getElementById("readout").innerHTML = `
+    <div class="eyebrow">Selected merge</div>
+    <div class="title">${prLabel(s)} · ${esc(s.title)}</div>
+    <div><span class="chip" style="color:${KVAR[s.kind]}">${KIND[s.kind]}</span> <span class="num" style="color:var(--muted);font-size:12.5px;margin-left:6px">${s.sha} · ${s.date}</span></div>
+    <p style="font-size:14px;color:var(--ink-2)">${moved}</p>
+    <div class="hr"></div>
+    <dl>
+      <dt>Drift from the plan as written</dt><dd>${fmt(s.drift, 2)}° <span style="color:var(--muted)">(${sign(dDrift)})</span></dd>
+      <dt>Gap, spec vs code</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd>
+      <dt>Reached-day names in code</dt><dd>${s.coverage == null ? "–" : fmt(s.coverage * 100, 1) + "%"}</dd>
+      <dt>Code lines changed</dt><dd>${s.code_churn.toLocaleString()}</dd>
+      <dt>Spec lines changed</dt><dd>${edits.reduce((a, b) => a + b[1], 0)}</dd>
+    </dl>
+    ${edits.length ? `<div style="font-size:12.5px;color:var(--ink-2)">${edits.slice(0, 5).map(([f, n]) => `<div style="display:flex;justify-content:space-between;gap:10px"><code>${esc(f.replace("specs/", ""))}</code><span class="num">${n}</span></div>`).join("")}${edits.length > 5 ? `<div style="color:var(--muted)">+${edits.length - 5} more files</div>` : ""}</div>` : ""}`;
+}
+
+/* ---------- line charts ---------- */
+const LW = 1000, LP = { l: 44, r: 104, t: 14, b: 46 };
+const lx = i => LP.l + (i / (N - 1)) * (LW - LP.l - LP.r);
+function dayStarts() {
+  const out = []; let d = -1;
+  R.forEach((r, i) => { if (r.day !== d) { out.push([i, r.day]); d = r.day; } });
+  return out;
+}
+const steps = (lo, hi, n) => Array.from({ length: n + 1 }, (_, i) => +(lo + (hi - lo) * i / n).toFixed(1));
+function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip }) {
+  box.innerHTML = "";
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": label }, box);
+  const ly = v => LP.t + (1 - (v - yMin) / (yMax - yMin)) * (H - LP.t - LP.b);
+  ticks.forEach(t => {
+    el("line", { x1: LP.l, x2: LW - LP.r, y1: ly(t), y2: ly(t), stroke: "var(--grid)" }, svg);
+    el("text", { x: LP.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = t + unit;
+  });
+  el("line", { x1: LP.l, x2: LW - LP.r, y1: H - LP.b, y2: H - LP.b, stroke: "var(--axis)" }, svg);
+  let lastX = -99;
+  dayStarts().forEach(([i, d]) => {
+    if (!d || lx(i) - lastX < 34) return;
+    lastX = lx(i);
+    el("line", { x1: lx(i), x2: lx(i), y1: LP.t, y2: H - LP.b, stroke: "var(--grid)", "stroke-dasharray": "2 3" }, svg);
+    el("text", { x: lx(i) + 3, y: H - LP.b + (strip ? 30 : 16), class: "num" }, svg).textContent = "D" + dd(d);
+  });
+  if (strip) {
+    const w = (LW - LP.l - LP.r) / (N - 1);
+    R.forEach((r, i) => el("rect", { x: lx(i) - w / 2 + 1, y: H - LP.b + 5, width: Math.max(2, w - 2), height: 8, rx: 2, fill: KVAR[r.kind] }, svg));
+  }
+  el("line", { x1: lx(sel), x2: lx(sel), y1: LP.t, y2: H - LP.b, stroke: "var(--ink-2)", "stroke-width": 1 }, svg);
+  const cross = el("line", { x1: 0, x2: 0, y1: LP.t, y2: H - LP.b, stroke: "var(--muted)", "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
+  series.forEach(s => {
+    const pts = R.map((r, i) => [i, s.get(r)]).filter(p => p[1] != null);
+    el("polyline", { points: pts.map(([i, v]) => `${lx(i)},${ly(v)}`).join(" "), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    const v = s.get(R[sel]);
+    if (v != null) el("circle", { cx: lx(sel), cy: ly(v), r: 5, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }, svg);
+    const end = pts[pts.length - 1];
+    el("text", { x: lx(end[0]) + 10, y: ly(end[1]) + 4, class: "lbl" }, svg).textContent = `${s.name} ${fmt(end[1])}${unit}`;
+  });
+  const hit = el("rect", { x: LP.l - 6, y: 0, width: LW - LP.l - LP.r + 12, height: H, class: "hit" }, svg);
+  const idxAt = ev => {
+    const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+    const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    return Math.max(0, Math.min(N - 1, Math.round((q.x - LP.l) / (LW - LP.l - LP.r) * (N - 1))));
+  };
+  hit.addEventListener("mousemove", ev => { const i = idxAt(ev); cross.setAttribute("x1", lx(i)); cross.setAttribute("x2", lx(i)); cross.setAttribute("visibility", "visible"); showTip(ev, rowTip(R[i])); });
+  hit.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+  hit.addEventListener("click", ev => setSel(idxAt(ev)));
+}
+// The axes follow the data, so a later phase that pushes drift or coverage past today's range stays on the chart.
+const degMax = Math.ceil(Math.max(...R.map(r => Math.max(r.drift, r.gap_full))) / 15) * 15;
+const covMin = Math.min(92, Math.floor(Math.min(...R.filter(r => r.coverage != null).map(r => r.coverage * 100)) / 2) * 2);
+function drawLines() {
+  lineChart(document.getElementById("lines"), {
+    H: 330, yMin: 0, yMax: degMax, ticks: steps(0, degMax, degMax / 15), unit: "°", strip: true,
+    label: "Drift and gap in degrees across merges",
+    series: [
+      { name: "gap", color: "var(--gap)", get: r => r.gap_full },
+      { name: "drift", color: "var(--spec)", get: r => r.drift },
+    ],
+  });
+  lineChart(document.getElementById("cover"), {
+    H: 190, yMin: covMin, yMax: 100, ticks: steps(covMin, 100, 4), unit: "%", strip: false,
+    label: "Share of reached-day spec names present in code",
+    series: [{ name: "in code", color: "var(--code)", get: r => r.coverage == null ? null : +(r.coverage * 100).toFixed(2) }],
+  });
+}
+
+/* ---------- heatmap ---------- */
+function drawHeat() {
+  const box = document.getElementById("heat");
+  box.innerHTML = "";
+  const files = DATA.files, cols = R.slice(1);
+  const CW = 15, CH = 13, L = 96, T = 30;
+  const W = L + cols.length * CW + 8, H = T + files.length * CH + 34;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Lines edited per spec file per merge", style: `min-width:${W}px;max-width:${W}px` }, box);
+  const max = Math.max(...cols.flatMap(r => Object.values(r.spec_files || {})), 1);
+  files.forEach((f, j) => {
+    const d = dayOfFile(f), twin = files.filter(g => dayOfFile(g) === d).length > 1;
+    el("text", { x: L - 8, y: T + j * CH + CH - 3, "text-anchor": "end", class: "num", style: "font-size:10.5px" }, svg)
+      .textContent = f === "plan.md" ? "plan.md" : "day " + dd(d) + (twin ? " " + f.split("-")[2] : "");
+  });
+  cols.forEach((r, c) => {
+    const x = L + c * CW;
+    el("rect", { x: x + 1, y: 8, width: CW - 2, height: 8, rx: 2, fill: KVAR[r.kind] }, svg);
+    files.forEach((f, j) => {
+      const n = (r.spec_files || {})[f] || 0;
+      const pct = n ? Math.round(22 + 78 * Math.sqrt(n / max)) : 0;
+      el("rect", { x: x + 1, y: T + j * CH + 1, width: CW - 2, height: CH - 2, rx: 2,
+        fill: n ? `color-mix(in oklab, var(--spec) ${pct}%, var(--surface))` : "var(--surface-2)" }, svg);
+    });
+    if (c % 5 === 0 || c === cols.length - 1)
+      el("text", { x: x + CW / 2, y: H - 12, "text-anchor": "middle", class: "num", style: "font-size:10px" }, svg).textContent = "#" + r.pr;
+  });
+  // frontier: bottom edge of the day being worked on
+  const rowOfDay = d => files.findIndex(f => dayOfFile(f) === d);
+  let path = "";
+  cols.forEach((r, c) => {
+    const y = T + (rowOfDay(Math.max(r.day, 1)) + 1) * CH;
+    path += (c === 0 ? `M${L + c * CW},${y}` : `V${y}`) + `H${L + (c + 1) * CW}`;
+  });
+  el("path", { d: path, fill: "none", stroke: "var(--code)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  if (sel > 0) el("rect", { x: L + (sel - 1) * CW + 0.5, y: 4, width: CW - 1, height: T + files.length * CH - 2, rx: 3, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, svg);
+  const hit = el("rect", { x: L, y: 0, width: cols.length * CW, height: T + files.length * CH, class: "hit" }, svg);
+  const at = ev => {
+    const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+    const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    return [Math.floor((q.x - L) / CW), Math.floor((q.y - T) / CH)];
+  };
+  hit.addEventListener("mousemove", ev => {
+    const [c, j] = at(ev);
+    if (c < 0 || c >= cols.length) return hideTip();
+    const r = cols[c];
+    if (j < 0 || j >= files.length) return showTip(ev, rowTip(r));
+    const f = files[j], n = (r.spec_files || {})[f] || 0, d = dayOfFile(f);
+    const where = !d ? "the plan" : d > r.day ? `a future day (working on day ${r.day})` : d === r.day ? "the current day" : "a finished day";
+    showTip(ev, `<b>${prLabel(r)} → ${esc(f.replace("specs/", ""))}</b><div style="margin:3px 0 6px">${esc(r.title)}</div>
+      <div class="row"><span>lines edited</span><span>${n}</span></div><div class="row"><span>target</span><span>${where}</span></div>`);
+  });
+  hit.addEventListener("mouseleave", hideTip);
+  hit.addEventListener("click", ev => { const [c] = at(ev); if (c >= 0 && c < cols.length) setSel(c + 1); });
+  el("text", { x: L, y: H - 1, class: "lbl", style: "font-size:11px" }, svg).textContent = "▬ orange step: the day being worked on · darker blue = more lines edited";
+}
+
+/* ---------- findings + table ---------- */
+// Each heading is a claim, so each is chosen by the numbers it rests on rather than fixed.
+function drawFindings() {
+  const bigStep = Math.max(...R.map(r => r.step));
+  const covFloor = Math.min(...R.filter(r => r.coverage != null).map(r => r.coverage)) * 100;
+  const codeShare = -byKind.code / gapClosed;
+  const days = DATA.days.filter(d => d.status === "done").length;
+  const f = [
+    [bigStep < 10 ? "The destination held; the path moved" : "The plan changed direction",
+     `Drift reached ${fmt(last.drift)}°; the biggest single step was ${fmt(bigStep, 2)}°. ${days} days in, ${Math.round(last.deleted / DATA.origin_lines * 100)}% of the Sep 20 spec's lines have been rewritten.`],
+    [specShare >= codeShare ? "The spec moved toward the code, not the reverse" : "The code now closes more of the gap than the spec",
+     `Of the ${fmt(gapClosed)}° of gap that closed, ${Math.round(specShare * 100)}% came from ${nKind("spec")} spec-change PRs and ${Math.round(codeShare * 100)}% from ${nKind("code")} code PRs.`],
+    [covFloor >= 90 ? "Spec first keeps the gap from ever opening" : "The gap opened at least once",
+     `Reached-day coverage never fell below ${fmt(covFloor, 1)}%: the share of names in the specs of days already reached that exist in the code.`],
+    [forward * 2 >= specEdits ? "Corrections reach forward" : "Corrections land on the day at hand",
+     `${Math.round(forward / specEdits * 100)}% of all edited day-spec lines (${forward} of ${specEdits}) went to days not reached yet.`],
+  ];
+  document.getElementById("findings").innerHTML = f.map(([h, p]) => `<div class="finding"><h3>${h}</h3><p>${p}</p></div>`).join("");
+}
+function drawTable() {
+  document.getElementById("tbl").innerHTML = `<thead><tr><th>PR</th><th>Type</th><th>Day</th><th class="r">Drift °</th><th class="r">Gap °</th><th class="r">Names in code</th><th class="r">Spec lines</th><th class="r">Code lines</th><th>Title</th></tr></thead><tbody>` +
+    R.map((r, i) => `<tr data-i="${i}" class="${i === sel ? "sel" : ""}"><td class="num">${prLabel(r)}</td><td><span class="sw" style="background:${KVAR[r.kind]}"></span>${KIND[r.kind]}</td><td class="num">${r.day || "–"}</td><td class="r">${fmt(r.drift, 2)}</td><td class="r">${fmt(r.gap_full, 2)}</td><td class="r">${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</td><td class="r">${Object.values(r.spec_files || {}).reduce((a, b) => a + b, 0)}</td><td class="r">${r.code_churn}</td><td class="t">${esc(r.title)}</td></tr>`).join("") + "</tbody>";
+}
+function drawScrubNow() {
+  const s = R[sel];
+  document.getElementById("scrub-now").innerHTML = `<span class="chip" style="color:${KVAR[s.kind]}">${KIND[s.kind]}</span>
+    <span class="t">${prLabel(s)} · ${esc(s.title)}</span>
+    <span class="num" style="color:var(--ink-2)">drift ${fmt(s.drift)}° · gap ${fmt(s.gap_full)}°</span>`;
+}
+function setSel(i) {
+  sel = i; scrub.value = i;
+  drawScrubNow(); drawTraj(); drawReadout(); drawLines(); drawHeat();
+  document.querySelectorAll("#tbl tr[data-i]").forEach(tr => tr.classList.toggle("sel", +tr.dataset.i === sel));
+}
 
 /* ---------- where we are ---------- */
 const PHASES = ["Make the split safe", "Modularise in place", "Gateway + JWT", "Extract job-service",
@@ -144,7 +424,7 @@ function drawConclusion() {
     : `<tbody><tr><td class="t">The README has no measurement table.</td></tr></tbody>`;
 }
 
-drawNow(); drawConclusion();
+drawNow(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
 }
 
 function start() {
