@@ -81,6 +81,38 @@ class SavedJobHydrationIT extends IntegrationTest {
                 .containsExactly("seed-0001", "republished-away");
     }
 
+    /**
+     * Newest posting first. The test above only pins where a vanished posting goes; with every
+     * posting in the mart, a list sorted oldest first passed all of Day 04's tests (found closing
+     * Day 09). Saved in an order that matches neither the answer nor the ids.
+     */
+    @Test
+    void listsTheNewestPostingFirst() {
+        aPosting().id("order-a").postedDaysAgo(30).create();
+        aPosting().id("order-b").postedDaysAgo(1).create();
+        aPosting().id("order-c").postedDaysAgo(10).create();
+        ApiClient client = authenticatedAs(aUser().create());
+        client.post("/api/saved-jobs", Map.of("postingId", "order-c"));
+        client.post("/api/saved-jobs", Map.of("postingId", "order-a"));
+        client.post("/api/saved-jobs", Map.of("postingId", "order-b"));
+
+        assertThat(postingIds(client.get("/api/saved-jobs")))
+                .containsExactly("order-b", "order-c", "order-a");
+    }
+
+    // Postings from the same day come in id order, whichever was saved first.
+    @Test
+    void breaksATieOnPostedDateByPostingId() {
+        aPosting().id("tie-2").postedDaysAgo(5).create();
+        aPosting().id("tie-1").postedDaysAgo(5).create();
+        ApiClient client = authenticatedAs(aUser().create());
+        client.post("/api/saved-jobs", Map.of("postingId", "tie-2"));
+        client.post("/api/saved-jobs", Map.of("postingId", "tie-1"));
+
+        assertThat(postingIds(client.get("/api/saved-jobs")))
+                .containsExactly("tie-1", "tie-2");
+    }
+
     // The state still moves, and the row still counts, with nothing behind it in the mart.
     @Test
     void aVanishedPostingCanStillBeTrackedAndRemoved() {
