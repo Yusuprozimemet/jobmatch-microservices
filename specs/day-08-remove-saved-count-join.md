@@ -50,12 +50,18 @@ computed, not the answer, and it expires on Day 25, when `saved_jobs` moves to `
 this container stops seeing that statement.
 
 ## Acceptance criteria
-- [ ] `saved_jobs` appears nowhere under the `jobs` module.
-- [ ] Day 03's `JobSavedCountIT` passes **unedited** — all six tests.
-- [ ] Exactly one statement touches `saved_jobs` per search page, at page sizes 1, 20 and 100.
-- [ ] Exactly one statement touches `saved_jobs` per `GET /api/jobs/{id}`.
-- [ ] A posting nobody saved reports `savedCount: 0`.
-- [ ] Paging past the end and a search matching nothing still return 200 with an empty page.
+- [x] `saved_jobs` appears nowhere under the `jobs` module. `grep -rn "saved_jobs" jobs/src/`
+  returns nothing (#44).
+- [x] Day 03's `JobSavedCountIT` passes **unedited** — all six tests. Zero lines changed under
+  `app/src/test` in #44; the test file is as Day 03 wrote it.
+- [x] Exactly one statement touches `saved_jobs` per search page, at page sizes 1, 20 and 100.
+  `JobSavedCountQueriesIT` (#42), green before the change and after it. Broken on purpose with
+  a per-posting loop first, where it failed with 2, 21 and 25 statements.
+- [x] Exactly one statement touches `saved_jobs` per `GET /api/jobs/{id}`. Same test.
+- [x] A posting nobody saved reports `savedCount: 0`. `JobSavedCountIT.reportsZeroForAPostingNobodySaved`,
+  held by the zero-filled map in `ApplicationsDirectory` (#43).
+- [x] Paging past the end and a search matching nothing still return 200 with an empty page.
+  `JobSearchIT`'s two empty-page tests; an empty id list returns before querying.
 
 ## Verify
 ```bash
@@ -99,3 +105,25 @@ Check the surefire report, not only the exit code: `JobSavedCountIT` must show `
 
   Two things were left unsaid and are now in scope: an empty page must not reach the database
   as `IN ()`, and the map is zero-filled by the implementation rather than by every caller.
+- **Done on Day 08.** Spec change #41, then #42 (Track 0, the query-count test), #43 (Track A,
+  `SavedJobCounts` and `ApplicationsDirectory`) and #44 (Track B, `jobs` moved over). 206
+  tests green. *Estimated 2 pull requests, took 3,* the extra one being Track 0, which the
+  spec change added.
+- **Departure from "In scope": the count is joined in `JobService`, not `JobRepository`.** The
+  repository reads the tables `jobs` owns, and nothing else; the service is where two sources
+  meet. No criterion depends on the difference. The repository builds each record with a
+  commented placeholder 0 and the service replaces it through `withSavedCount`.
+- **The query-count test was made to fail before it was trusted.** It passes before the change
+  as well as after, which is the point, and which also means a green run on its own proves
+  nothing. A per-posting count loop in `searchJobs` failed it with 1 + page size statements;
+  the detail case stayed green, since the loop was only in search.
+- **The first criterion is a text grep, and I broke it with a comment.** A comment in
+  `JobService` said "applications, which owns saved_jobs". Caught locally before the push; the
+  comment says "the saves" now. A grep does not know a comment from a query, and should not
+  have to.
+- **`mvnw verify` does not run checkstyle.** CI runs `checkstyle:check` as its own step, so 206
+  green tests said nothing about a `HiddenField` violation in `withSavedCount`. Run both before
+  pushing.
+- The mirror-image join is Day 09's: `applications` still reads `analytics.fct_postings` in one
+  place, `SavedJobRepository`. `StatementCounter` is in `support/` so Day 09 can count that side
+  the same way.
