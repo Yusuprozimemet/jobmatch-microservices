@@ -89,8 +89,40 @@ export class ApiError extends Error {
   }
 }
 
+// One refresh at a time. The refresh token works once, so a second refresh sent with the same
+// cookie would be refused and sign the user out: concurrent 401s wait for the same one.
+let refreshing: Promise<boolean> | null = null;
+
+function refreshTokens(): Promise<boolean> {
+  refreshing ??= fetch("/api/auth/refresh", {
+    method: "POST",
+    credentials: "include",
+  })
+    .then(
+      (response) => response.ok,
+      () => false,
+    )
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
+}
+
+// The access token lives 15 minutes, so a 401 may only mean it expired: refresh once and
+// retry once. Not for /api/auth/ itself, where a 401 is a wrong password or a spent token.
+async function fetchWithRefresh(
+  path: string,
+  init: RequestInit,
+): Promise<Response> {
+  const response = await fetch(path, init);
+  if (response.status !== 401 || path.startsWith("/api/auth/")) {
+    return response;
+  }
+  return (await refreshTokens()) ? fetch(path, init) : response;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetchWithRefresh(path, {
     ...options,
     credentials: "include",
     headers: {
@@ -164,7 +196,7 @@ export function logoutUser(): Promise<void> {
 }
 
 export async function getCurrentUser(): Promise<CurrentUserResponse | null> {
-  const response = await fetch("/api/users/me", {
+  const response = await fetchWithRefresh("/api/users/me", {
     credentials: "include",
   });
 
