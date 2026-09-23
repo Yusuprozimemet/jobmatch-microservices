@@ -81,49 +81,65 @@ authenticates, and A switches last, so `main` never signs a browser out after 15
 was tried: `STATELESS` with nothing else turned 15 of 55 auth tests red.
 
 ## Acceptance criteria
-- [ ] **new** — Login, password change and Google sign-in set `access_token`
+- [x] **new** — Login, password change and Google sign-in set `access_token`
       (`HttpOnly; SameSite=Lax; Path=/; Max-Age=900`) and `refresh_token`
       (`HttpOnly; SameSite=Lax; Path=/api/auth; Max-Age=2592000`), asserted on the `Set-Cookie`
-      headers, not through `ApiClient`'s jar (`tokens/AuthCookiesIT`). Red today: login sets only
-      `JSESSIONID=…; Path=/; HttpOnly; SameSite=Lax`.
-- [ ] **new** — No `Set-Cookie` names `JSESSIONID`, deletions included, on register, login,
+      headers, not through `ApiClient`'s jar (`tokens/AuthCookiesIT`). `AuthCookiesIT` (#84). Red
+      on `main`'s code, 3 of 3: `No Set-Cookie for 'access_token' in [JSESSIONID=…; Path=/;
+      HttpOnly; SameSite=Lax]`; red again with the refresh cookie at `/api/auth/refresh` and with
+      `HttpOnly` off.
+- [x] **new** — No `Set-Cookie` names `JSESSIONID`, deletions included, on register, login,
       `/api/users/me`, password change, logout, account deletion and refresh
-      (`tokens/NoSessionIT`). The Google routes are exempt until Day 14. Red today: login,
-      password change and logout each set it.
-- [ ] **new** — An expired access cookie plus a valid refresh cookie: `POST /api/auth/refresh`
+      (`tokens/NoSessionIT`). The Google routes are exempt until Day 14. `NoSessionIT` (#87),
+      over one account's whole life. Red with `establishSession` put back in login.
+- [x] **new** — An expired access cookie plus a valid refresh cookie: `POST /api/auth/refresh`
       returns 200 with both cookies anew, and the new access cookie reaches `/api/users/me`
       (`tokens/RefreshIT`). The expired token is signed by the test with the harness's key,
-      more than 60 seconds past (the decoder allows 60 seconds of clock skew). Red today: 404.
-- [ ] **new** — A refresh token used once gets 401 the second time, and that response deletes
-      both cookies (`tokens/RefreshIT`). Red today: 404.
-- [ ] **new** — After logout, the refresh token it received no longer redeems (`redeem` is
-      empty), and the logout response deletes both cookies (`tokens/LogoutRevokesIT`). Red
-      today: nothing revokes; `redeem` still returns the user.
-- [ ] **new** — After a password change, every refresh token the user held before it no longer
+      more than 60 seconds past (the decoder allows 60 seconds of clock skew). `RefreshIT` (#85;
+      the `/api/users/me` half in #87, once the session no longer authenticated). Red on `main`'s
+      code: 404.
+- [x] **new** — A refresh token used once gets 401 the second time, and that response deletes
+      both cookies (`tokens/RefreshIT`). Same class (#85). Red with `rotate` ignoring
+      `revoked_at`: `expected: 401 but was: 200`.
+- [x] **new** — After logout, the refresh token it received no longer redeems (`redeem` is
+      empty), and the logout response deletes both cookies (`tokens/LogoutRevokesIT`).
+      `LogoutRevokesIT` (#85). Red on `main`'s code and with the logout handler removed.
+- [x] **new** — After a password change, every refresh token the user held before it no longer
       redeems, and the caller is signed in with new ones; after a password reset, every one no
-      longer redeems (`tokens/PasswordRevokesIT`). Red today: `redeem` still returns the user.
-- [ ] **new** — `DELETE /api/users/me` deletes both cookies (`tokens/AuthCookiesIT`). Red today:
-      it deletes `JSESSIONID` only.
-- [ ] **new** — Restarting the backend does not sign a user out: the compose check in **Verify**
-      prints `200` after the restart. Red today: `401`.
+      longer redeems (`tokens/PasswordRevokesIT`). `PasswordRevokesIT` (#85). Red on `main`'s
+      code and with `revokeAll` removed: both tests.
+- [x] **new** — `DELETE /api/users/me` deletes both cookies (`tokens/AuthCookiesIT`).
+      `AuthCookiesIT` (#87). Red with deletion clearing `JSESSIONID` only, and with it the
+      contract's `AccountDeletionIT.endsTheSession` (`expected: 401 but was: 404`).
+- [x] **new** — Restarting the backend does not sign a user out: the compose check in **Verify**
+      prints `200` after the restart. `200`, `200` on `main` at the close and in #87; `200`, `401`
+      on 02387dd (#82).
 - [ ] **new** — The frontend calls `POST /api/auth/refresh` on a 401 and retries once:
       `grep -rn "api/auth/refresh" frontend/src` finds it in `api.ts`; `npm run lint` and
       `npm run build` pass; and in a browser, with `access_token` deleted by hand and the page
       reloaded, the user is still signed in and a new `access_token` is set (checked by the
-      maintainer; there is no browser in CI). Red today: the grep finds nothing.
-- [ ] **hold** — A stale auth cookie costs an anonymous route nothing: with an expired access
+      maintainer; there is no browser in CI). #86: the grep finds `api.ts:97` (0 before); build
+      and lint pass (lint with `--line-ending=crlf` on a Windows checkout). A scratch script
+      stubbing `fetch` showed one refresh for three concurrent 401s, no refresh for
+      `/api/auth/`, and the 401 standing when refresh fails; broken on a copy, 3 refreshes and 1.
+      **The browser check is not yet reported by the maintainer,** so this box stays open; the
+      day is done when it is ticked.
+- [x] **hold** — A stale auth cookie costs an anonymous route nothing: with an expired access
       token or garbage in `Cookies.AUTH`, `GET /api/jobs` returns 200, login with valid
-      credentials 200, and register 201 (`tokens/StaleCookieIT`, Track 0). True today, where the
-      cookie is an unknown session id. Broken, in the auditor's scratch build of this day without
-      the in-scope rule: 401 on all three, with all 190 contract tests green.
-- [ ] **hold** — A tampered auth cookie on `/api/users/me` returns 401, not 500
-      (`tokens/StaleCookieIT`, Track 0). True today. Broken on purpose in Track 0's PR.
-- [ ] **hold** — Day 02's 49 auth tests, and all 190 tests in the 23 `contract/` classes, pass,
+      credentials 200, and register 201 (`tokens/StaleCookieIT`, Track 0). `StaleCookieIT` (#83),
+      green before and after the switch. Broken on purpose in #83 (an invalid-session strategy
+      answering 401: 9 of 10 red) and in #87 (the resolver passing stale tokens through: 9 of 10,
+      `but was: 401`).
+- [x] **hold** — A tampered auth cookie on `/api/users/me` returns 401, not 500
+      (`tokens/StaleCookieIT`, Track 0). Same class. Broken on purpose in #83 and #87 (a stale
+      token that throws: `expected: 401 but was: 500`).
+- [x] **hold** — Day 02's 49 auth tests, and all 190 tests in the 23 `contract/` classes, pass,
       and nothing in `contract/` changes: the last command in **Verify** prints nothing. In the
       Day 01–04 suite only `support/` changes: `Cookies.AUTH` becomes `"access_token"`, with its
-      Javadoc. Broken on purpose in the spec-change PR for Day 12 (#74): with `establishSession`
-      taken out of `login`, `Tests run: 49, Failures: 8`. In the auditor's scratch build of this
-      day, without the email-principal converter: 89 of 257 red.
+      Javadoc. At the close: 275 tests green, the command prints nothing, `Cookies.AUTH` changed in
+      #87. **One departure:** `support/` also gained `ApiClient.withCookie` (#83),
+      `GoogleSignIn` (#84) and `TestTokens` (#85), used only by the tests in `tokens/`; see Notes.
+      Broken on purpose in #87 without the email-principal converter: 81 of 190 contract tests red.
 
 ## Verify
 ```bash
@@ -226,3 +242,33 @@ git diff --stat "$BASE" HEAD -- backend/app/src/test/java/nl/hackyourfuture/proj
   deploy: their `JSESSIONID` no longer authenticates. Production that sets `SESSION_COOKIE_SECURE`
   loses `Secure` on the auth cookie until a later day adds it; Day 16's cutover is the last point
   it can.
+- **Done on Day 13.** Spec change #82, then #83 (Track 0, stale-cookie holds), #84 (Track B, the
+  cookies), #85 (Track C, refresh, rotation and revocation), #86 (Track D, the frontend) and #87
+  (Track A, the switch). 275 tests green, checkstyle clean; all 190 contract tests pass and
+  `contract/` did not change. *Estimated 3 pull requests as first written, 5 after the spec
+  change, took 5.*
+- **The plan's central test held.** The session-auth rewrite passed Day 02's 49 auth tests and
+  the rest of `contract/` unedited, with `Cookies.AUTH` the only line the contract suite reads
+  that changed. It held because of three things the spec as first written did not ask for,
+  found by the spec-auditor's scratch build before the work: the email principal (81 contract
+  tests red without it, #87), Google's cookies moving here from Day 14, and account deletion's
+  cookies.
+- **The tracks ran 0, B, C, D, A,** so each landed on a working `main` and the switch came
+  last. Reverting #87 alone restores session auth.
+- **The departure from "only `Cookies.AUTH`" in `support/`.** Three additions, each for tests
+  outside `contract/`: `ApiClient.withCookie` (a cookie no server set), `GoogleSignIn` (a copy
+  of `AuthGoogleSignInIT`'s private stub flow, which that test keeps) and `TestTokens` (an
+  expired token signed with the application's key). CLAUDE.md allows `support/` changes; the
+  criterion's wording was narrower than the rule, and nothing in `contract/` uses them.
+- **Mistakes of mine, recorded in their PRs:**
+  - #82: the restart script's first version sent `acceptTerms`, not `acceptedTerms`; caught
+    before it ran.
+  - #85: a break made with `sed` also hit Day 12's `redeem`; rerun on `rotate` alone.
+  - #87: a checkstyle line-length violation, hidden because my command piped checkstyle into
+    `tail` and printed `tail`'s exit code. The same pipe was in #84's and #85's runs, which
+    printed nothing and so passed; CI ran checkstyle on all three.
+- **`npm run lint` fails on a Windows checkout** (57 formatter errors on this branch, 58 on
+  `main` before #86), all of them CRLF line endings from `core.autocrlf`. CI checks out LF.
+  `npx biome check --line-ending=crlf` is clean.
+- **Not done here:** `backend/docs/auth.md` still describes session auth; a docs PR rewrites it,
+  by the maintainer's decision. `Secure` is still off the new cookies (Out of scope).
