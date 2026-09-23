@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import nl.hackyourfuture.project.backend.identity.token.AuthCookies;
 import nl.hackyourfuture.project.backend.identity.user.User;
 import nl.hackyourfuture.project.backend.identity.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
     private final AuthenticationService authenticationService;
+    private final AuthCookies authCookies;
 
     // Derived from app.base-url in application.yaml.
     @Value("${app.oauth2.success-redirect}")
@@ -58,6 +60,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         }
 
         authenticationService.establishSession(user.get().getEmail(), request);
+        authCookies.issue(response, user.get().getId(), user.get().getEmail());
 
         // Google skips our terms screen, so send them there first.
         if (user.get().getTermsAcceptedAt() == null) {
