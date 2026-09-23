@@ -37,6 +37,7 @@ public class AuthenticationService {
     private final EmailService emailService;
     private final AuthCookies authCookies;
     private final RefreshTokens refreshTokens;
+    private final PendingGoogleLinks pendingGoogleLinks;
 
     @Value("${app.base-url}")
     private String baseUrl;
@@ -99,7 +100,7 @@ public class AuthenticationService {
         }
 
         authCookies.issue(httpResponse, credentials.id(), credentials.email());
-        completePendingGoogleLink(credentials, httpRequest);
+        completePendingGoogleLink(credentials, httpRequest, httpResponse);
 
         // Null timestamp means they never agreed; the frontend shows the terms screen.
         return new LoginResponse(
@@ -202,11 +203,11 @@ public class AuthenticationService {
         log.info("Password successfully updated for user email: {}", email);
     }
 
-    // A Google sign-in that found this email waits in the session until a password login
-    // proves the account. This is that proof, so the identity can be attached now.
+    // A Google sign-in that found this email waits, parked, until a password login proves the
+    // account. This is that proof, so the identity can be attached now.
     private void completePendingGoogleLink(UserRepository.UserCredentialsRecord credentials,
-                                           HttpServletRequest httpRequest) {
-        PendingGoogleLink.claim(httpRequest.getSession(false), credentials.email())
+                                           HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        pendingGoogleLinks.claim(httpRequest, httpResponse, credentials.id())
                 .ifPresent(providerId -> {
                     boolean linked = userRepository.linkProvider(
                             credentials.id(), OAuth2LoginSuccessHandler.PROVIDER_GOOGLE, providerId);

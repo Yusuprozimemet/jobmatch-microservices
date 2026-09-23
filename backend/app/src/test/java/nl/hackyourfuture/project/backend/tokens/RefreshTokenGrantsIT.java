@@ -3,7 +3,7 @@ package nl.hackyourfuture.project.backend.tokens;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Only {@code identity} reads the refresh-token hashes, although every other module may read the
- * rest of its schema (Day 12).
+ * Only {@code identity} reads the refresh-token hashes (Day 12) and the pending Google links
+ * (Day 14), although every other module may read the rest of its schema.
  *
  * <p>Through the application's own pools, as {@code ModuleConnectionsIT} does, so the role refused
  * is the one each module really logs in as.
@@ -43,16 +43,17 @@ class RefreshTokenGrantsIT extends IntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"applications", "matching", "jobs"})
-    void noOtherModuleCanReadThem(String module) {
+    @CsvSource({"applications, refresh_tokens", "matching, refresh_tokens", "jobs, refresh_tokens",
+        "applications, pending_google_links", "matching, pending_google_links", "jobs, pending_google_links"})
+    void noOtherModuleCanReadThem(String module, String table) {
         DataSource dataSource = context.getBean(module + "DataSource", DataSource.class);
 
         assertThatThrownBy(() -> JdbcClient.create(dataSource)
-                .sql("SELECT count(*) FROM identity.refresh_tokens")
+                .sql("SELECT count(*) FROM identity." + table)
                 .query(Long.class)
                 .single())
                 .rootCause()
-                .hasMessageContaining("permission denied for table refresh_tokens");
+                .hasMessageContaining("permission denied for table " + table);
     }
 
     @Test

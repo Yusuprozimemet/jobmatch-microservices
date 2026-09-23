@@ -29,6 +29,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
     private final AuthCookies authCookies;
+    private final PendingGoogleLinks pendingGoogleLinks;
 
     // Derived from app.base-url in application.yaml.
     @Value("${app.oauth2.success-redirect}")
@@ -51,8 +52,9 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         Optional<User> user = resolveUser(email, name, providerId);
         if (user.isEmpty()) {
-            // Park the identity - not signed in yet, since nothing here proves the account is theirs.
-            PendingGoogleLink.save(request.getSession(), email, providerId);
+            // Park it for the email's account - not signed in, since nothing here proves it is theirs.
+            userRepository.getUserByEmail(email)
+                    .ifPresent(owner -> pendingGoogleLinks.park(response, owner.getId(), providerId));
             log.info("Google sign-in for {} needs the account password before linking", email);
             response.sendRedirect(linkRequiredRedirect);
             return;
