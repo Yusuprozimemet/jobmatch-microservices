@@ -333,6 +333,30 @@ reading `identity`'s tables and ask through two interfaces in `shared`. 202 test
   with the enforcer skipped they still fail — which is a smaller claim and the true one.
 - *Estimated 4 pull requests, took 5.*
 
+**Day 8 — remove the `saved_count` join.** `jobs` stops reading `saved_jobs` and asks
+`applications` through `SavedJobCounts`, one call per page. The first of the two cross-module
+joins is gone. 206 tests green.
+
+- **The gate Day 3 wrote for this day passed unedited.** `JobSavedCountIT` was written five days
+  earlier with a note that it "must not need editing"; the join under it was replaced and it did
+  not. This is the first time a contract test stood between a refactor and a behaviour change
+  instead of only recording one.
+- **The spec's verify command ran no tests at all.** With `-Dtest` and no `-pl`, surefire applied
+  the pattern to every module and stopped on `shared`, before `app`, where the tests live. It
+  failed loudly, but `app/target` still held a green report from an earlier run, and anyone who
+  read that instead of the exit code saw six passes that had not happened. A different route to
+  Day 2's failure mode: a check reporting on tests it did not run.
+- **One criterion asked for something no test could see.** "Assert the query count" had nothing
+  to count with: the contract tests speak HTTP and JDBC, and neither shows how many statements a
+  request ran. `pg_stat_statements` in the test container does, from the database side, without
+  touching an application bean. The test it made passes before the change and after, so it was
+  broken on purpose first: a per-posting loop failed it with 1 + page size statements.
+- **Two slips of mine, caught before pushing:** a comment that put `saved_jobs` back under `jobs/`
+  and failed the day's own grep, and a checkstyle violation that 206 green tests could not see,
+  because `mvnw verify` does not run checkstyle.
+- *Estimated 2 pull requests, took 3.* The third is the query-count test, which the spec change
+  added before work started.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -357,10 +381,10 @@ unchanged.
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`.** Day 13 and Days 17–28 are the remaining tests |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 3 specs that could not be met, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 6 of 7 days worked, and Day 5 needed two) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter.** Day 13 and Days 17–28 are the remaining tests |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 4 specs that could not be met, 1 spec verify command that ran no tests, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 7 of 8 days worked; Days 5 and 8 needed two, Day 8's first made on Day 3 while writing its gate) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
