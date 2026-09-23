@@ -28,7 +28,6 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     static final String PROVIDER_GOOGLE = "GOOGLE";
 
     private final UserRepository userRepository;
-    private final AuthenticationService authenticationService;
     private final AuthCookies authCookies;
 
     // Derived from app.base-url in application.yaml.
@@ -52,14 +51,13 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         Optional<User> user = resolveUser(email, name, providerId);
         if (user.isEmpty()) {
-            // Park the identity - no session yet, since nothing here proves the account is theirs.
+            // Park the identity - not signed in yet, since nothing here proves the account is theirs.
             PendingGoogleLink.save(request.getSession(), email, providerId);
             log.info("Google sign-in for {} needs the account password before linking", email);
             response.sendRedirect(linkRequiredRedirect);
             return;
         }
 
-        authenticationService.establishSession(user.get().getEmail(), request);
         authCookies.issue(response, user.get().getId(), user.get().getEmail());
 
         // Google skips our terms screen, so send them there first.

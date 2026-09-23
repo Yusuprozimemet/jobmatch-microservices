@@ -18,9 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@code POST /api/auth/refresh} trades a live refresh cookie for a new pair, once (Day 13).
  *
- * <p>The request carries an expired access token, as a browser's does when it refreshes, and no
- * session. That the new access cookie signs the user in is asserted once the session goes
- * (Track A); until then the session, not the cookie, is what authenticates.
+ * <p>The request carries an expired access token, as a browser's does when it refreshes.
  */
 class RefreshIT extends IntegrationTest {
 
@@ -41,6 +39,8 @@ class RefreshIT extends IntegrationTest {
         String access = value(response.setCookie(ACCESS));
         assertThat(SignedJWT.parse(access).getJWTClaimsSet().getSubject()).isEqualTo(user.id().toString());
         assertThat(value(response.setCookie(REFRESH))).isNotBlank().isNotEqualTo(refresh);
+        assertThat(anonymous().withCookie(ACCESS, access).get("/api/users/me").at("/email").asString())
+                .as("the new access cookie signs the user in").isEqualTo(user.email());
     }
 
     @Test

@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.tokens;
 
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
+import nl.hackyourfuture.project.backend.support.Cookies;
 import nl.hackyourfuture.project.backend.support.GoogleSignIn;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.StubOidcProvider;
@@ -52,6 +53,15 @@ class AuthCookiesIT extends IntegrationTest {
         aUser().email("cookies@example.test").googleAccount("google-sub-cookies").create();
 
         assertBothCookies(GoogleSignIn.as(anonymous(), "google-sub-cookies", "cookies@example.test"));
+    }
+
+    @Test
+    void deletingTheAccountDeletesBothCookies() {
+        ApiResponse response = authenticatedAs(aUser().create()).delete("/api/users/me");
+
+        assertThat(response.status()).isEqualTo(204);
+        assertThat(Cookies.deletes(response.setCookie("access_token"))).as("deletes the access cookie").isTrue();
+        assertThat(Cookies.deletes(response.setCookie("refresh_token"))).as("deletes the refresh cookie").isTrue();
     }
 
     private static void assertBothCookies(ApiResponse response) {

@@ -6,13 +6,13 @@ import java.util.Optional;
  * The email a logged-in principal carries. Empty for nobody logged in, or for Spring's
  * anonymous placeholder.
  *
- * <p>The principal is always a plain email: password login and Google sign-in both end in
- * {@code AuthenticationService.establishSession}, which puts the account's email there. The
+ * <p>The principal is always a plain email: since Day 13 it is the access token's {@code email}
+ * claim, which {@code AccessTokenAuthentication} puts there as the session used to. The
  * helper this replaces, copied into four controllers, also accepted a {@code UserDetails}; nothing
  * creates one, and removing that branch left every test green.
  *
  * <p>Used by {@link CurrentUserIdResolver} for the other modules, and by identity's own
- * controllers, which still work by email. Day 13 puts the id in a token and changes this.
+ * controllers, which still work by email.
  */
 public final class PrincipalEmail {
 

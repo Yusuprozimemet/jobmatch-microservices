@@ -77,7 +77,8 @@ public class AuthCookies {
                 .findFirst();
     }
 
-    private static void clear(HttpServletResponse response) {
+    /** Deletes both cookies: what signing out, however it happens, leaves in the browser. */
+    public static void clear(HttpServletResponse response) {
         add(response, ACCESS, "", "/", Duration.ZERO);
         add(response, REFRESH, "", REFRESH_PATH, Duration.ZERO);
     }
