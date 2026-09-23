@@ -4,7 +4,8 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
 
 ## Workflow
 
-1. Read the day spec.
+1. Read the day spec against the code, and run every acceptance check on the code as it is.
+   Fix what that turns up in a spec-change PR before any track starts.
 2. Branch per track: `day-04/track-b-saved-jobs-tests`.
 3. Build only what **In scope** lists.
 4. Copy the acceptance criteria into the PR description and tick them.
@@ -17,8 +18,23 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
 - **Criteria must be checkable by someone who did not write the code.**
   "Auth works" is not a criterion. "`POST /api/auth/login` returns 200 with a
   `Set-Cookie` containing `HttpOnly` and `SameSite=Lax`" is.
+- **Every criterion is `new` or `hold`, and every check has been seen to fail.** A check that
+  cannot fail proves nothing, and Phases 0 and 1 had three kinds of them: a CI gate that never
+  ran the integration tests (Day 02), a verify command that ran no tests (Day 08), and greps for
+  TODO markers that did not exist, so the criterion ticked itself (Days 08 and 09).
+  - `new` is behaviour that does not exist yet. The check must fail on today's code, and the
+    spec says how ("the grep finds two"). A `new` check that passes before the work is wrong.
+  - `hold` must stay true through the change: contract tests passing unedited, a statement
+    count. It passes before and after, so passing says nothing. Break the code on purpose once,
+    watch the check fail, record what it reported, and revert. Day 08 did this with a
+    per-posting loop: the query-count test failed with 2, 21 and 25 statements.
+  - The proof goes in the PR that first runs the check: the spec-change PR if the check exists
+    already, the track's PR if a track adds it (a Track 0). The closing PR links it when it
+    ticks the box.
 - **Tracks inside a day run in parallel. Days run in order.** Day N assumes N-1 is merged.
 - Changing a spec is normal. Change it in a PR *before* the work, not after.
+- Specs written before the `new`/`hold` rule get their criteria tagged in that day's
+  spec-change PR, when the spec is read against the code.
 
 ## Layout
 
