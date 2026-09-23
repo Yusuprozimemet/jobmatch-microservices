@@ -127,8 +127,8 @@ anything that requires a network.
 
 | Phase | Days | Outcome | Status |
 | --- | --- | --- | --- |
-| **0 — Make the split safe** | 1–5 | Integration tests over the five public API surfaces, asserting the HTTP contract only, so they survive the split unchanged. Actuator, Micrometer, OpenTelemetry. | **in progress** |
-| **1 — Modularise in place** | 6–11 | Maven modules that may only call each other through published interfaces; the two cross-schema joins replaced by interfaces; migrations split per module. No network yet. | ready |
+| **0 — Make the split safe** | 1–5 | Integration tests over the five public API surfaces, asserting the HTTP contract only, so they survive the split unchanged. Actuator, Micrometer, OpenTelemetry. | done |
+| **1 — Modularise in place** | 6–11 | Maven modules that may only call each other through published interfaces; the three cross-module reads replaced by interfaces; migrations split per module. No network yet. | **in progress** |
 | **2 — Gateway + JWT** | 12–16 | Spring Cloud Gateway in front; session auth rewritten to RS256 JWT with JWKS, refresh tokens in the database, Google sign-in without a session. | ready |
 | **3 — Extract job-service** | 17–20 | First independent service: read-only, no user data, own database and image. | provisional |
 | **4 — Extract matching-service** | 21–24 | Isolates the 20-second LLM timeout from job search; match scores move to NoSQL with a native TTL. | provisional |

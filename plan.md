@@ -10,7 +10,7 @@ straightforward. What is not straightforward:
 |---|---|---|
 | **No tests** | `backend/src/test` has one context-load test. Nothing will tell us if a split broke behaviour. | Phase 0. Non-negotiable. |
 | **Session auth** | `JSESSIONID` + Spring sessions (`SecurityConfig`) can't work behind a stateless gateway. | Phase 2 — rewrite to RS256 JWT. |
-| **Two cross-schema joins** | `JobRepository` reads `saved_jobs`; `SavedJobRepository` reads `analytics.fct_postings`. Separate databases make these impossible. | Phase 1 — replace with interfaces before any network exists. |
+| **Three cross-module reads** | `JobRepository` reads `saved_jobs`; `SavedJobRepository` joins `analytics.fct_postings`; `matching`'s `JobMatchRepository` builds its shortlist straight from the mart. Separate databases make all three impossible. | Phase 1 — replace with interfaces before any network exists. |
 | **GDPR delete** | One `ON DELETE CASCADE` becomes a cascade across four databases. | Phase 5 — `user.deleted` event. |
 
 **Do Phases 0–2 and stop if time runs short.** They deliver the boundaries, the
@@ -53,17 +53,21 @@ Each phase is a series of <400-line PRs, so CI stays green.
 - Integration tests (Testcontainers) covering the five public API surfaces:
   auth, profile, jobs search, saved jobs, top-matches. Test the HTTP contract,
   not the internals — these tests must survive the split unchanged.
-- Add `spring-boot-starter-actuator` + Micrometer + the OpenTelemetry Java agent.
+- Add `spring-boot-starter-actuator` + Micrometer + OpenTelemetry tracing through
+  `spring-boot-starter-opentelemetry`. (Planned as the Java agent; Day 05 found it produces
+  no HTTP server spans on Spring Framework 7 / Tomcat 11 and suppresses Spring's own.)
 - **Done when:** tests pass against the monolith and will be reused verbatim later.
 
 ### Phase 1 — Modularise in place (no network yet)
 **Goal:** prove the boundaries hold while everything is still one process.
 - Convert packages to Maven modules. A module may only call another through a
   published interface.
-- Kill the two cross-schema joins:
+- Kill the three cross-module reads:
   - `saved_count` in job search → `SavedJobCounts` interface, returns counts by posting id.
   - Saved jobs hydration → `PostingLookup` interface, batch fetch by ids.
-- Delete `UserLookup`: pass `userId` down from the controller instead of resolving email.
+  - Match shortlist → `PostingShortlist` interface; the SQL moves into `jobs`.
+- Resolve the user once, at the edge: controllers pass `userId` down instead of each
+  module turning an email into an id through `UserDirectory`.
 - Split migrations per module; give each its own schema.
 - **Done when:** modules compile independently and no SQL crosses a schema.
 - **This phase is where the real work is. It is also fully reversible.**
