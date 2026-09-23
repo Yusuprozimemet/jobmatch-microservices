@@ -33,8 +33,9 @@ The backend authenticates from a token and holds no server-side session.
 | C | | Refresh + rotation + revoke-on-password-change |
 
 ## Acceptance criteria
-- [ ] No response anywhere sets `JSESSIONID`.
-- [ ] No assertion in `backend/src/test/java/.../contract/` changes. The auth cookie's
+- [ ] No response sets `JSESSIONID`, except on the Google routes (`/api/oauth2/**`,
+      `/api/login/oauth2/**`), which keep their session until Day 14 — see the note.
+- [ ] No assertion in `backend/app/src/test/java/.../contract/` changes. The auth cookie's
       *name* is mechanism, not contract: it lives in `support/Cookies.AUTH`, and that one
       line is the only edit Phase 2 may make to the Day 01–04 suite.
 - [ ] An expired access token plus a valid refresh token yields a new access token.
@@ -45,7 +46,7 @@ The backend authenticates from a token and holds no server-side session.
 
 ## Verify
 ```bash
-cd backend && ./mvnw verify
+cd backend && ./mvnw clean verify && ./mvnw -B checkstyle:check
 docker compose restart backend
 # reload the browser: still logged in
 ```
@@ -68,3 +69,12 @@ docker compose restart backend
   `Secure` over plain HTTP. The refresh cookie's path scoping therefore needs its own
   assertion on the `Set-Cookie` header, not a round-trip through the jar.
 - Keep the old session code on the branch until acceptance passes. Delete it on Day 16.
+- **Spec corrected on Day 09, before the work, from a read of every remaining spec.**
+  - **"No response anywhere sets `JSESSIONID`" contradicted "Google keeps its session for
+    one more day".** It is not only `establishSession`: Spring's `oauth2Login` keeps the
+    authorization request — `state` and `nonce` — in the HTTP session by default
+    (`HttpSessionOAuth2AuthorizationRequestRepository`), and `STATELESS` does not change that.
+    `AuthGoogleSignInIT` follows `/api/oauth2/authorization/google` to the callback with the
+    session cookie in between. So the Google routes still set a session cookie today, by
+    design, and Day 14 removes it. The criterion is scoped to say so.
+  - The contract path was `backend/src/test/...`; Day 06 moved it to `backend/app/src/test/...`.

@@ -39,10 +39,17 @@ still work exactly as before.
 
 ## Verify
 ```bash
-cd backend && ./mvnw verify -Dtest='Jwt*,Auth*IT'
+cd backend
+# -pl app -am and failIfNoSpecifiedTests=false: without them surefire stops on `shared`,
+# which has no matching test, and nothing runs (found on Day 08).
+./mvnw clean verify -pl app -am -Dtest='Jwt*,Auth*IT' -Dsurefire.failIfNoSpecifiedTests=false
+./mvnw -B checkstyle:check
 curl -s localhost:8080/.well-known/jwks.json | grep -c '"d"'   # expect 0
 ```
 
 ## Notes
 - Put the keypair in the compose env for local, Key Vault later. Never in git.
 - 15 minutes is short on purpose: it caps the damage from a token we cannot revoke.
+- **Spec corrected on Day 09, before the work, from a read of every remaining spec.**
+  The verify command ran no tests, for the reason Day 08 found: `-Dtest` with no `-pl` fails
+  on `shared` before reaching `app`. Check the surefire reports, not only the exit code.
