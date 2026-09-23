@@ -1,26 +1,18 @@
 package nl.hackyourfuture.project.backend.tokens;
 
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.util.Base64URL;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 import nl.hackyourfuture.project.backend.identity.token.AccessTokens;
 import nl.hackyourfuture.project.backend.identity.token.SigningKey;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.Cookies;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.TestTokens;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 
@@ -76,37 +68,12 @@ class StaleCookieIT extends IntegrationTest {
 
     private ApiClient holding(String kind) {
         String value = switch (kind) {
-            case "expired" -> expiredToken();
+            case "expired" -> TestTokens.expired(signingKey, UUID.randomUUID(), "someone@example.test");
             case "tampered" -> tampered(accessTokens.mint(UUID.randomUUID(), "someone@example.test"));
             case "garbage" -> "not-a-token-or-a-session";
             default -> throw new IllegalArgumentException(kind);
         };
         return anonymous().withCookie(Cookies.AUTH, value);
-    }
-
-    /**
-     * Signed with the application's own key and shaped like its tokens, so the only thing wrong
-     * with it is the time. Well past the decoder's 60 seconds of allowed clock skew.
-     */
-    private String expiredToken() {
-        Instant issued = Instant.now().minus(Duration.ofHours(1)).truncatedTo(ChronoUnit.SECONDS);
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .subject(UUID.randomUUID().toString())
-                .claim("email", "someone@example.test")
-                .issuer(AccessTokens.ISSUER)
-                .audience(AccessTokens.AUDIENCE)
-                .issueTime(Date.from(issued))
-                .expirationTime(Date.from(issued.plus(AccessTokens.LIFETIME)))
-                .jwtID(UUID.randomUUID().toString())
-                .build();
-        SignedJWT token = new SignedJWT(
-                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.keyId()).build(), claims);
-        try {
-            token.sign(new RSASSASigner(signingKey.privateJwk()));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-        return token.serialize();
     }
 
     /** A real token with one byte of its signature changed. */
