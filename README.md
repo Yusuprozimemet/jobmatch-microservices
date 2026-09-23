@@ -357,6 +357,26 @@ joins is gone. 206 tests green.
 - *Estimated 2 pull requests, took 3.* The third is the query-count test, which the spec change
   added before work started.
 
+**Day 9 — remove the hydration join, and move the shortlist.** `applications` and `matching` stop
+reading the mart. They ask `jobs` through `PostingLookup` for posting details and through
+`PostingShortlist` for match candidates. No SQL crosses a module boundary any more. 210 tests
+green.
+
+- **The spec's central instruction could not be followed.** "Order and page inside `saved_jobs`"
+  was impossible: the list is ordered by a mart column, and `saved_jobs` has nothing to order by.
+  Following it would have changed the order users see and failed a Day 4 test. The fix hydrates
+  the whole personal list and pages in memory.
+- **`plan.md` counted two cross-module reads; there were three.** `matching` built its shortlist
+  straight from the mart, and no Phase 1 day moved it. Found by reading every remaining spec
+  against the code before starting, and added as Track C the same day.
+- **Breaking the code on purpose found what reading had not.** Closing under the new rule that
+  every check must be seen to fail, I reversed the saved-jobs sort. All 31 of Day 4's tests
+  passed. They pin where a vanished posting goes, not which way the list runs. The spec had said
+  Day 4 pins the order, and two spec changes and four track PRs had read past it. Nothing changed
+  for users, since Track B kept newest first, but only by reading.
+- *Estimated 2 pull requests, took 4.* Both extras came from spec changes before the work: the
+  query-count test, and Track C.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -381,10 +401,10 @@ unchanged.
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter.** Day 13 and Days 17–28 are the remaining tests |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 4 specs that could not be met, 1 spec verify command that ran no tests, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 7 of 8 days worked; Days 5 and 8 needed two, Day 8's first made on Day 3 while writing its gate) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again.** Day 13 and Days 17–28 are the remaining tests |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 5 specs that could not be met, 2 spec verify commands that ran no tests, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 8 of 9 days worked; Days 5, 8 and 9 needed two, Day 8's first made on Day 3 while writing its gate) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
