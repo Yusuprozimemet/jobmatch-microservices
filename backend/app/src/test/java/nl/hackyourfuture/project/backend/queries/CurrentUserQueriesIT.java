@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Not a contract test. Today the session's principal is an email, and {@code identity} turns
  * it into a user with one query. Before Day 10 that query runs inside {@code applications} and
- * {@code matching}, through {@code UserDirectory}. After it, it runs once in a resolver at the
+ * {@code matching}, through an interface in {@code shared}. After it, it runs once in a resolver at the
  * edge. The move must not add a second lookup on the way, and that is what this test is for.
  *
  * <p>Expires on Day 13, when the principal carries the user's id and the count should drop to

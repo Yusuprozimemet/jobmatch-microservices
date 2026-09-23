@@ -6,11 +6,9 @@ import java.util.UUID;
 /**
  * Reads the ranking-relevant part of a user's profile.
  *
- * <p>Temporary, for the same reason as {@link UserDirectory}: {@code matching} uses
- * {@code ProfileRepository} directly today, which is {@code identity}'s table.
- *
- * <p>// TODO day-10: replace with whatever Day 10 settles on. It plans a {@code ProfileSkills}
- * interface with the same shape, so this may survive under another name.
+ * <p>How {@code matching} learns a user's skills and city without reading {@code identity}'s
+ * {@code user_profiles} table. Two fields, not the row. Day 24 puts it behind HTTP when
+ * {@code matching} runs as its own service; the shape stays.
  */
 public interface ProfileDirectory {
 
