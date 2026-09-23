@@ -12,8 +12,10 @@ code is gone.
 - Delete the dead session code left behind on Day 13, and the backend's CORS config now
   that the gateway owns it.
 - Deployment: gateway gets the public ingress, backend goes internal-only.
-- Docs: update `backend/docs/auth.md`, `api.md` and `hiearchy-backend.md` for JWT.
-  Add both architecture charts to `backend/docs/`.
+- Docs: update `backend/docs/auth.md` and `api.md` for JWT.
+- Two architecture diagrams in `backend/docs/architecture.md`, as Mermaid so they render on
+  GitHub and diff in review: **before** (browser → backend, session cookie) and **after**
+  (browser → gateway → backend, JWT cookie, JWKS).
 - `README.md`: the new local startup story.
 - Tag the release. This is the Phase 2 boundary and a sensible rollback point.
 
@@ -34,14 +36,14 @@ code is gone.
       save a job, view matches, change password, log out.
 - [ ] `grep -rn "JSESSIONID\|HttpSession\|establishSession"` returns nothing.
 - [ ] `backend/docs/auth.md` describes JWT, not sessions.
-- [ ] Both charts are committed and render on GitHub.
+- [ ] Both diagrams are in `backend/docs/architecture.md` and render on GitHub.
 - [ ] A tagged release exists and the team knows it is the rollback point.
 
 ## Verify
 ```bash
 docker compose down -v && docker compose up -d --build
 docker compose ps                    # backend: no published port
-cd backend && ./mvnw verify
+cd backend && ./mvnw clean verify && ./mvnw -B checkstyle:check
 # then walk the full browser flow above
 ```
 
@@ -50,3 +52,7 @@ cd backend && ./mvnw verify
   Boundaries are proven, auth is stateless, tests are real. Phases 3–7 can start whenever,
   and none of this work needs redoing.
 - Write the Phase 3 specs only after this day ships. What we learn here changes them.
+- **Spec corrected on Day 09, before the work, from a read of every remaining spec.**
+  `hiearchy-backend.md` does not exist — Day 02 found this, and it was never taken out here.
+  "Both architecture charts" named nothing that exists or is described anywhere; the two
+  diagrams are now defined.
