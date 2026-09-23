@@ -17,7 +17,7 @@ With the default `admin` / `password` credentials. Do not use those credentials 
 docker run --name hyf-postgres -e POSTGRES_DB=project_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18.4-alpine
 ```
 
-> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates the `project_db` database with an `app` and an `analytics` schema, a schema per backend module (`identity`, `applications`, `matching`), and one least-privilege role for each, plus a read-only `jobs_user`. Then run the app with `DB_SCHEMA=app`, `DB_USER=app_user` and the password the script prints.
+> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates the `project_db` database with an `app` and an `analytics` schema, a schema per backend module (`identity`, `applications`, `matching`), and one least-privilege role for each, plus a read-only `jobs_user`. Then run the app with `DB_USER=app_user` for the migrations and each module's role for its own connection (`DB_IDENTITY_USER=identity_user`, and so on), with the passwords the script prints.
 
 ### 2. Set up configuration
 
@@ -105,7 +105,7 @@ docker pull ghcr.io/<org>/<repo>/backend:latest
 Run it, pointing at your database:
 
 ```bash
-docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=project_db -e DB_SCHEMA=app -e DB_USER=<user> -e DB_PASSWORD=<password> ghcr.io/<org>/<repo>/backend:latest
+docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=project_db \n  -e DB_USER=app_user -e DB_PASSWORD=<password> \n  -e DB_IDENTITY_USER=identity_user -e DB_IDENTITY_PASSWORD=<password> \n  -e DB_APPLICATIONS_USER=applications_user -e DB_APPLICATIONS_PASSWORD=<password> \n  -e DB_MATCHING_USER=matching_user -e DB_MATCHING_PASSWORD=<password> \n  -e DB_JOBS_USER=jobs_user -e DB_JOBS_PASSWORD=<password> \n  ghcr.io/<org>/<repo>/backend:latest
 ```
 
 Two things to watch:
@@ -126,9 +126,10 @@ All configuration lives in [`application.yaml`](src/main/resources/application.y
 | `DB_HOST` | `localhost` | Database host (server name or IP address) |
 | `DB_PORT` | `5432` | Database port |
 | `DB_NAME` | `project_db` | Database name |
-| `DB_SCHEMA` | `app` | Database schema |
-| `DB_USER` | `admin` | Database username |
-| `DB_PASSWORD` | `password` | Database password |
+| `DB_USER` | `admin` | Owner of the migrations; only Flyway logs in as it. `app_user` where `db-setup.py` set the database up |
+| `DB_PASSWORD` | `password` | Its password |
+| `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_MATCHING_USER`, `DB_JOBS_USER` | `identity_user`, … | Each module's own login, with its own schema as the search path. `jobs_user` only reads |
+| `DB_IDENTITY_PASSWORD`, `DB_APPLICATIONS_PASSWORD`, `DB_MATCHING_PASSWORD`, `DB_JOBS_PASSWORD` | `password` | Their passwords |
 | `SPRING_PROFILES_ACTIVE` | — | Active profile: `dev` or `prod`. None is active unless you set it; the Docker image defaults to `prod` |
 
 [`.env.example`](.env.example) lists the same variables as a starting point — copy it to `.env` (gitignored) and load it as described in [Quick start](#quick-start) step 2.
@@ -318,7 +319,8 @@ The `user` package is your reference — deliberately small and complete.
 | `Connection refused` on port 5432 | PostgreSQL isn't running — start the container from [Quick start](#quick-start) |
 | `FATAL: database "project_db" does not exist` | The database was created under another name. Create `project_db`, or set `DB_NAME` to the name you have |
 | `password authentication failed for user "admin"` | Wrong `DB_USER` / `DB_PASSWORD` for this database |
-| `relation "users" does not exist`, or Flyway hits `permission denied for schema app` | `DB_SCHEMA` names a schema your `DB_USER` may not write to — the repository SQL uses unqualified table names and resolves them through it. Point it at a schema the user owns |
+| Flyway stops at V12 with `Day 11 moves identity's tables into schema identity ...` | The module roles and schemas do not exist in this database. Run `db-setup.py` against it, or for compose recreate the volume: `docker compose down -v` |
+| `permission denied for table ...` from the application | A module's login reached another module's table. Each module writes only its own schema; that is Postgres enforcing the boundary, not a grant to add |
 | `Could not find a valid Docker environment` while running `./mvnw verify` | Docker isn't running — the tests start their own database container |
 | `Migration checksum mismatch` | An applied migration was edited. Revert it and add a new `V…` file |
 | `403 Forbidden` on your new endpoint | Not listed in `SecurityConfig`; anything unlisted requires authentication |

@@ -4,14 +4,13 @@ spring:
   threads:
     virtual:
       enabled: true
-  datasource:
-    # Day 11 moved each module's tables into its own schema; this one connection looks in all of
-    # them, and in app for Flyway's history, until each module gets a connection of its own.
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=identity,applications,matching,${DB_SCHEMA:app}
-    username: ${DB_USER:admin}
-    password: ${DB_PASSWORD:password}
+  # The owner of V1-V14, and only Flyway logs in as it: the modules each have their own login,
+  # below under app.datasource. Its history stays in app.
   flyway:
-    schemas: ${DB_SCHEMA:app}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}
+    user: ${DB_USER:admin}
+    password: ${DB_PASSWORD:password}
+    schemas: app
     # Used for password reset emails
   mail:
     host: ${MAIL_HOST:smtp-relay.brevo.com}
@@ -39,6 +38,25 @@ server:
         secure: ${SESSION_COOKIE_SECURE:false}
 
 app:
+  # One login per module (Day 11), each with its own schema as the search path, so a write into
+  # another module's schema is refused by Postgres. jobs owns nothing and reads the mart.
+  datasource:
+    identity:
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=identity
+      username: ${DB_IDENTITY_USER:identity_user}
+      password: ${DB_IDENTITY_PASSWORD:password}
+    applications:
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=applications
+      username: ${DB_APPLICATIONS_USER:applications_user}
+      password: ${DB_APPLICATIONS_PASSWORD:password}
+    matching:
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=matching
+      username: ${DB_MATCHING_USER:matching_user}
+      password: ${DB_MATCHING_PASSWORD:password}
+    jobs:
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=analytics
+      username: ${DB_JOBS_USER:jobs_user}
+      password: ${DB_JOBS_PASSWORD:password}
   base-url: ${APP_BASE_URL:http://localhost:3000}
   mail:
     from: ${MAIL_FROM:jobmatch.team2026@gmail.com}

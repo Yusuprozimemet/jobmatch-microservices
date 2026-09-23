@@ -27,4 +27,11 @@ CREATE SCHEMA matching AUTHORIZATION matching_user;
 GRANT USAGE ON SCHEMA identity TO applications_user, matching_user, jobs_user;
 GRANT USAGE ON SCHEMA applications TO identity_user, matching_user, jobs_user;
 GRANT USAGE ON SCHEMA matching TO identity_user, applications_user, jobs_user;
+
+-- jobs reads the mart. In compose anything in analytics is created by this admin, so its future
+-- tables are granted too; production gets the same from db-setup.py's read-only rule.
+CREATE SCHEMA IF NOT EXISTS analytics;
+GRANT USAGE ON SCHEMA analytics TO jobs_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO jobs_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA analytics GRANT SELECT ON TABLES TO jobs_user;
 SQL

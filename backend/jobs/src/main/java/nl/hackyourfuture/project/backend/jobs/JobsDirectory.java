@@ -5,6 +5,7 @@ import nl.hackyourfuture.project.backend.shared.jobs.PostingShortlist;
 import nl.hackyourfuture.project.backend.shared.jobs.PostingSummary;
 import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import nl.hackyourfuture.project.backend.shared.mart.MartSkills;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -33,7 +34,7 @@ class JobsDirectory implements PostingLookup, PostingShortlist {
 
     private final JdbcClient jdbcClient;
 
-    JobsDirectory(JdbcClient jdbcClient) {
+    JobsDirectory(@Qualifier("jobsJdbcClient") JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 

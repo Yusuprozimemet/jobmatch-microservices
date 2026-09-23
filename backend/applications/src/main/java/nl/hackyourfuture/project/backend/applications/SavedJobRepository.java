@@ -1,5 +1,6 @@
 package nl.hackyourfuture.project.backend.applications;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -13,7 +14,7 @@ public class SavedJobRepository {
 
     private final JdbcClient jdbcClient;
 
-    public SavedJobRepository(JdbcClient jdbcClient) {
+    public SavedJobRepository(@Qualifier("applicationsJdbcClient") JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 

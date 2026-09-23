@@ -37,7 +37,7 @@ public class AuthenticationService {
     private String baseUrl;
 
     // Creates the account, stores the hashed password, and records the terms agreement.
-    @Transactional
+    @Transactional("identityTransactionManager")
     public RegisterResponse register(RegisterRequest request) {
         String normalizedEmail = request.email().toLowerCase(Locale.ROOT);
         // Checking if a user with this email already exists
@@ -105,7 +105,7 @@ public class AuthenticationService {
     }
 
     // Creates a reset token and emails the link.
-    @Transactional
+    @Transactional("identityTransactionManager")
     public void forgotPassword(ForgotPasswordRequest request) {
         String normalizedEmail = request.email().toLowerCase(Locale.ROOT);
         var userOpt = userRepository.getUserByEmail(normalizedEmail);
@@ -145,7 +145,7 @@ public class AuthenticationService {
     }
 
     // Checks the reset token, then sets the new password.
-    @Transactional
+    @Transactional("identityTransactionManager")
     public void resetPassword(ResetPasswordRequest request) {
         UUID userId = userRepository.findUserIdByValidResetToken(request.token())
                 .orElseThrow(() ->
@@ -165,7 +165,7 @@ public class AuthenticationService {
     }
 
     // Changes the password after checking the current one.
-    @Transactional
+    @Transactional("identityTransactionManager")
     public void updatePassword(String email, UpdatePasswordRequest request, HttpServletRequest httpRequest) {
         // Look up the user ID using the provided email
         UUID userId = userRepository.getUserByEmail(email)

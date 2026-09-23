@@ -82,10 +82,20 @@ public final class PostgresContainer {
         return DATA_SOURCE;
     }
 
-    /** JDBC URL looking in every module schema and then {@code app}, as the application connects. */
+    /** JDBC URL looking in every module schema and then {@code app}: the harness's own view. */
     public static String jdbcUrl() {
+        return jdbcUrl(String.join(",", TABLE_SCHEMAS));
+    }
+
+    /** JDBC URL with one schema as the search path, as a module connects. */
+    public static String jdbcUrl(String schema) {
         String url = CONTAINER.getJdbcUrl();
-        return url + (url.contains("?") ? "&" : "?") + "currentSchema=" + String.join(",", TABLE_SCHEMAS);
+        return url + (url.contains("?") ? "&" : "?") + "currentSchema=" + schema;
+    }
+
+    /** The password every module role has in the test container. */
+    public static String rolePassword() {
+        return ROLE_PASSWORD;
     }
 
     /** Runs a multi-statement script. Postgres accepts these over the simple query protocol. */
@@ -114,6 +124,9 @@ public final class PostgresContainer {
             statements.add("CREATE SCHEMA " + schema + " AUTHORIZATION " + schema + "_user");
             statements.add("GRANT USAGE ON SCHEMA " + schema + " TO " + othersThan(schema));
         }
+        // jobs reads the mart; production gets this from db-setup.py's read-only rule.
+        statements.add("GRANT USAGE ON SCHEMA analytics TO jobs_user");
+        statements.add("GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO jobs_user");
         execute(String.join(";\n", statements));
     }
 

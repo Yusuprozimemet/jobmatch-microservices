@@ -5,6 +5,7 @@ import nl.hackyourfuture.project.backend.jobs.dto.JobFiltersResponse;
 import nl.hackyourfuture.project.backend.jobs.dto.JobSearchResponse;
 import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import nl.hackyourfuture.project.backend.shared.mart.MartSkills;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -41,7 +42,7 @@ public class JobRepository {
 
     private final JdbcClient jdbcClient;
 
-    public JobRepository(JdbcClient jdbcClient) {
+    public JobRepository(@Qualifier("jobsJdbcClient") JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
