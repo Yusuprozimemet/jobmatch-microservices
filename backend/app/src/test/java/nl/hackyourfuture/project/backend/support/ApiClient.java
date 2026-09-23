@@ -65,6 +65,15 @@ public final class ApiClient {
         return exchange(HttpMethod.DELETE, path, null, uriVariables);
     }
 
+    /**
+     * Puts a cookie in the jar as if a server had set it earlier: a browser still holding one
+     * that has since expired, or one somebody edited.
+     */
+    public ApiClient withCookie(String name, String value) {
+        cookieJar.put(name, value);
+        return this;
+    }
+
     /** The cookies this client would send, by name. */
     public Map<String, String> cookies() {
         return Map.copyOf(cookieJar);
