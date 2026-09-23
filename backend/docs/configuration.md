@@ -64,7 +64,8 @@ scripts/dev-up.sh          # docker compose up -d db backend frontend
 | Service | Port | Notes |
 | --- | --- | --- |
 | `db` | 5432 | `postgres:18.4-alpine`, volume `db-data`, `pg_isready` healthcheck |
-| `backend` | 8080 | Built from `./backend`. Waits for the database to be healthy |
+| `jwt-key` | — | Runs and exits. Writes the token signing key into the `jwt-keys` volume on the first start, then keeps it until `down -v` |
+| `backend` | 8080 | Built from `./backend`. Waits for the database to be healthy and for `jwt-key` to finish |
 | `frontend` | 3000 | Built from `./frontend`. `depends_on: backend` — start order only, **not** readiness |
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
 
@@ -100,6 +101,7 @@ All of it in [`application.yaml`](../src/main/resources/application.yaml).
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** |
 | `SESSION_COOKIE_SECURE` | `false` | Must be `true` on HTTPS |
+| `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with: a PEM, PKCS#8 file of at least 2048 bits. **Required**, in every profile; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/private.pem` |
 | `SPRING_PROFILES_ACTIVE` | none | `dev` or `prod`. The Docker image sets `SPRING_PROFILES_DEFAULT=prod` |
 
 ## Google sign-in
@@ -231,6 +233,7 @@ feature rather than breaking the app.
 | An empty `analytics` schema | Jobs list is empty, filters are empty, matches are `[]`. No errors | Only by looking |
 | `SESSION_COOKIE_SECURE=true` on plain HTTP | The browser silently drops the cookie; every call looks logged out | Nowhere — this one is invisible |
 | `DB_*` under the `prod` profile | The app does not start | Immediately |
+| `JWT_PRIVATE_KEY_FILE`, in any profile | The app does not start. It is not optional: a key made at startup would sign everyone out on each restart | Startup: *"JWT_PRIVATE_KEY_FILE is not set..."*, or names the file and what is wrong with it |
 
 The first three all announce themselves at startup, which is deliberate: a feature that is off should
 say so once, loudly, rather than fail per request.
@@ -243,6 +246,8 @@ What must be set beyond the defaults, in one place:
 
 - [ ] `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SCHEMA=app`, `DB_USER=app_user`, `DB_PASSWORD` — the
       `prod` profile has no fallbacks
+- [ ] `JWT_PRIVATE_KEY_FILE`, pointing at a key from the secret store — the backend does not start
+      without it. Replacing the key later signs every user out
 - [ ] `APP_BASE_URL=https://c55c.hyf.dev`, no trailing slash
 - [ ] `SESSION_COOKIE_SECURE=true`
 - [ ] `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, with the redirect URI registered in the Google

@@ -58,6 +58,11 @@ app:
       username: ${DB_JOBS_USER:jobs_user}
       password: ${DB_JOBS_PASSWORD:password}
   base-url: ${APP_BASE_URL:http://localhost:3000}
+  # The RSA key identity signs tokens with (Day 12): a PEM, PKCS#8 file. No default on purpose,
+  # since the application never generates one; without it, it does not start. Compose writes one
+  # with scripts/jwt-key.sh, and the test harness makes its own.
+  jwt:
+    private-key-file: ${JWT_PRIVATE_KEY_FILE:}
   mail:
     from: ${MAIL_FROM:jobmatch.team2026@gmail.com}
   oauth2:

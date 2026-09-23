@@ -35,3 +35,6 @@ build/
 
 # Environment variables
 .env
+
+# The token signing key scripts/jwt-key.sh writes for a backend run outside compose (Day 12)
+.jwt/
