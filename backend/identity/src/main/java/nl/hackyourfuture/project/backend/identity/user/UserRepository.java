@@ -121,6 +121,13 @@ public class UserRepository {
                 .optional();
     }
 
+    public Optional<User> findById(UUID id) {
+        return jdbcClient.sql(USER_SELECT + " WHERE u.id = :id")
+                .param("id", id)
+                .query(USER_ROW_MAPPER)
+                .optional();
+    }
+
     public User updateUser(User user) {
         // added COALESCE so if the name isn't provided it will keep the original UserName
         jdbcClient.sql("""

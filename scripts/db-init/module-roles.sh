@@ -28,6 +28,21 @@ GRANT USAGE ON SCHEMA identity TO applications_user, matching_user, jobs_user;
 GRANT USAGE ON SCHEMA applications TO identity_user, matching_user, jobs_user;
 GRANT USAGE ON SCHEMA matching TO identity_user, applications_user, jobs_user;
 
+-- db-setup.py's read-only rule for what each module creates in its own schema later, so compose
+-- grants a new table what production does (identity's migrations revoke what must stay private).
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_user IN SCHEMA identity
+    GRANT SELECT ON TABLES TO applications_user, matching_user, jobs_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_user IN SCHEMA identity
+    GRANT SELECT ON SEQUENCES TO applications_user, matching_user, jobs_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE applications_user IN SCHEMA applications
+    GRANT SELECT ON TABLES TO identity_user, matching_user, jobs_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE applications_user IN SCHEMA applications
+    GRANT SELECT ON SEQUENCES TO identity_user, matching_user, jobs_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE matching_user IN SCHEMA matching
+    GRANT SELECT ON TABLES TO identity_user, applications_user, jobs_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE matching_user IN SCHEMA matching
+    GRANT SELECT ON SEQUENCES TO identity_user, applications_user, jobs_user;
+
 -- jobs reads the mart. In compose anything in analytics is created by this admin, so its future
 -- tables are granted too; production gets the same from db-setup.py's read-only rule.
 CREATE SCHEMA IF NOT EXISTS analytics;

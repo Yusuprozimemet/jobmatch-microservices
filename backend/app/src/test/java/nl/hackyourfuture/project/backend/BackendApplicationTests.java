@@ -17,10 +17,12 @@ class BackendApplicationTests extends IntegrationTest {
 
     // Day 11 moved every table out of app into its module's schema and handed it to the module's
     // role. Until then this asserted all seven were in app; it changed with the layout it pins.
+    // Day 12 added refresh_tokens, identity's first table of its own, decided before the work.
     @Test
     void flywayHasMovedEachModulesTablesIntoItsOwnSchema() {
         assertThat(tablesIn("identity")).containsExactly(
                 "password_reset_tokens identity_user",
+                "refresh_tokens identity_user",
                 "user_credentials identity_user",
                 "user_profiles identity_user",
                 "users identity_user");

@@ -112,7 +112,8 @@ public final class PostgresContainer {
      * The module roles, and a schema owned by each: identity_user owns identity, and so on.
      * jobs_user owns nothing; it only ever reads. Every other role may use a schema but not
      * create in it, the rule {@code db-setup.py} applies. Grants on the tables themselves come
-     * with the migrations that move the tables in, since grants do not follow a moved table.
+     * with the migrations that move the tables in, since grants do not follow a moved table; what
+     * a module creates in its own schema later is readable by the others, as in production.
      */
     private static void createModuleRoles() {
         List<String> statements = new ArrayList<>();
@@ -123,6 +124,12 @@ public final class PostgresContainer {
         for (String schema : MODULE_SCHEMAS) {
             statements.add("CREATE SCHEMA " + schema + " AUTHORIZATION " + schema + "_user");
             statements.add("GRANT USAGE ON SCHEMA " + schema + " TO " + othersThan(schema));
+            // db-setup.py's read-only rule for what the module creates later, so a table that
+            // must not be read by the others (identity's refresh_tokens) is tested against it.
+            for (String objects : List.of("TABLES", "SEQUENCES")) {
+                statements.add("ALTER DEFAULT PRIVILEGES FOR ROLE " + schema + "_user IN SCHEMA " + schema
+                        + " GRANT SELECT ON " + objects + " TO " + othersThan(schema));
+            }
         }
         // jobs reads the mart; production gets this from db-setup.py's read-only rule.
         statements.add("GRANT USAGE ON SCHEMA analytics TO jobs_user");
