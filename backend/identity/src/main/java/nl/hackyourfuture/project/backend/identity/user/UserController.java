@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import nl.hackyourfuture.project.backend.identity.PrincipalEmail;
 import nl.hackyourfuture.project.backend.identity.user.dto.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -16,7 +17,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.web.bind.annotation.*;
@@ -37,7 +37,7 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "The current authenticated user")
     @ApiResponse(responseCode = "401", description = "Not logged in")
     public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal Object principal) {
-        return resolveEmail(principal)
+        return PrincipalEmail.of(principal)
                 .map(email -> ResponseEntity.ok(userService.getUserByEmail(email)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
@@ -50,7 +50,7 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "The user, with the agreement stamped")
     @ApiResponse(responseCode = "401", description = "Not logged in")
     public ResponseEntity<UserResponse> acceptTerms(@AuthenticationPrincipal Object principal) {
-        return resolveEmail(principal)
+        return PrincipalEmail.of(principal)
                 .map(email -> ResponseEntity.ok(userService.acceptTerms(email)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
@@ -70,7 +70,7 @@ public class UserController {
     public ResponseEntity<UserResponse> updateCurrentUser(
             @AuthenticationPrincipal Object principal,
             @Valid @RequestBody UserRequest request) {
-        return resolveEmail(principal)
+        return PrincipalEmail.of(principal)
                 .map(email -> ResponseEntity.ok(userService.updateCurrentUser(email, request)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
@@ -85,7 +85,7 @@ public class UserController {
             @AuthenticationPrincipal Object principal,
             HttpServletRequest request,
             HttpServletResponse response) {
-        Optional<String> email = resolveEmail(principal);
+        Optional<String> email = PrincipalEmail.of(principal);
         if (email.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -96,21 +96,6 @@ public class UserController {
         endSession(request, response);
 
         return ResponseEntity.noContent().build();
-    }
-
-    // The caller's email, or empty when nobody is logged in.
-    private static Optional<String> resolveEmail(Object principal) {
-        // Not logged in, or an anonymous placeholder.
-        if (principal instanceof String principalEmail) {
-            if ("anonymousUser".equals(principalEmail) || principalEmail.isBlank()) {
-                return Optional.empty();
-            }
-            return Optional.of(principalEmail);
-        }
-        if (principal instanceof UserDetails userDetails) {
-            return Optional.of(userDetails.getUsername());
-        }
-        return Optional.empty();
     }
 
     // Same as the logout handler in SecurityConfig.

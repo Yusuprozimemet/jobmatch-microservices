@@ -7,20 +7,18 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import nl.hackyourfuture.project.backend.identity.PrincipalEmail;
 import nl.hackyourfuture.project.backend.identity.profile.dto.ProfileResponse;
 import nl.hackyourfuture.project.backend.identity.profile.dto.UpdateProfileRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/profile")
@@ -38,7 +36,7 @@ public class ProfileController {
     @ApiResponse(responseCode = "200", description = "The user's job preferences")
     @ApiResponse(responseCode = "401", description = "Not logged in")
     public ResponseEntity<ProfileResponse> getProfile(@AuthenticationPrincipal Object principal) {
-        return resolveEmail(principal)
+        return PrincipalEmail.of(principal)
                 .map(email -> ResponseEntity.ok(profileService.getProfile(email)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
@@ -59,23 +57,8 @@ public class ProfileController {
     public ResponseEntity<ProfileResponse> saveProfile(
             @AuthenticationPrincipal Object principal,
             @Valid @RequestBody UpdateProfileRequest request) {
-        return resolveEmail(principal)
+        return PrincipalEmail.of(principal)
                 .map(email -> ResponseEntity.ok(profileService.saveProfile(email, request)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
-    }
-
-    // Logged-in user's email, or empty if nobody is logged in.
-    private static Optional<String> resolveEmail(Object principal) {
-        // Not logged in.
-        if (principal instanceof String principalEmail) {
-            if ("anonymousUser".equals(principalEmail) || principalEmail.isBlank()) {
-                return Optional.empty();
-            }
-            return Optional.of(principalEmail);
-        }
-        if (principal instanceof UserDetails userDetails) {
-            return Optional.of(userDetails.getUsername());
-        }
-        return Optional.empty();
     }
 }
