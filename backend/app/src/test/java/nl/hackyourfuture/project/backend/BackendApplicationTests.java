@@ -15,21 +15,27 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class BackendApplicationTests extends IntegrationTest {
 
+    // Day 11 moved every table out of app into its module's schema and handed it to the module's
+    // role. Until then this asserted all seven were in app; it changed with the layout it pins.
     @Test
-    void flywayHasMigratedTheAppSchema() {
-        List<String> tables = jdbc()
-                .sql("SELECT tablename FROM pg_tables WHERE schemaname = 'app' ORDER BY tablename")
-                .query(String.class)
-                .list();
+    void flywayHasMovedEachModulesTablesIntoItsOwnSchema() {
+        assertThat(tablesIn("identity")).containsExactly(
+                "password_reset_tokens identity_user",
+                "user_credentials identity_user",
+                "user_profiles identity_user",
+                "users identity_user");
+        assertThat(tablesIn("applications")).containsExactly("saved_jobs applications_user");
+        assertThat(tablesIn("matching")).containsExactly("job_match_scores matching_user");
+    }
 
-        assertThat(tables).contains(
-                "flyway_schema_history",
-                "job_match_scores",
-                "password_reset_tokens",
-                "saved_jobs",
-                "user_credentials",
-                "user_profiles",
-                "users");
+    // Only Flyway's history of V1-V14 stays behind.
+    @Test
+    void theAppSchemaHoldsNothingButFlywaysHistory() {
+        assertThat(jdbc()
+                .sql("SELECT tablename FROM pg_tables WHERE schemaname = 'app'")
+                .query(String.class)
+                .list())
+                .containsExactly("flyway_schema_history");
     }
 
     @Test
@@ -41,5 +47,18 @@ class BackendApplicationTests extends IntegrationTest {
                 .query(String.class)
                 .list())
                 .containsExactly("fct_postings", "fct_postings_cities", "fct_postings_skills");
+    }
+
+    // Each table with its owner, leaving out any Flyway history a module keeps for itself.
+    private List<String> tablesIn(String schema) {
+        return jdbc()
+                .sql("""
+                        SELECT tablename || ' ' || tableowner FROM pg_tables
+                        WHERE schemaname = :schema AND tablename <> 'flyway_schema_history'
+                        ORDER BY tablename
+                        """)
+                .param("schema", schema)
+                .query(String.class)
+                .list();
     }
 }

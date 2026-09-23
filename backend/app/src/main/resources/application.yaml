@@ -5,7 +5,9 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=${DB_SCHEMA:app}
+    # Day 11 moved each module's tables into its own schema; this one connection looks in all of
+    # them, and in app for Flyway's history, until each module gets a connection of its own.
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=identity,applications,matching,${DB_SCHEMA:app}
     username: ${DB_USER:admin}
     password: ${DB_PASSWORD:password}
   flyway:
