@@ -1,9 +1,10 @@
 # Day 09 — Remove the saved-jobs hydration join
 
-**Phase:** 1 · **Depends on:** Day 07 · **Expected PRs:** 3
+**Phase:** 1 · **Depends on:** Day 07 · **Expected PRs:** 4
 
 ## Goal
-`applications` stops reading `analytics.fct_postings`. It asks `jobs` for posting details.
+`applications` and `matching` stop reading `analytics`. They ask `jobs` — for posting details,
+and for the match shortlist.
 
 ## In scope
 - `PostingLookup` interface in `shared.jobs`, beside `shared.applications`' `SavedJobCounts`:
@@ -26,11 +27,19 @@
   number of saved rows, so the separate `COUNT(*)` goes.
 - **Preserve the `LEFT JOIN` semantics.** A saved posting missing from the mart must still
   be returned, with null detail fields and an empty `skills` list. Day 04 pins this.
+- **The match shortlist moves to `jobs`.** `PostingShortlist` in `shared.jobs`:
+  `List<ShortlistedPosting> shortlist(String city, List<String> skills, int limit)`.
+  `ShortlistedPosting` is today's `JobMatchRepository.JobMatchRow`, moved and renamed; its
+  nine fields do not change. The SQL moves from `matching`'s `JobMatchRepository` into `jobs`
+  **unchanged** — candidate filter, skill scoring, repost dedup, ordering. Implemented by the
+  same package-private component as `PostingLookup`. `JobMatchRepository` is deleted.
 
 ## Out of scope
 - Making the call over HTTP — Phase 3/5.
 - Changing the `SavedJobResponse` shape. The frontend must not need a change.
 - Changing the order. Newest posting first is what users see today, and Day 04 pins it.
+- Changing the shortlist's SQL or ranking in any way. It moves; Day 18 exposes the same
+  interface as `POST /internal/postings/shortlist`.
 - Reconciling the two locations and the two skill orders. That is a behaviour change with a
   frontend-visible result and gets its own spec if anyone wants it.
 - Moving `MartSkills` out of `shared`. After today only `jobs` uses it; that is its own change.
@@ -42,6 +51,7 @@
 | 0 | | Query-count test, landed first |
 | A | | `PostingLookup`, `PostingSummary` + batched implementation in `jobs` |
 | B | | Rewrite `SavedJobRepository` and its call site |
+| C | | `PostingShortlist` + `ShortlistedPosting`; move the shortlist SQL from `matching` to `jobs` |
 
 Track 0 is Day 08's pattern again: `StatementCounter` counts the statements that mention
 `fct_postings` during one `GET /api/saved-jobs`. It is **1 today** — the join — and 1 after,
@@ -50,7 +60,8 @@ purpose (a lookup per posting) before it is trusted. `SavedJobHydrationQueriesIT
 `app/src/test/.../queries/`.
 
 ## Acceptance criteria
-- [ ] `grep -rn "analytics\.\|fct_postings" applications/src/` returns nothing.
+- [ ] `grep -rn "analytics\.\|fct_postings" applications/src/ matching/src/` returns nothing.
+- [ ] Day 04's `Match*IT` — 22 tests — pass **unedited**.
 - [ ] Day 04's `SavedJob*IT` — 31 tests — pass **unedited**. In particular the vanished-posting
       tests, the order test, and both pinned divergences.
 - [ ] `totalElements` is the number of saved rows, whatever the mart holds.
@@ -61,8 +72,8 @@ purpose (a lookup per posting) before it is trusted. `SavedJobHydrationQueriesIT
 ## Verify
 ```bash
 cd backend
-./mvnw clean verify -pl app -am -Dtest='Saved*IT' -Dsurefire.failIfNoSpecifiedTests=false
-grep -rn "analytics\.\|fct_postings" applications/src/ || echo "clean"
+./mvnw clean verify -pl app -am -Dtest='Saved*IT,Match*IT' -Dsurefire.failIfNoSpecifiedTests=false
+grep -rn "analytics\.\|fct_postings" applications/src/ matching/src/ || echo "clean"
 ./mvnw -B checkstyle:check
 ```
 Check the surefire reports, not only the exit code.
@@ -97,3 +108,12 @@ Check the surefire reports, not only the exit code.
     now counts what the day is about: statements that reach the mart.
   - The fields `jobs` must read — the free-text location, the raw skill order — were written
     down by Day 04 for this day and were not in this spec.
+- **Track C added on Day 09, before the work, from a read of every remaining spec.** `plan.md`
+  counted two cross-schema joins; there are three cross-module reads. `matching`'s
+  `JobMatchRepository` builds the shortlist from `analytics.fct_postings` and
+  `fct_postings_cities` directly, and no Phase 1 day moved it. Days 18–19 would have fixed it
+  over HTTP, but Phase 1's own "done when no SQL crosses a schema" could not have been true at
+  Day 11, and Day 11's per-schema roles would have had to grant `matching` a read on the mart
+  just to keep it working. It belongs here, beside `PostingLookup`: same front door, same
+  pattern, no network. It is a move, not a rewrite, so the gate is the 22 `Match*IT` tests
+  and no query-count test is added — one statement goes in, the same statement comes out.
