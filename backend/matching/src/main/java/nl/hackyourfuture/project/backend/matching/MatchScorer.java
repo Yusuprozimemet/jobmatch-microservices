@@ -1,5 +1,6 @@
 package nl.hackyourfuture.project.backend.matching;
 
+import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -76,7 +77,7 @@ public class MatchScorer {
 
     // Scores each posting 0-100, keyed by posting id. Missing entries are normal - the
     // caller falls back for whatever's absent.
-    public Map<String, Score> score(List<String> candidateSkills, List<JobMatchRepository.JobMatchRow> jobs) {
+    public Map<String, Score> score(List<String> candidateSkills, List<ShortlistedPosting> jobs) {
         if (!isEnabled() || jobs.isEmpty()) {
             return Map.of();
         }
@@ -97,14 +98,14 @@ public class MatchScorer {
     }
 
     // Short ids keep the prompt small and less likely to be echoed back wrong.
-    private String buildPrompt(List<String> candidateSkills, List<JobMatchRepository.JobMatchRow> jobs) {
+    private String buildPrompt(List<String> candidateSkills, List<ShortlistedPosting> jobs) {
         StringBuilder prompt = new StringBuilder()
                 .append("Candidate skills: ").append(String.join(", ", candidateSkills)).append("\n\n")
                 .append("Score how well each job matches the candidate, 0-100. Treat equivalent ")
                 .append("technologies as matches (postgres/postgresql, react/reactjs, k8s/kubernetes). ")
                 .append("Take the seniority in the title into account.\n\nJobs:\n");
 
-        for (JobMatchRepository.JobMatchRow job : jobs) {
+        for (ShortlistedPosting job : jobs) {
             prompt.append(shortId(job.postingId())).append(" | ")
                     .append(job.title()).append(" | ")
                     .append(String.join(", ", job.jobSkills())).append("\n");
@@ -146,7 +147,7 @@ public class MatchScorer {
         return choices.get(0).path("message").path("content").asString("");
     }
 
-    private Map<String, Score> parseScores(String content, List<JobMatchRepository.JobMatchRow> jobs) throws Exception {
+    private Map<String, Score> parseScores(String content, List<ShortlistedPosting> jobs) throws Exception {
         // The model often wraps the JSON in extra text or a code fence, so just grab
         // everything between the first [ and the last ].
         int start = content.indexOf('[');
@@ -156,7 +157,7 @@ public class MatchScorer {
         }
 
         Map<String, String> byShortId = new HashMap<>();
-        for (JobMatchRepository.JobMatchRow job : jobs) {
+        for (ShortlistedPosting job : jobs) {
             byShortId.put(shortId(job.postingId()), job.postingId());
         }
 
