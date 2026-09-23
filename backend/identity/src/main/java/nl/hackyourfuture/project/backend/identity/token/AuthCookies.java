@@ -1,11 +1,17 @@
 package nl.hackyourfuture.project.backend.identity.token;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import nl.hackyourfuture.project.backend.identity.user.User;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -37,6 +43,43 @@ public class AuthCookies {
     public void issue(HttpServletResponse response, UUID userId, String email) {
         add(response, ACCESS, accessTokens.mint(userId, email), "/", AccessTokens.LIFETIME);
         add(response, REFRESH, refreshTokens.issue(userId), REFRESH_PATH, RefreshTokens.LIFETIME);
+    }
+
+    /**
+     * Trades the refresh cookie for a new pair. The old refresh token is revoked in the same
+     * transaction as the new one is stored, so a failure in between leaves the old one working.
+     *
+     * @return whether the refresh token was live; if not, both cookies are deleted
+     */
+    @Transactional("identityTransactionManager")
+    public boolean refresh(HttpServletRequest request, HttpServletResponse response) {
+        Optional<User> user = refreshToken(request).flatMap(refreshTokens::rotate);
+        if (user.isEmpty()) {
+            clear(response);
+            return false;
+        }
+        issue(response, user.get().getId(), user.get().getEmail());
+        return true;
+    }
+
+    /** Signs the browser out: its refresh token no longer refreshes, and both cookies go. */
+    public void logout(HttpServletRequest request, HttpServletResponse response) {
+        refreshToken(request).ifPresent(refreshTokens::revoke);
+        clear(response);
+    }
+
+    private static Optional<String> refreshToken(HttpServletRequest request) {
+        return Optional.ofNullable(request.getCookies()).stream()
+                .flatMap(Arrays::stream)
+                .filter(cookie -> REFRESH.equals(cookie.getName()))
+                .map(Cookie::getValue)
+                .filter(value -> !value.isBlank())
+                .findFirst();
+    }
+
+    private static void clear(HttpServletResponse response) {
+        add(response, ACCESS, "", "/", Duration.ZERO);
+        add(response, REFRESH, "", REFRESH_PATH, Duration.ZERO);
     }
 
     private static void add(HttpServletResponse response, String name, String value, String path, Duration maxAge) {

@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.hackyourfuture.project.backend.identity.auth.dto.*;
 import nl.hackyourfuture.project.backend.identity.token.AuthCookies;
+import nl.hackyourfuture.project.backend.identity.token.RefreshTokens;
 import nl.hackyourfuture.project.backend.identity.user.User;
 import nl.hackyourfuture.project.backend.identity.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +36,7 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final AuthCookies authCookies;
+    private final RefreshTokens refreshTokens;
 
     @Value("${app.base-url}")
     private String baseUrl;
@@ -165,6 +167,8 @@ public class AuthenticationService {
         String hashedPassword = passwordEncoder.encode(request.newPassword());
         userRepository.updatePasswordHash(userId, hashedPassword);
         userRepository.deletePasswordResetTokensByUserId(userId);
+        // Whoever held the old password may hold a refresh token too.
+        refreshTokens.revokeAll(userId);
 
         log.info("Password successfully reset for user ID: {}", userId);
     }
@@ -194,6 +198,8 @@ public class AuthenticationService {
         userRepository.updatePasswordHash(userId, newPasswordHash);
         // Refresh/re-establish the session to invalidate any old/stolen session contexts
         establishSession(email, httpRequest);
+        // Nothing issued before the change stays in play; the caller gets a new pair.
+        refreshTokens.revokeAll(userId);
         authCookies.issue(httpResponse, userId, email);
 
         log.info("Password successfully updated for user email: {}", email);

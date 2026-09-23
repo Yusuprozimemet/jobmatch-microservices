@@ -21,8 +21,8 @@ import java.util.UUID;
  * bytes, base64url, good for thirty days unless revoked. Only the token's SHA-256 is stored, so a
  * copy of the table signs no one in.
  *
- * <p>Nothing calls this yet. Day 13 issues one at login, rotates it on refresh and revokes it at
- * logout; until then no response changes.
+ * <p>{@link AuthCookies} issues one at every sign-in, rotates it on refresh and revokes it at
+ * logout; a password change or reset revokes them all (Day 13).
  */
 @Component
 public class RefreshTokens {
@@ -67,6 +67,29 @@ public class RefreshTokens {
                 .query(UUID.class)
                 .optional()
                 .flatMap(users::findById);
+    }
+
+    /**
+     * The user a live token belongs to, and the token revoked, in one statement: two requests
+     * racing with one token cannot both get the user. Nothing for a revoked, expired or unknown one.
+     */
+    public Optional<User> rotate(String token) {
+        return jdbcClient.sql("""
+                        UPDATE refresh_tokens SET revoked_at = now()
+                        WHERE token_hash = :tokenHash AND revoked_at IS NULL AND expires_at > now()
+                        RETURNING user_id
+                        """)
+                .param("tokenHash", hash(token))
+                .query(UUID.class)
+                .optional()
+                .flatMap(users::findById);
+    }
+
+    /** Stops every token this user holds working: what a password change or reset does. */
+    public void revokeAll(UUID userId) {
+        jdbcClient.sql("UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = :userId AND revoked_at IS NULL")
+                .param("userId", userId)
+                .update();
     }
 
     /** Stops a token working. Revoking one that is unknown or already revoked does nothing. */

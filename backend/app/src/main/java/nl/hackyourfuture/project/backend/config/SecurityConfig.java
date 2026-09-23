@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.config;
 
 import lombok.extern.slf4j.Slf4j;
 import nl.hackyourfuture.project.backend.identity.auth.OAuth2LoginSuccessHandler;
+import nl.hackyourfuture.project.backend.identity.token.AuthCookies;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
@@ -61,6 +62,7 @@ public class SecurityConfig {
             ObjectProvider<ClientRegistrationRepository> clientRegistrations,
             ObjectProvider<OAuth2UserService<OidcUserRequest, OidcUser>> oidcUserService,
             OAuth2LoginSuccessHandler oauth2LoginSuccessHandler,
+            AuthCookies authCookies,
             Environment environment) {
         http
                 .authorizeHttpRequests(auth -> auth
@@ -85,9 +87,10 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
-                // Custom logout: clear the session cookie and return JSON.
+                // Custom logout: revoke the refresh token, clear the cookies and return JSON.
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
+                        .addLogoutHandler((request, response, authentication) -> authCookies.logout(request, response))
                         .deleteCookies("JSESSIONID")
                         .logoutSuccessHandler((request, response, authentication) -> {
                             response.setStatus(HttpStatus.OK.value());
