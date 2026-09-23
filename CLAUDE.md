@@ -32,10 +32,11 @@ maintainer, and nothing starts after a phase ends until they say so.
    and measurement table.
 4. **After opening any PR, stop and wait for the maintainer to say "merged".** Do not start the
    next step, and do not start a new phase, until told.
-5. **After every "merged", refresh the dashboard before the next step:** on fresh `main`, run
-   `python scripts/spec-drift.py`. A session that can publish to the maintainer's dashboard
-   republishes it with the new data (`--page` swaps the data line in a saved copy); any other
-   session reports the next step the script prints.
+5. **After every "merged", refresh the dashboard before the next step:** the merge rebuilds the
+   [public one](https://yusuprozimemet.github.io/jobmatch-microservices/) by itself (`.github/workflows/dashboard.yml`). On fresh
+   `main`, run `python scripts/spec-drift.py`. A session that can publish to the maintainer's
+   dashboard artifact republishes it from `--build dashboard.html`; any other session reports the
+   next step the script prints.
 6. **When a phase's last day closes,** run the plan-auditor on the phase that just ended and on
    the next, report, and stop.
 
@@ -88,7 +89,8 @@ Their findings are advice to the maintainer. What becomes a PR is the maintainer
   `scripts/db-init/` (a fresh compose volume) and the test harness. A migration never creates a
   role.
 - **Measurement:** `python scripts/spec-drift.py --out spec-drift.json` rebuilds the migration
-  dashboard's data from git and GitHub. It is refreshed after every merge.
+  dashboard's data from git and GitHub; `--build` writes the page (`docs/dashboard/`) with it.
+  Every merge to `main` republishes it to [GitHub Pages](https://yusuprozimemet.github.io/jobmatch-microservices/).
 
 ## Pitfalls this repository has already hit
 

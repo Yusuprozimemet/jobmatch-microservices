@@ -67,7 +67,7 @@ flowchart TD
 1. Clone the repository and open Claude Code in it. `CLAUDE.md` and the two agents load on
    their own; there is nothing to install for them.
 2. Read `plan.md`, then `specs/README.md`.
-3. Run `python scripts/spec-drift.py --out spec-drift.json`, or open the dashboard, for the
+3. Run `python scripts/spec-drift.py --out spec-drift.json`, or open the [dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/), for the
    current day and the next step.
 4. Say "start Day N". The session follows the order above and stops at every PR.
 

@@ -5,7 +5,6 @@ main, and each day's status, tracks and criteria. Needs git, the gh CLI and nump
 
     python scripts/spec-drift.py --out data.json
     python scripts/spec-drift.py --build dashboard.html  # docs/dashboard/ as one file, data inlined
-    python scripts/spec-drift.py --page dashboard.html   # swap the data line in a saved page
 
 Drift: angle between today's spec text (plan.md + specs/*.md, log word counts) and the spec as
 first committed. Gap: angle between spec and code over the code-like names the specs put in
@@ -277,7 +276,6 @@ def main():
     out = ap.add_mutually_exclusive_group()
     out.add_argument("--out", default="spec-drift.json")
     out.add_argument("--build", help="write docs/dashboard/ here as one page, with the data inlined")
-    out.add_argument("--page", help="an HTML page with a `window.SPEC_DRIFT = ...;` line to refresh in place")
     args = ap.parse_args()
     listed = json.loads(run("gh", "pr", "list", "--state", "all", "--limit", "500",
                             "--json", "number,title,headRefName,state,url"))
@@ -296,16 +294,9 @@ def main():
                            vocab_size=vocab, pca_var=pca,
                            conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md"))),
                       separators=(",", ":"))
-    target = args.build or args.page or args.out
+    target = args.build or args.out
     if args.build:
         data = build(data)
-    elif args.page:
-        with open(args.page, encoding="utf-8") as f:
-            page = f.read()
-        # A page saved from the published artifact carries the viewer's skeleton; drop it.
-        page = re.sub(r"\A<!doctype html>.*?<body>\n", "", page, flags=re.S | re.I)
-        page = re.sub(r"\n?</body></html>\s*\Z", "\n", page)
-        data = fill(page, data, args.page)
     with open(target, "w", encoding="utf-8") as f:
         f.write(data)
     print(f"{target}: {len(rows)} snapshots, {len(days)} days, next: {now['next_step']}")
