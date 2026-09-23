@@ -6,7 +6,6 @@
 The Google flow, including the account-linking case, works with no server-side session.
 
 ## In scope
-- `OAuth2LoginSuccessHandler` issues a JWT cookie instead of calling `establishSession`.
 - **`PendingGoogleLink` moves off the session.** New table `identity.pending_google_links`:
   one-time code, Google subject id, email, 10-minute expiry, claimed-at.
   The redirect carries the code; the password login that follows claims it.
@@ -27,7 +26,7 @@ The Google flow, including the account-linking case, works with no server-side s
 
 | Track | Owner | Work |
 |---|---|---|
-| A | | Success handler issues tokens; terms redirect from a claim |
+| A | | Terms redirect from a claim |
 | B | | `pending_google_links` table, one-time code, claim + expiry |
 
 ## Acceptance criteria
@@ -59,3 +58,8 @@ grep -rn "HttpSession" --include=*.java . || echo "clean"
   - `docs/hiearchy-backend.md` does not exist; Day 02 found this. The terms step is
     `backend/docs/auth.md` §7.
   - The verify command had Day 08's defect: `-Dtest` with no `-pl` runs nothing.
+- **Spec corrected on Day 13, before that day's work.** `OAuth2LoginSuccessHandler` issuing the
+  token cookies moved to Day 13: under Day 13's `STATELESS`, Spring stops reading the security
+  context `establishSession` writes into the session, and three `AuthGoogleSignInIT` tests got
+  401 after sign-in in the spec-auditor's scratch build. What stays here is taking the
+  authorization request and the pending link off the session, and the terms redirect.
