@@ -99,8 +99,8 @@ public class RefreshTokens {
                 .update();
     }
 
-    /** The SHA-256 of the token as the client holds it, in lower-case hex. */
-    static String hash(String token) {
+    /** The SHA-256 of the token as the client holds it, in lower-case hex. Pending Google links store their codes so too. */
+    public static String hash(String token) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.US_ASCII));
             return HexFormat.of().formatHex(digest);

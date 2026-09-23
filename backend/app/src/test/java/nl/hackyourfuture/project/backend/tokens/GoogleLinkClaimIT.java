@@ -42,9 +42,12 @@ class GoogleLinkClaimIT extends IntegrationTest {
         assertThat(login(browser, other).status()).isEqualTo(200);
         assertThat(login(browser, owner).status()).isEqualTo(200);
 
-        assertThat(GoogleSignIn.as(anonymous(), "google-sub-owner", owner.email()).location())
+        ApiClient later = anonymous();
+        assertThat(GoogleSignIn.as(later, "google-sub-owner", owner.email()).location())
                 .as("the owner's Google identity was linked by the owner's login")
                 .isEqualTo(SIGNED_IN);
+        // Landing on / is not enough: a link claimed by the other login would sign in as them.
+        assertThat(later.get("/api/users/me").at("/email").asString()).isEqualTo(owner.email());
     }
 
     private static ApiResponse login(ApiClient browser, TestUser user) {
