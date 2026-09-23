@@ -71,10 +71,7 @@ public class JobRepository {
                     f.source,
                     f.category,
                     f.freshness_class,
-                    f.age_days,
-                    (SELECT COUNT(DISTINCT user_id)
-                    FROM saved_jobs
-                    WHERE posting_id = f.posting_id) AS saved_count
+                    f.age_days
                 FROM analytics.fct_postings f
                 WHERE 1=1
                 """);
@@ -151,7 +148,7 @@ public class JobRepository {
                     rs.getString("category"),
                     rs.getString("freshness_class"),
                     rs.getObject("age_days") != null ? rs.getInt("age_days") : null,
-                    rs.getInt("saved_count")
+                    0 // savedCount is applications' number, not ours - JobService fills it in
             );
         }).list();
 
@@ -249,10 +246,7 @@ public class JobRepository {
                           AND lower(sub_c.city) NOT IN (:excluded)), '') AS location,
                     COALESCE((SELECT json_agg(DISTINCT s.skill ORDER BY s.skill)::text
                     FROM analytics.fct_postings_skills s
-                    WHERE s.posting_id = f.posting_id), '[]') AS skills,
-                    (SELECT COUNT(DISTINCT user_id)
-                    FROM saved_jobs
-                    WHERE posting_id = f.posting_id) AS saved_count
+                    WHERE s.posting_id = f.posting_id), '[]') AS skills
                 FROM analytics.fct_postings f
                 WHERE f.posting_id = :postingId
                 """;
@@ -285,7 +279,7 @@ public class JobRepository {
                             rs.getString("salary_period"),
                             rs.getString("source_url"),
                             rs.getString("status"),
-                            rs.getInt("saved_count")
+                            0 // savedCount - filled in by JobService, as in searchJobs
                     );
                 })
                 .optional();
