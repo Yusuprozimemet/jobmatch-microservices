@@ -70,6 +70,8 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/docs/**").permitAll()
                         .requestMatchers("/api/oauth2/**", "/api/login/oauth2/**").permitAll()
+                        // The public key tokens are verified with. Whoever verifies has no token yet.
+                        .requestMatchers(HttpMethod.GET, "/.well-known/jwks.json").permitAll()
                         // Only these /api/jobs routes are public - top-matches stays private.
                         .requestMatchers(HttpMethod.GET, "/api/jobs/top-matches").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/jobs", "/api/jobs/filters", "/api/jobs/*").permitAll()
