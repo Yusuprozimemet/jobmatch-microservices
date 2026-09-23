@@ -32,7 +32,7 @@ The last module leaves `backend/`. Five services, no monolith.
 - [ ] `backend/` no longer exists.
 - [ ] Every Day 1–4 test passes **unedited** against the full compose stack.
 - [ ] Google sign-in works end to end, including the account-linking branch.
-- [ ] `docker compose up` starts gateway + five services + Postgres + bus + NoSQL emulator.
+- [ ] `docker compose up` starts the gateway + four services + Postgres + bus + NoSQL emulator.
 - [ ] A new teammate can follow the README from clone to running app in under 30 minutes.
 - [ ] Release tagged. Phase 5 boundary.
 

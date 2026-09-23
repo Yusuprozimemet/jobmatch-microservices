@@ -8,9 +8,15 @@ Uploading a CV fills in the profile skills, instead of the user typing them by h
 
 ## In scope
 - `functions/cv-parse`: blob-triggered on the `uploads` container.
-- Extract text, ask the LLM for skills, map them to the same canonical form
-  `JobMatchService.canonicalise` uses — mismatched casing silently breaks matching.
-- `PUT /internal/profiles/{userId}/skills` on `identity-service`, with a service token.
+- Extract text, ask the LLM for skills, and canonicalise them. **There are two
+  `canonicalise` methods today and they differ:** `ProfileService`'s collapses hyphens,
+  `JobMatchService`'s only lowercases and trims, on purpose, because the mart's spellings are
+  hyphenated. Suggestions become profile skills, so they take the profile's form; test that
+  they then match through the matching path too.
+- `PUT /internal/profiles/{userId}/skill-suggestions` on `identity-service`, with a service
+  token. **Suggestions, stored apart from the profile** — writing `skills` directly would
+  break the criterion that nothing is applied without the user's confirmation. Confirming
+  copies them into the profile through the existing profile update.
 - **The function runs outside the cluster**, so it reaches identity through the public
   ingress, not an internal address. Budget for this in config and network rules.
 - Result surfaced to the user: suggested skills they confirm, never silently applied.

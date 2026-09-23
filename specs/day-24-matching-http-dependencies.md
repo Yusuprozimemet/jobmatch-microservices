@@ -9,7 +9,7 @@ fully independent.
 
 ## In scope
 - `identity` exposes `GET /internal/profiles/{userId}/skills`, returning the
-  `ProfileSkills` shape from Day 10. Service-token auth, same as Day 18.
+  `ProfileSnapshot` shape (`ProfileDirectory`, Day 07). Service-token auth, same as Day 18.
 - `matching-service` uses it through a Day 19-style client with timeout, retry and
   circuit breaker.
 - Fallback: identity unreachable → 503 with a clear message. Matching without a profile

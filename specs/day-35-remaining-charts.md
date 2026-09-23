@@ -4,7 +4,7 @@
 **Status:** provisional — re-read and revise before starting.
 
 ## Goal
-All five services plus the gateway run in the cluster.
+All four services plus the gateway run in the cluster, with the frontend.
 
 ## In scope
 - Charts for `api-gateway`, `identity-service`, `application-service`, `matching-service`,

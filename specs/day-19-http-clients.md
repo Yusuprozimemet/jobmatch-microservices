@@ -8,15 +8,18 @@
 circuit breaker, and the system still behaves the same.
 
 ## In scope
-- HTTP implementations of the Day 08–10 interfaces, using `RestClient`.
+- HTTP implementations of `PostingLookup` and `PostingShortlist` (Day 09), used by the
+  monolith to call `job-service`, using `RestClient`. `SavedJobCounts` goes the other way —
+  `job-service` calling the monolith — and has been HTTP since Day 17; it gets the same
+  resilience treatment here.
 - Resilience4j on every internal call: connect and read timeouts, bounded retry on
   idempotent GETs only, circuit breaker, and a **declared fallback**:
 
-  | Call | Fallback when job-service is down |
-  |---|---|
-  | `PostingLookup` (saved jobs) | Return saved jobs with empty detail fields — the Day 04 missing-posting case already covers this shape |
-  | Shortlist (matching) | 503 with a clear message. Matching without postings is meaningless |
-  | `SavedJobCounts` (job search) | `savedCount: 0`, search still returns results |
+  | Call | Depends on | Fallback when that is down |
+  |---|---|---|
+  | `PostingLookup` (saved jobs) | `job-service` | Return saved jobs with empty detail fields — the Day 04 missing-posting case already covers this shape |
+  | `PostingShortlist` (matching) | `job-service` | 503 with a clear message. Matching without postings is meaningless |
+  | `SavedJobCounts` (job search) | the monolith | `savedCount: 0`, search still returns results |
 
 - Timeouts shorter than the gateway's, so a stuck dependency surfaces as a fast error.
 - Every internal call is a span and a metric.
@@ -34,7 +37,8 @@ circuit breaker, and the system still behaves the same.
 
 ## Acceptance criteria
 - [ ] Day 03 and Day 04 tests pass **unedited**.
-- [ ] With `job-service` stopped, job search still returns results with `savedCount: 0`.
+- [ ] With the **monolith** stopped, job search — which is `job-service` — still returns
+      results with `savedCount: 0`.
 - [ ] With `job-service` stopped, saved jobs still list, with empty details.
 - [ ] With `job-service` stopped, top-matches returns 503, not a 30-second hang.
 - [ ] The circuit breaker opens after a configured failure count and recovers by itself.
@@ -42,9 +46,11 @@ circuit breaker, and the system still behaves the same.
 
 ## Verify
 ```bash
+docker compose stop backend
+curl -s localhost:8080/api/jobs | head -c 200            # still 200, savedCount 0
+docker compose start backend
 docker compose stop job-service
-curl -s localhost:8080/api/jobs | head -c 200            # still 200
-curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/jobs/top-matches   # 503
+curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/jobs/top-matches   # 503, fast
 docker compose start job-service
 ```
 
@@ -52,3 +58,10 @@ docker compose start job-service
 - This is where a monolith becomes a distributed system, and where partial failure
   becomes real. The fallback table is the most important part of this spec —
   agree on it before writing code.
+- **Corrected on Day 09 from a read of every remaining spec** — still provisional; this fixes
+  what is already known to be wrong, not the phase review.
+  **The table had a dependency backwards.** It listed `SavedJobCounts` under "when
+  `job-service` is down", and a criterion stopped `job-service` and expected job search to
+  keep answering. From Day 17, job search *is* `job-service`; the counts come from
+  `applications`, in the monolith. Stopping `job-service` takes search down with it. The table
+  now names what each call depends on; Day 25 already had this right.

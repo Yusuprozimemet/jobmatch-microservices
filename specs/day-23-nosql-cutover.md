@@ -34,8 +34,10 @@
 
 ## Verify
 ```bash
-cd services/matching-service && ./mvnw verify
-grep -rn "JobMatchScoreCleanup\|SchedulingConfig" . || echo "clean"
+(cd services/matching-service && ./mvnw verify)
+# From the repository root: SchedulingConfig lives in the monolith's app module, not in
+# matching-service, so a grep inside the service would miss it.
+grep -rn "JobMatchScoreCleanup\|SchedulingConfig" --include=*.java . || echo "clean"
 ```
 
 ## Notes

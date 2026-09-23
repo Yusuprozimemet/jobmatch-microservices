@@ -12,7 +12,11 @@ Saved jobs and the tracker run as their own service with their own database.
 - New `apps_db` holding `saved_jobs`, migrated with a `SET SCHEMA`-style move — do not
   edit existing migration files.
 - Hydration already goes over HTTP from Day 19; verify it still does.
-- Exposes `POST /internal/saved-counts` for `job-service` (the Day 08 interface, now HTTP).
+- `POST /internal/saved-counts` moves with it. The monolith has served it since Day 17;
+  `job-service`'s client now points at `application-service`.
+- Day 08's `JobSavedCountQueriesIT` expires today: it counts statements in the shared
+  database, and `saved_jobs` leaves it. Delete it, or rewrite it against `apps_db` inside
+  `application-service`'s own tests.
 - `userId` comes from the JWT `sub` forwarded by the gateway. It never reads `users`.
 
 ## Out of scope
@@ -42,5 +46,5 @@ curl -s localhost:8080/api/jobs | head -c 200        # still 200
 ```
 
 ## Notes
-- Three services now call each other in a cycle: jobs ↔ applications. Confirm neither
+- Two services now call each other in a cycle: jobs ↔ applications. Confirm neither
   fallback can trigger the other, or a single outage cascades.
