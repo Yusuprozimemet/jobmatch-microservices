@@ -31,6 +31,11 @@ class MatchingDatabase {
         dataSource.setJdbcUrl(url);
         dataSource.setUsername(username);
         dataSource.setPassword(password);
+        // Four pools where there was one, so each is small: at most five connections, one kept
+        // idle. Hikari's default, ten held open each, is 40 per instance and ran a test run's
+        // cached contexts out of Postgres's connection slots once all four pools opened at startup.
+        dataSource.setMaximumPoolSize(5);
+        dataSource.setMinimumIdle(1);
         return dataSource;
     }
 
