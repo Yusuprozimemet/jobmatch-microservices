@@ -88,44 +88,58 @@ the harness's key in the same PR or all 232 tests go red. C serves and signs wit
 uses no key. No Track 0: nothing observable changes, and the hold below needs no new test.
 
 ## Acceptance criteria
-- [ ] **new** — `GET /.well-known/jwks.json` with no cookie returns 200 and exactly one key,
+- [x] **new** — `GET /.well-known/jwks.json` with no cookie returns 200 and exactly one key,
       with `kty` `RSA`, `use` `sig`, `alg` `RS256` and a `kid`, and none of the private members
-      `d`, `p`, `q`, `dp`, `dq`, `qi` (asserted by name, `tokens/JwksIT`). Red today: 401 with an
-      empty body, from `SecurityConfig`'s `anyRequest().authenticated()`.
-- [ ] **new** — An access token minted by `identity` verifies with nimbus-jose-jwt against the
+      `d`, `p`, `q`, `dp`, `dq`, `qi` (asserted by name, `tokens/JwksIT`). `JwksIT` (#76), 2 tests.
+      Red before #76 with the 401 the spec named; red again with the permit removed
+      (`expected: 200 but was: 401`) and with the private key published
+      (`[private member d in the JWKS]`). Verify's curl check passes on compose at the close.
+- [x] **new** — An access token minted by `identity` verifies with nimbus-jose-jwt against the
       key the JWKS response publishes, chosen by `kid`, and fails to verify once one byte of its
-      signature is changed (`tokens/AccessTokenIT`). Red today: nothing mints a token;
-      `grep -rilE "jwk|jwt|well-known" --include=*.java */src/main` from `backend/` finds 0 files.
-- [ ] **new** — Its claims: `sub` is the user's UUID, not their email; `email`;
+      signature is changed (`tokens/AccessTokenIT`). `AccessTokenIT` (#76). Red with the token
+      signed by another key: `Expecting value to be true but was false`.
+- [x] **new** — Its claims: `sub` is the user's UUID, not their email; `email`;
       `iss` = `jobmatch-identity`; `aud` = `jobmatch-api`; `exp − iat` = 900; a `jti`; and two
-      tokens minted for one user in the same second differ (`tokens/AccessTokenIT`). Red today:
-      nothing mints a token.
-- [ ] **new** — A refresh token is unreadable in the database: no column of its row contains
+      tokens minted for one user in the same second differ (`tokens/AccessTokenIT`). Same class
+      (#76). Red with the `jti` removed (2 of 4: a null `jti`, and equal same-second tokens) and
+      with `sub` set to the email.
+- [x] **new** — A refresh token is unreadable in the database: no column of its row contains
       it, `token_hash` is its SHA-256, and `expires_at` is 30 days after `created_at`
-      (`tokens/RefreshTokensIT`). Red today: `identity.refresh_tokens` does not exist.
-- [ ] **new** — `redeem` returns the user for a live token and nothing for a revoked, an expired
-      or an unknown one (`tokens/RefreshTokensIT`). Red today: no redeem or revoke exists.
-- [ ] **new** — Deleting a user deletes their refresh tokens (`tokens/RefreshTokensIT`). Red
-      today: the table does not exist; red again with the cascade taken off the foreign key.
-- [ ] **new** — As `applications_user`, `matching_user` and `jobs_user`, `SELECT` on
+      (`tokens/RefreshTokensIT`). `RefreshTokensIT` (#80). Red with the token stored in plain.
+- [x] **new** — `redeem` returns the user for a live token and nothing for a revoked, an expired
+      or an unknown one (`tokens/RefreshTokensIT`). Same class (#80). Red, 2 of 4, with `redeem`
+      ignoring `revoked_at` and `expires_at`.
+- [x] **new** — Deleting a user deletes their refresh tokens (`tokens/RefreshTokensIT`).
+      `goesWithTheAccount` (#80). Red with the cascade taken off the foreign key:
+      `violates foreign key constraint "fk_refresh_tokens_user"`.
+- [x] **new** — As `applications_user`, `matching_user` and `jobs_user`, `SELECT` on
       `identity.refresh_tokens` is refused, in a harness that registers `db-setup.py`'s default
-      privileges (`tokens/RefreshTokenGrantsIT`). Red today: the table does not exist; red again,
-      with the default privileges in place, when the migration's revoke is removed.
-- [ ] **new** — With `JWT_PRIVATE_KEY_FILE` unset, pointing at no file, or at a file that is not
+      privileges (`tokens/RefreshTokenGrantsIT`). `RefreshTokenGrantsIT` (#80), through each
+      module's own pool. Red, 3 of 3, with the migration's revoke removed. With the harness's
+      default privileges removed as well, the refusals passed, so the class also asserts that
+      the defaults are registered, and that assertion is the one that failed. On compose, a
+      fresh volume at the close: only `identity_user` can read the table.
+- [x] **new** — With `JWT_PRIVATE_KEY_FILE` unset, pointing at no file, or at a file that is not
       an RSA private key, the application fails to start with a message naming
       `JWT_PRIVATE_KEY_FILE`. The test starts its own context, not `IntegrationTest`'s, which has a
-      key (`tokens/SigningKeyStartupTest`). Red today: all 232 tests start with no key configured.
-- [ ] **new** — `docker compose restart backend` serves the same `kid` as before it. Red today:
-      there is no JWKS.
-- [ ] **hold** — A clean `docker compose up`, with `.env` copied from `.env.example`, starts the
-      backend with no manual step (Day 11's hold, now with a key to find). Broken on purpose in
-      Track A's PR: without the key step, the backend exits naming `JWT_PRIVATE_KEY_FILE`.
-- [ ] **hold** — No behaviour changes. The full suite passes; nothing in `contract/` (23 classes)
+      key (`tokens/SigningKeyStartupTest`). `SigningKeyStartupTest` (#75), 6 tests, which also cover a
+      non-RSA key and one under 2048 bits. Red with `SigningKey` generating a key when none is
+      set: the context started.
+- [x] **new** — `docker compose restart backend` serves the same `kid` as before it. Seen in
+      #75 in the log (the same key id after a recreate and a restart), in #76 over the JWKS, and
+      again at the close.
+- [x] **hold** — A clean `docker compose up`, with `.env` copied from `.env.example`, starts the
+      backend with no manual step (Day 11's hold, now with a key to find). Run at the close in
+      its own project and volume. Broken on purpose in #75: started with `main`'s compose file,
+      which had no key step, the backend exited naming `JWT_PRIVATE_KEY_FILE`.
+- [x] **hold** — No behaviour changes. The full suite passes; nothing in `contract/` (23 classes)
       changes; and the three callers of `establishSession`, in `identity/.../auth/`, are
       untouched: the last command in **Verify** prints nothing. The two harness tests above are
-      the named exception, outside `contract/`. Broken on purpose in the spec-change PR: with
-      `establishSession` taken out of `login`, the auth tests reported
+      the named exception, outside `contract/`. Broken on purpose in the spec-change PR (#74):
+      with `establishSession` taken out of `login`, the auth tests reported
       `Tests run: 49, Failures: 8` (`AuthLoginIT` 2, `AuthLogoutIT` 1, `AuthPasswordUpdateIT` 5).
+      At the close: 255 tests green, the command prints nothing, and the two harness tests
+      changed in #80 as decided.
 
 ## Verify
 ```bash
@@ -197,3 +211,26 @@ git diff --stat "$BASE" HEAD -- backend/app/src/test/java/nl/hackyourfuture/proj
   refresh token hash; Track B corrects that line.
 - **Deployment changes.** Production needs `JWT_PRIVATE_KEY_FILE` and its file before the deploy
   that carries Track A, or the backend will not start. `db-setup.py` needs no re-run.
+- **Done on Day 12.** Spec change #74, then #75 (Track A, the signing key), #76 (Track C,
+  minting and JWKS) and #80 (Track B, refresh tokens). 255 tests green, checkstyle clean.
+  *Estimated 3 pull requests as first written, 4 after the spec change, took 3.* The fourth was
+  held for a split of Track A under the 400-line gate; it came to 340 changed lines and fitted.
+- **The tracks ran A → C → B,** as the spec allowed: C signs with A's key, and B needs no key.
+  Four tooling PRs (#77–#79, the dashboard in the repository and on GitHub Pages) merged
+  between C and B; none touched the backend.
+- **Found by breaking the code, not by reading:** the check that other roles cannot read
+  `refresh_tokens` passed with the revoke removed, as long as the harness registered no default
+  privileges. So the harness's defaults are asserted by the test itself (`pg_default_acl`), not
+  assumed. The spec asked for the defaults; nothing asked for proof that they were there.
+- **One departure from "the same default privileges `db-setup.py` does":** the harness and
+  compose register them for each module schema's owner only, not for every role. Only the owner
+  can create in a module schema, and the admin's tables there were moved in, and moved tables
+  get no default privileges. A compose volume from before this day has none, which nothing
+  needs yet.
+- **Mistakes of mine, recorded in their PRs:**
+  - In #75, one restart was run without `--env-file`, so it failed for want of `DB_USER`.
+  - In #80, a round of breaks restored files with `git checkout`, which also threw away an
+    uncommitted harness change. Three breaks ran against the wrong harness before
+    `git status` showed it. Every break was run again, restoring from copies.
+- `backend/docs/schema.md` still heads its tables "`app` schema", which has been stale since
+  Day 11. #80 corrected only the rows this day touched.
