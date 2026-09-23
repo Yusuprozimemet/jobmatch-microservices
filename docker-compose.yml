@@ -30,9 +30,18 @@ services:
       # ${DB_PORT}". Pre-existing, found while bringing up the obs stack for this day.
       DB_PORT: "5432"
       DB_NAME: ${POSTGRES_DB}
+      # The owner of the migrations; only Flyway logs in as it (Day 11).
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_SCHEMA: app
+      # One login per module, created by scripts/db-init/ on an empty volume.
+      DB_IDENTITY_USER: identity_user
+      DB_IDENTITY_PASSWORD: ${IDENTITY_DB_PASSWORD:-password}
+      DB_APPLICATIONS_USER: applications_user
+      DB_APPLICATIONS_PASSWORD: ${APPLICATIONS_DB_PASSWORD:-password}
+      DB_MATCHING_USER: matching_user
+      DB_MATCHING_PASSWORD: ${MATCHING_DB_PASSWORD:-password}
+      DB_JOBS_USER: jobs_user
+      DB_JOBS_PASSWORD: ${JOBS_DB_PASSWORD:-password}
       # Tracing is opt-in: empty means no exporter, so the application still starts with
       # nowhere to send spans. Point it at the Tempo below to turn it on:
       #

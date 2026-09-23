@@ -43,9 +43,19 @@ public abstract class IntegrationTest {
     // Loading this class starts the container, so the mart schema exists before Flyway runs.
     @DynamicPropertySource
     static void useTestContainer(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", PostgresContainer::jdbcUrl);
-        registry.add("spring.datasource.username", () -> PostgresContainer.instance().getUsername());
-        registry.add("spring.datasource.password", () -> PostgresContainer.instance().getPassword());
+        // Flyway logs in as the container's owner, as it does in compose; every module as its own
+        // role, with its own schema as the search path (Day 11). jobs reads the mart.
+        registry.add("spring.flyway.url", PostgresContainer::jdbcUrl);
+        registry.add("spring.flyway.user", () -> PostgresContainer.instance().getUsername());
+        registry.add("spring.flyway.password", () -> PostgresContainer.instance().getPassword());
+        for (String module : PostgresContainer.MODULE_SCHEMAS) {
+            registry.add("app.datasource." + module + ".url", () -> PostgresContainer.jdbcUrl(module));
+            registry.add("app.datasource." + module + ".username", () -> module + "_user");
+            registry.add("app.datasource." + module + ".password", PostgresContainer::rolePassword);
+        }
+        registry.add("app.datasource.jobs.url", () -> PostgresContainer.jdbcUrl("analytics"));
+        registry.add("app.datasource.jobs.username", () -> "jobs_user");
+        registry.add("app.datasource.jobs.password", PostgresContainer::rolePassword);
     }
 
     @BeforeEach

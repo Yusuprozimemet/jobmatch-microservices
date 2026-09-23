@@ -1,6 +1,6 @@
 package nl.hackyourfuture.project.backend.identity.user;
 
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -9,9 +9,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-@RequiredArgsConstructor
 public class UserRepository {
     private final JdbcClient jdbcClient;
+
+    public UserRepository(@Qualifier("identityJdbcClient") JdbcClient jdbcClient) {
+        this.jdbcClient = jdbcClient;
+    }
 
     // One SELECT for every User, so no query can quietly miss a column.
     // LEFT JOIN: Google-only accounts have no credentials row.

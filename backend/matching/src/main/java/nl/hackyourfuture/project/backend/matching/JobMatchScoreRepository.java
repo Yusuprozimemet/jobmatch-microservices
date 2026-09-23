@@ -1,6 +1,7 @@
 package nl.hackyourfuture.project.backend.matching;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -25,7 +26,7 @@ public class JobMatchScoreRepository {
     private final int retentionDays;
 
     public JobMatchScoreRepository(
-            JdbcClient jdbcClient,
+            @Qualifier("matchingJdbcClient") JdbcClient jdbcClient,
             @Value("${app.llm.score-retention-days:1}") int retentionDays
     ) {
         this.jdbcClient = jdbcClient;

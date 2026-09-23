@@ -1,6 +1,7 @@
 package nl.hackyourfuture.project.backend.applications;
 
 import nl.hackyourfuture.project.backend.shared.applications.SavedJobCounts;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -20,7 +21,7 @@ class ApplicationsDirectory implements SavedJobCounts {
 
     private final JdbcClient jdbcClient;
 
-    ApplicationsDirectory(JdbcClient jdbcClient) {
+    ApplicationsDirectory(@Qualifier("applicationsJdbcClient") JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 

@@ -1,6 +1,6 @@
 package nl.hackyourfuture.project.backend.identity.profile;
 
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -11,9 +11,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-@RequiredArgsConstructor
 public class ProfileRepository {
     private final JdbcClient jdbcClient;
+
+    public ProfileRepository(@Qualifier("identityJdbcClient") JdbcClient jdbcClient) {
+        this.jdbcClient = jdbcClient;
+    }
 
     private static final String PROFILE_SELECT = """
             SELECT user_id, category, preferred_city, work_mode,
