@@ -9,7 +9,8 @@ main, and each day's status, tracks and criteria. Needs git, the gh CLI and nump
 
 Drift: angle between today's spec text (plan.md + specs/*.md, log word counts) and the spec as
 first committed. Gap: angle between spec and code over the code-like names the specs put in
-backticks, counted in the specs and in the code (Markdown, data/ and screenshots left out).
+backticks, counted in the specs and in the code (Markdown, data/, screenshots and this dashboard
+left out: its method text names the very identifiers it counts).
 """
 import argparse
 import collections
@@ -119,7 +120,7 @@ def trajectory(snaps, blobs):
 
     def code_counts(sha):
         out = subprocess.run(["git", "grep", "-o", "-h", "-w", "-F", "-f", "-", sha, "--", ".",
-                              ":(exclude)*.md", ":(exclude)data", ":(exclude)screenshots",
+                              ":(exclude)*.md", ":(exclude)data", ":(exclude)screenshots", ":(exclude)docs/dashboard",
                               ":(exclude)**/package-lock.json"], input=patterns,
                              capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
         c = np.zeros(len(vocab))
@@ -148,7 +149,8 @@ def trajectory(snaps, blobs):
             for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
                 a, d, f = line.split("\t")
                 spec_files[f] = int(a) + int(d)
-            for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", ".", ":(exclude)*.md").splitlines():
+            for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", ".", ":(exclude)*.md",
+                                ":(exclude)docs/dashboard").splitlines():
                 a, d, _ = line.split("\t")
                 churn += 0 if a == "-" else int(a) + int(d)
         mask = reached > 0
