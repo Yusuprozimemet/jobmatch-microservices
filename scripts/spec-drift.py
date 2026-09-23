@@ -4,6 +4,7 @@ Writes one JSON file for the migration dashboard: drift, gap and a 2D projection
 main, and each day's status, tracks and criteria. Needs git, the gh CLI and numpy.
 
     python scripts/spec-drift.py --out data.json
+    python scripts/spec-drift.py --build dashboard.html  # docs/dashboard/ as one file, data inlined
     python scripts/spec-drift.py --page dashboard.html   # swap the data line in a saved page
 
 Drift: angle between today's spec text (plan.md + specs/*.md, log word counts) and the spec as
@@ -15,6 +16,7 @@ import collections
 import datetime
 import json
 import math
+import os
 import re
 import subprocess
 
@@ -24,6 +26,8 @@ WORD = re.compile(r"[a-z0-9_]{2,}")
 TICK = re.compile(r"`([^`\n]+)`")
 IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{3,}")
 CRITERION = re.compile(r"^- \[( |x)\]", re.M)
+PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
+PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
 
 
 def run(*args):
@@ -221,6 +225,37 @@ def roadmap(snaps, prs, blobs):
     return days
 
 
+def conclusion(readme):
+    """What the README says at the head of main: its phase reads, and its measurement table."""
+    reads = [dict(phase=int(m.group(1)), text=m.group(0).strip()) for m in PHASE_READ.finditer(readme)]
+    rows = [[c.strip() for c in r.strip().strip("|").split("|")]
+            for r in section(readme, "What is being measured").splitlines() if r.startswith("|")]
+    return dict(reads=reads, measured=[r for r in rows[2:] if len(r) == 2])
+
+
+def fill(page, data, name):
+    # A PR title is written by whoever opens the PR; "</script>" in one must not end the data line.
+    data = data.replace("</", "<\\/")
+    page, n = re.subn(r"^window\.SPEC_DRIFT = .*;$", lambda _: f"window.SPEC_DRIFT = {data};", page, flags=re.M)
+    if n != 1:
+        raise SystemExit(f"{name}: expected one window.SPEC_DRIFT line, found {n}")
+    return page
+
+
+def build(data):
+    """docs/dashboard/ as a single page: the stylesheet and script inlined, the data filled in."""
+    def read(name):
+        with open(os.path.join(PAGE, name), encoding="utf-8") as f:
+            return f.read()
+    page = read("index.html")
+    for tag, name, wrap in (('<link rel="stylesheet" href="dashboard.css">', "dashboard.css", "style"),
+                            ('<script src="dashboard.js"></script>', "dashboard.js", "script")):
+        if page.count(tag) != 1:
+            raise SystemExit(f"index.html: expected one {tag}")
+        page = page.replace(tag, f"<{wrap}>\n{read(name)}</{wrap}>")
+    return fill(page, data, "index.html")
+
+
 def next_step(days, open_prs):
     if open_prs:
         return "Waiting on " + ", ".join(f"#{p['number']} {p['title']}" for p in open_prs)
@@ -237,8 +272,10 @@ def next_step(days, open_prs):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", default="spec-drift.json")
-    ap.add_argument("--page", help="an HTML page with a `window.SPEC_DRIFT = ...;` line to refresh in place")
+    out = ap.add_mutually_exclusive_group()
+    out.add_argument("--out", default="spec-drift.json")
+    out.add_argument("--build", help="write docs/dashboard/ here as one page, with the data inlined")
+    out.add_argument("--page", help="an HTML page with a `window.SPEC_DRIFT = ...;` line to refresh in place")
     args = ap.parse_args()
     listed = json.loads(run("gh", "pr", "list", "--state", "all", "--limit", "500",
                             "--json", "number,title,headRefName,state,url"))
@@ -254,18 +291,19 @@ def main():
                next_step=next_step(days, open_prs),
                open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
     data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
-                           vocab_size=vocab, pca_var=pca), separators=(",", ":"))
-    target = args.page or args.out
-    if args.page:
+                           vocab_size=vocab, pca_var=pca,
+                           conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md"))),
+                      separators=(",", ":"))
+    target = args.build or args.page or args.out
+    if args.build:
+        data = build(data)
+    elif args.page:
         with open(args.page, encoding="utf-8") as f:
             page = f.read()
         # A page saved from the published artifact carries the viewer's skeleton; drop it.
         page = re.sub(r"\A<!doctype html>.*?<body>\n", "", page, flags=re.S | re.I)
         page = re.sub(r"\n?</body></html>\s*\Z", "\n", page)
-        page, n = re.subn(r"^window\.SPEC_DRIFT = .*;$", lambda _: f"window.SPEC_DRIFT = {data};", page, flags=re.M)
-        if n != 1:
-            raise SystemExit(f"{args.page}: expected one window.SPEC_DRIFT line, found {n}")
-        data = page
+        data = fill(page, data, args.page)
     with open(target, "w", encoding="utf-8") as f:
         f.write(data)
     print(f"{target}: {len(rows)} snapshots, {len(days)} days, next: {now['next_step']}")

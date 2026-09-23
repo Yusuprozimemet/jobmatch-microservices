@@ -25,7 +25,7 @@ chmod +x scripts/*.sh
 - scripts/run-all.sh
   - Runs preflight and then the full Path A sequence.
 - scripts/spec-drift.py
-  - Measures the migration from git history: how far the specs drifted from `plan.md`, how far spec and code sit apart, and each day's status and next step. Writes the data for the migration dashboard; rerun after every merge. Needs git, the `gh` CLI and numpy.
+  - Measures the migration from git history: how far the specs drifted from `plan.md`, how far spec and code sit apart, and each day's status and next step. Writes the data for the migration dashboard; rerun after every merge. `--build dashboard.html` writes the page in [`docs/dashboard/`](../docs/dashboard/) as one file with the data inlined. Needs git, the `gh` CLI and numpy.
 
 ## Typical flow
 
