@@ -1,45 +1,99 @@
 # Day 09 — Remove the saved-jobs hydration join
 
-**Phase:** 1 · **Depends on:** Day 07 · **Expected PRs:** 2
+**Phase:** 1 · **Depends on:** Day 07 · **Expected PRs:** 3
 
 ## Goal
 `applications` stops reading `analytics.fct_postings`. It asks `jobs` for posting details.
 
 ## In scope
-- `PostingLookup` interface in `shared`:
-  `Map<String, PostingSummary> byIds(Collection<String> postingIds)`.
-- `PostingSummary`: the fields `SavedJobResponse` actually uses — no more.
-- Implement in `jobs` with one batched query.
-- `SavedJobRepository.getSavedJobsWithDetails` drops its
-  `LEFT JOIN analytics.fct_postings`: page over `saved_jobs` first, then hydrate.
+- `PostingLookup` interface in `shared.jobs`, beside `shared.applications`' `SavedJobCounts`:
+  `Map<String, PostingSummary> byIds(Collection<String> postingIds)`. Ids missing from the mart
+  are **absent** from the map; the caller decides what that means.
+- `PostingSummary` (also `shared.jobs`): the fields `SavedJobResponse` actually uses — no more.
+  That is the twelve besides `postingId` and `jobState`.
+- Implement in `jobs` with one batched query, in a package-private `@Component`, the way
+  `ApplicationsDirectory` implements `SavedJobCounts`. An empty id list returns an empty map
+  without querying — `IN ()` is a syntax error.
+- **It reads the columns the join reads, not the ones job search reads.** `location` is
+  `fct_postings.location`, the free-text column, not the normalised city bridge; `skills` is the
+  `fct_postings.skills` column in its own order, not `fct_postings_skills` sorted. Day 04 pinned
+  both divergences (`showsTheFreeTextLocationWhichCanNameAPlaceSearchWouldNot`, and the
+  `containsExactly` on skill order), so reusing `JobRepository`'s search SQL fails the gate.
+- `SavedJobRepository.getSavedJobsWithDetails` drops its `LEFT JOIN analytics.fct_postings`.
+  It reads **every** saved row for the user (id and state, one query), hydrates them through
+  `PostingLookup` (one call), sorts by `postedDate` descending with nulls last and `postingId`
+  as the tie-break — the order the SQL has today — and pages in memory. `totalElements` is the
+  number of saved rows, so the separate `COUNT(*)` goes.
 - **Preserve the `LEFT JOIN` semantics.** A saved posting missing from the mart must still
-  be returned, with empty detail fields. Day 04 pins this.
-- Remove the `// TODO day-09` marker.
+  be returned, with null detail fields and an empty `skills` list. Day 04 pins this.
 
 ## Out of scope
 - Making the call over HTTP — Phase 3/5.
 - Changing the `SavedJobResponse` shape. The frontend must not need a change.
+- Changing the order. Newest posting first is what users see today, and Day 04 pins it.
+- Reconciling the two locations and the two skill orders. That is a behaviour change with a
+  frontend-visible result and gets its own spec if anyone wants it.
+- Moving `MartSkills` out of `shared`. After today only `jobs` uses it; that is its own change.
 
 ## Tracks
 
 | Track | Owner | Work |
 |---|---|---|
-| A | | Interface + batched implementation in `jobs` |
-| B | | Rewrite `SavedJobRepository`, keep paging correct |
+| 0 | | Query-count test, landed first |
+| A | | `PostingLookup`, `PostingSummary` + batched implementation in `jobs` |
+| B | | Rewrite `SavedJobRepository` and its call site |
+
+Track 0 is Day 08's pattern again: `StatementCounter` counts the statements that mention
+`fct_postings` during one `GET /api/saved-jobs`. It is **1 today** — the join — and 1 after,
+now the batched lookup, at every page size and list length. It lands first and is broken on
+purpose (a lookup per posting) before it is trusted. `SavedJobHydrationQueriesIT`, in
+`app/src/test/.../queries/`.
 
 ## Acceptance criteria
-- [ ] `grep -rn "analytics\." applications/` returns nothing.
-- [ ] Day 04's hydration and missing-posting tests pass **unedited**.
-- [ ] Paging is still computed from `saved_jobs`, so totals are unaffected by mart gaps.
-- [ ] Two queries per page, regardless of page size.
-- [ ] `grep -rn "TODO day-09"` returns nothing.
+- [ ] `grep -rn "analytics\.\|fct_postings" applications/src/` returns nothing.
+- [ ] Day 04's `SavedJob*IT` — 31 tests — pass **unedited**. In particular the vanished-posting
+      tests, the order test, and both pinned divergences.
+- [ ] `totalElements` is the number of saved rows, whatever the mart holds.
+- [ ] Exactly one statement touches `fct_postings` per `GET /api/saved-jobs`, at page sizes 1, 2
+      and 20, with more saved jobs than the page holds.
+- [ ] A user with no saved jobs gets an empty page and no statement touches `fct_postings`.
 
 ## Verify
 ```bash
-cd backend && ./mvnw verify -Dtest='Saved*IT'
-grep -rn "analytics\." applications/ || echo "clean"
+cd backend
+./mvnw clean verify -pl app -am -Dtest='Saved*IT' -Dsurefire.failIfNoSpecifiedTests=false
+grep -rn "analytics\.\|fct_postings" applications/src/ || echo "clean"
+./mvnw -B checkstyle:check
 ```
+Check the surefire reports, not only the exit code.
 
 ## Notes
-- Paging order is the trap. Order and page inside `saved_jobs`, then hydrate the page —
-  never hydrate first and page after.
+- **Spec corrected on Day 09, before the work.** Read against the code and against Day 04's
+  tests, which are this day's gate:
+  - **The central instruction could not be followed.** "Order and page inside `saved_jobs`, then
+    hydrate the page — never hydrate first and page after." The list is ordered by
+    `p.posted_date DESC NULLS LAST, sj.posting_id`: a mart column. `saved_jobs` has three
+    columns — `user_id`, `posting_id`, `job_state` — and nothing to order by but the id. Paging
+    inside it changes the order users see and fails
+    `sortsAVanishedPostingAfterTheOnesStillInTheMart`. The note's real concern, that totals
+    and vanished rows survive mart gaps, is kept: the rows come from `saved_jobs`, all of them,
+    and the mart only supplies sort keys and detail.
+  - The cost is that each request hydrates the user's whole saved list, not one page. It is a
+    personal tracker, so tens of rows, not thousands. **Two alternatives, not chosen:** a
+    second lookup method returning only posting dates, then hydrating the page — three
+    statements and a wider interface for no gain at this size; or a `saved_at` column to order
+    by — a migration with no value for existing rows, a changed order, and an edited Day 04
+    test. Revisit when a user's list is long enough to measure, not before.
+  - **The `// TODO day-09` marker does not exist,** so its criterion would have ticked itself —
+    the same defect Day 08's spec had.
+  - **The verify command had Day 08's defect:** `-Dtest` with no `-pl` fails on `shared` before
+    reaching `app`. The corrected command was run before being written here: 31 tests,
+    all green.
+  - **The `grep` searched `applications/`, which includes `target/`:** the compiled
+    `SavedJobRepository.class` matches, so a stale build fails the check after the source is
+    clean. It is `applications/src/` now, and also looks for `fct_postings` without the schema.
+  - **"Two queries per page"** counted the `COUNT(*)` and the joined page. The rewrite runs two
+    statements as well, but a different two, and one of them is the whole list. The criterion
+    now counts what the day is about: statements that reach the mart.
+  - The fields `jobs` must read — the free-text location, the raw skill order — were written
+    down by Day 04 for this day and were not in this spec.
