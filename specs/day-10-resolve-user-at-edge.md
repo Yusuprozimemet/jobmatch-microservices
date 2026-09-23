@@ -69,20 +69,27 @@ Track 0 lands two `hold` tests before anything moves. Both pass today and must p
   `user_credentials` joined. Break it on purpose with a second lookup before trusting it.
 
 ## Acceptance criteria
-- [ ] **new** — `UserDirectory.java` no longer exists, and `grep -rn "UserDirectory" --include=*.java .`
-      returns nothing. Red today: 9 lines in 5 files, one of them `ProfileDirectory`'s Javadoc.
-- [ ] **new** — No method under `applications/src/main` or `matching/src/main` has a `String email`
-      parameter, and neither module mentions `@AuthenticationPrincipal`. Red today: the grep in
-      Verify finds 19 lines in 4 files. It also finds `String email = ...` locals, which go too.
-- [ ] **new** — `grep -rn "TODO day-10" --include=*.java .` returns nothing. Red today: two, both
-      in `shared.identity`.
-- [ ] **hold** — Day 01–04 tests pass **unedited**, as they stand after #57.
-- [ ] **hold** — A session with no user behind it gets the answers listed under Track 0: 404
+- [x] **new** — `UserDirectory.java` no longer exists, and `grep -rn "UserDirectory" --include=*.java .`
+      returns nothing. Red before the work: 9 lines in 5 files. Gone since #63, which also reworded
+      a Javadoc in Day 10's own `CurrentUserQueriesIT` that named it.
+- [x] **new** — No method under `applications/src/main` or `matching/src/main` has a `String email`
+      parameter, and neither module mentions `@AuthenticationPrincipal`. Red before the work: 19
+      lines in 4 files. Clean since #62.
+- [x] **new** — `grep -rn "TODO day-10" --include=*.java .` returns nothing. Red before the work: two.
+      Clean since #63.
+- [x] **hold** — Day 01–04 tests pass **unedited**, as they stand after #57. Zero lines changed in
+      existing test files across #60–#63; the only additions are Track 0's two new files. Broken
+      on purpose in #63: an uppercased principal email failed `ProfileIT` (8), `ProfileValidationIT`
+      (5) and `SavedJobsIT` (10).
+- [x] **hold** — A session with no user behind it gets the answers listed under Track 0: 404
       "User not found" from `applications` and `identity`, 422 "Fill in your profile" from
-      `matching`. `SessionWithoutAUserIT`, broken on purpose in its PR.
-- [ ] **hold** — Exactly one statement reads `users` during `POST /api/saved-jobs` and during
-      `GET /api/jobs/top-matches`, the same as today. `CurrentUserQueriesIT`, broken on purpose
-      in its PR with a second lookup.
+      `matching`. `SessionWithoutAUserIT` (#60), green before the change and after. Broken on purpose
+      twice: the two modules' answers swapped in #60, and the new controller mapping changed in #62.
+      Both module tests failed each time.
+- [x] **hold** — Exactly one statement reads `users` during `POST /api/saved-jobs` and during
+      `GET /api/jobs/top-matches`, the same as today. `CurrentUserQueriesIT` (#60), green before and
+      after. Broken on purpose with a second lookup in #60 (services) and in #61 (the resolver):
+      2 statements each time.
 
 ## Verify
 ```bash
@@ -133,3 +140,26 @@ grep -rn "String email\|@AuthenticationPrincipal" applications/src/main matching
   - **The four principal-to-email helpers have the same body,** differing only in name and
     comments. One resolver changes nothing for any kind of principal.
   - *Estimate 3 → 4,* for Track 0.
+- **Done on Day 10.** Spec change #58, then #60 (Track 0, the two tests), #61 (Track A,
+  `@CurrentUserId` and its resolver), #62 (Track B, both modules take the id) and #63 (Track C,
+  `UserDirectory` deleted, one principal helper). 217 tests green, checkstyle clean.
+  *Estimated 3 pull requests, took 4,* the extra one being Track 0, which the spec change added.
+- **The first day worked under #55's rule from start to finish.** Every criterion was tagged before
+  the work, every `new` check was run red first, and every `hold` check was seen to fail in the PR
+  that relied on it. The rule's first catch was in the spec change itself: the statuses this day
+  protected had no test at all.
+- **The resolver returns a value and never throws for a missing user.** That keeps each module's
+  answer in the module (404 in `applications`, 422 in `matching`), and it keeps the order of
+  answers: `GET /api/saved-jobs` still says 400 for a bad page before 404 for a missing user.
+  `@CurrentUserId` on anything but `Optional<UUID>` fails at resolution, so a plain `UUID` cannot
+  bring one answer for everyone back.
+- **A branch copied four times could never run.** Every copy of the principal helper accepted a
+  `UserDetails`, but both logins end in `AuthenticationService.establishSession` with the email as
+  the principal, and nothing creates a `UserDetails`. Removing the branch left all 217 tests
+  green. The one helper left, `PrincipalEmail`, does not have it.
+- **The Day 08 trap, set by me and caught before pushing.** `CurrentUserQueriesIT`, written on this
+  day, named `UserDirectory` in its Javadoc, so the day's own grep would have failed on a comment.
+  Reworded in #63; the test did not change.
+- **`checkstyle:check` caught an unused import that 217 green tests could not see,** again.
+- `identity`'s own controllers still work by email, as the spec allowed. `CurrentUserQueriesIT`
+  expires on Day 13, when the principal carries the id and the count should drop to zero.
