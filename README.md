@@ -377,6 +377,22 @@ green.
 - *Estimated 2 pull requests, took 4.* Both extras came from spec changes before the work: the
   query-count test, and Track C.
 
+**Day 10 — resolve the user once, at the edge.** Only `identity` turns an email into a user now.
+`applications` and `matching` receive a user id from `@CurrentUserId` and never see an email;
+`UserDirectory` is deleted. 217 tests green.
+
+- **The first day run under the rule that every check must be seen to fail.** The rule's first
+  catch was in the spec: it protected two modules' different answers for a session with no user
+  behind it, and no test covered that case. A test pinning them landed before anything moved, and
+  was broken on purpose twice across the day.
+- **The resolver returns an empty value instead of throwing,** so each module keeps its own answer
+  (404 and 422) and the order of answers is unchanged.
+- **A branch copied into four controllers could never run.** Each copy accepted a principal type
+  that nothing in the application creates. Removing it left every test green.
+- **I set Day 8's trap again and caught it before pushing:** a comment in the day's own test named
+  the class the day's grep checks is gone.
+- *Estimated 3 pull requests, took 4.* The fourth is the tests-first track the spec change added.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -401,10 +417,10 @@ unchanged.
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again.** Day 13 and Days 17–28 are the remaining tests |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 5 specs that could not be met, 2 spec verify commands that ran no tests, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 8 of 9 days worked; Days 5, 8 and 9 needed two, Day 8's first made on Day 3 while writing its gate) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 5 specs that could not be met, 2 spec verify commands that ran no tests, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 1 protected behaviour with no test behind it, 1 dead branch copied into four controllers, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 9 of 10 days worked; Days 5, 8, 9 and 10 needed two, Day 8's first made on Day 3 while writing its gate and Day 10's on Day 9) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
