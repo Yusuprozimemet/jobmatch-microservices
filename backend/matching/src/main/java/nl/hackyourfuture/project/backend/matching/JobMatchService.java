@@ -1,5 +1,7 @@
 package nl.hackyourfuture.project.backend.matching;
 
+import nl.hackyourfuture.project.backend.shared.jobs.PostingShortlist;
+import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import lombok.RequiredArgsConstructor;
 import nl.hackyourfuture.project.backend.matching.dto.JobMatchResponse;
 import nl.hackyourfuture.project.backend.shared.identity.ProfileDirectory;
@@ -37,7 +39,7 @@ public class JobMatchService {
     // read as a 100% match off a single overlap.
     static final int MIN_PERCENT_DENOMINATOR = 5;
 
-    private final JobMatchRepository jobMatchRepository;
+    private final PostingShortlist postingShortlist;
     private final JobMatchScoreRepository jobMatchScoreRepository;
     private final ProfileDirectory profileDirectory;
     private final UserDirectory userDirectory;
@@ -54,8 +56,8 @@ public class JobMatchService {
                             + skills.size() + ".");
         }
 
-        List<JobMatchRepository.JobMatchRow> shortlist =
-                jobMatchRepository.findTopMatches(profile.preferredCity(), skills, SHORTLIST_SIZE);
+        List<ShortlistedPosting> shortlist =
+                postingShortlist.shortlist(profile.preferredCity(), skills, SHORTLIST_SIZE);
         if (shortlist.isEmpty()) {
             return List.of();
         }
@@ -72,15 +74,15 @@ public class JobMatchService {
 
     // Reuse stored scores, only ask the model for postings that don't have one yet.
     private Map<String, MatchScorer.Score> resolveScores(List<String> skills,
-                                                         List<JobMatchRepository.JobMatchRow> shortlist) {
+                                                         List<ShortlistedPosting> shortlist) {
         String skillsHash = skillsHash(skills);
         String scorerVersion = matchScorer.version();
-        List<String> postingIds = shortlist.stream().map(JobMatchRepository.JobMatchRow::postingId).toList();
+        List<String> postingIds = shortlist.stream().map(ShortlistedPosting::postingId).toList();
 
         Map<String, MatchScorer.Score> scores =
                 new HashMap<>(jobMatchScoreRepository.findScores(skillsHash, scorerVersion, postingIds));
 
-        List<JobMatchRepository.JobMatchRow> unscored = shortlist.stream()
+        List<ShortlistedPosting> unscored = shortlist.stream()
                 .filter(row -> !scores.containsKey(row.postingId()))
                 .toList();
         if (unscored.isEmpty()) {
@@ -131,7 +133,7 @@ public class JobMatchService {
         }
     }
 
-    private static JobMatchResponse toResponse(JobMatchRepository.JobMatchRow row, int ofSkills,
+    private static JobMatchResponse toResponse(ShortlistedPosting row, int ofSkills,
                                                MatchScorer.Score score) {
         double coverage = jobCoverage(row);
         int percent = Math.round((float) coverage * 100);
@@ -159,7 +161,7 @@ public class JobMatchService {
     // and as a stand-in for score when the model hasn't ranked a row yet.
     // Divides by the job's skill count, not the candidate's - otherwise a long profile could
     // never hit 100%, even for a perfect match.
-    private static double jobCoverage(JobMatchRepository.JobMatchRow row) {
+    private static double jobCoverage(ShortlistedPosting row) {
         // No clamping needed: matchedSkills comes from the job's own skills, so it can
         // never be bigger than jobSkillCount.
         return (double) row.matchedCount() / Math.max(row.jobSkillCount(), MIN_PERCENT_DENOMINATOR);

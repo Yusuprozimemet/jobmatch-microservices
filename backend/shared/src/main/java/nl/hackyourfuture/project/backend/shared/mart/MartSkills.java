@@ -10,7 +10,7 @@ import java.util.Objects;
 
 // Parses the skills column, e.g. '["python","sql"]'.
 // Takes a String, not a richer type, so a column type change breaks the build here instead
-// of failing silently downstream. JobMatchRepository parses skills in SQL instead - it needs
+// of failing silently downstream. The match shortlist in JobsDirectory parses skills in SQL instead - it needs
 // them there for ranking and dedup.
 public final class MartSkills {
 
