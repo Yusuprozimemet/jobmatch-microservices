@@ -44,8 +44,9 @@ public class AuthenticationController {
     @Operation(summary = "Log in a user", description = "Verifies user credentials, creates a session cookie, and returns account details.")
     @ApiResponse(responseCode = "200", description = "Login successful")
     @ApiResponse(responseCode = "401", description = "Invalid email or password")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request, jakarta.servlet.http.HttpServletRequest httpRequest) {
-        return authenticationService.login(request, httpRequest);
+    public LoginResponse login(@Valid @RequestBody LoginRequest request, jakarta.servlet.http.HttpServletRequest httpRequest,
+                               jakarta.servlet.http.HttpServletResponse httpResponse) {
+        return authenticationService.login(request, httpRequest, httpResponse);
     }
 
     @PostMapping("/forgot-password")
@@ -69,11 +70,12 @@ public class AuthenticationController {
     @ApiResponse(responseCode = "400", description = "Invalid current password or Google-only account")
     public void updatePassword(
             @AuthenticationPrincipal String email,
-            @Valid @RequestBody UpdatePasswordRequest request, jakarta.servlet.http.HttpServletRequest httpRequest) {
+            @Valid @RequestBody UpdatePasswordRequest request, jakarta.servlet.http.HttpServletRequest httpRequest,
+            jakarta.servlet.http.HttpServletResponse httpResponse) {
         // Not logged in.
         if (email == null || "anonymousUser".equals(email) || email.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not logged in");
         }
-        authenticationService.updatePassword(email, request, httpRequest);
+        authenticationService.updatePassword(email, request, httpRequest, httpResponse);
     }
 }

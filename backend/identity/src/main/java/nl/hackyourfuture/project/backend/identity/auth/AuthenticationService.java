@@ -1,9 +1,11 @@
 package nl.hackyourfuture.project.backend.identity.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.hackyourfuture.project.backend.identity.auth.dto.*;
+import nl.hackyourfuture.project.backend.identity.token.AuthCookies;
 import nl.hackyourfuture.project.backend.identity.user.User;
 import nl.hackyourfuture.project.backend.identity.user.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +34,7 @@ public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final AuthCookies authCookies;
 
     @Value("${app.base-url}")
     private String baseUrl;
@@ -79,8 +82,9 @@ public class AuthenticationService {
         );
     }
 
-    // Checks the password and starts the session (JSESSIONID).
-    public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
+    // Checks the password, starts the session (JSESSIONID) and sets the token cookies, which
+    // nothing reads until the session goes (Day 13).
+    public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         String normalizedEmail = request.email().toLowerCase(Locale.ROOT);
         // Look up user credentials by email or fail with a generic security error
         var credentials = userRepository.findCredentialsByEmail(normalizedEmail)
@@ -94,6 +98,7 @@ public class AuthenticationService {
         }
 
         establishSession(credentials.email(), httpRequest);
+        authCookies.issue(httpResponse, credentials.id(), credentials.email());
         completePendingGoogleLink(credentials, httpRequest);
 
         // Null timestamp means they never agreed; the frontend shows the terms screen.
@@ -166,7 +171,8 @@ public class AuthenticationService {
 
     // Changes the password after checking the current one.
     @Transactional("identityTransactionManager")
-    public void updatePassword(String email, UpdatePasswordRequest request, HttpServletRequest httpRequest) {
+    public void updatePassword(String email, UpdatePasswordRequest request,
+                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         // Look up the user ID using the provided email
         UUID userId = userRepository.getUserByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"))
@@ -188,6 +194,7 @@ public class AuthenticationService {
         userRepository.updatePasswordHash(userId, newPasswordHash);
         // Refresh/re-establish the session to invalidate any old/stolen session contexts
         establishSession(email, httpRequest);
+        authCookies.issue(httpResponse, userId, email);
 
         log.info("Password successfully updated for user email: {}", email);
     }
