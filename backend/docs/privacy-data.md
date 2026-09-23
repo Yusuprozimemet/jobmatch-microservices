@@ -27,7 +27,7 @@ Related: [`auth.md`](auth.md) for how accounts work, [`api.md`](api.md) for the 
 
 # 1. Everything that is stored
 
-All of it is in the `app` schema. The `analytics` schema holds job postings and nothing about users.
+All of it is in the module schemas (`identity`, `applications`, `matching`). The `analytics` schema holds job postings and nothing about users.
 
 | Table | Fields | Why it exists |
 | --- | --- | --- |
@@ -35,6 +35,7 @@ All of it is in the `app` schema. The `analytics` schema holds job postings and 
 | `user_credentials` | `password_hash`, `updated_at` | BCrypt hash only. No row at all for Google-only accounts |
 | `user_profiles` | `skills[]`, `category`, `preferred_city`, `work_mode`, `experience_level`, `employment_type`, `salary` | What the user is looking for, and what matching runs on |
 | `password_reset_tokens` | `token`, `expiry_date`, `user_id` | A 15-minute single-use link |
+| `refresh_tokens` | `token_hash`, `created_at`, `expires_at`, `revoked_at`, `user_id` | What keeps a browser signed in for 30 days. Only the SHA-256 of the token is stored |
 | `saved_jobs` | `posting_id`, `job_state` | Which jobs the user kept, and how far each application got |
 | `job_match_scores` | `skills_hash`, `posting_id`, `score`, `reason` | Cached model verdicts — **keyed on a hash of a skill set, not on a user** |
 
@@ -64,7 +65,8 @@ Worth stating, because it is a short list and it makes the shape of the app clea
 - **No analytics, no tracking pixels, no third-party scripts.** The frontend source contains no
   external URLs at all beyond the team's own GitHub profile links on the About page, so a visitor's
   browser talks to one origin and nothing else.
-- **One cookie**, `JSESSIONID`, strictly functional: it is the session. Nothing is stored in
+- **Two cookies**, `access_token` and `refresh_token`, strictly functional: they are the login.
+  (Google sign-in also sets a session cookie for the length of the sign-in.) Nothing is stored in
   `localStorage`.
 - **No IP addresses, user agents or request logs of our own.** Whatever the hosting layer keeps is
   outside this codebase.
@@ -91,7 +93,7 @@ The timestamp comes from the **database clock** (`now()`), and `acceptTerms` upd
 carries the column through untouched. An agreement can therefore be neither erased nor forged by an
 account edit, and a repeat call keeps the original moment.
 
-A Google user is logged in while sitting on `/accept-terms` — the session exists, the agreement does
+A Google user is logged in while sitting on `/accept-terms` — the login exists, the agreement does
 not yet. What they cannot do is save a profile, which is where the personal data actually starts.
 
 ---
@@ -114,8 +116,9 @@ than handed a partial file.
 
 **Between them those three cover every table that holds anything personal**, which is why `/me`
 returns fields the UI never displays — `createdAt`, `oauthProvider`, `oauthProviderId`,
-`passwordUpdatedAt` all exist for this export. `password_reset_tokens` is excluded deliberately: a
-live token is a credential, and putting it in a downloadable file would be worse than omitting it.
+`passwordUpdatedAt` all exist for this export. `password_reset_tokens` and `refresh_tokens` are
+excluded deliberately: a live token is a credential, and putting it in a downloadable file would be
+worse than omitting it.
 `job_match_scores` is excluded because it is not personal data — no row in it identifies anyone.
 
 Two real weaknesses:
@@ -135,18 +138,20 @@ Two real weaknesses:
 
 GDPR Art. 17. `DELETE /api/users/me`, from the profile page behind a confirmation step.
 
-The account is resolved from the session, so a caller can only ever delete their own. One `DELETE`
+The account is resolved from the access token, so a caller can only ever delete their own. One `DELETE`
 on `users` removes everything, because every table that references it cascades:
 
 ```
 users ─┬─ user_credentials        ON DELETE CASCADE
        ├─ user_profiles           ON DELETE CASCADE
        ├─ saved_jobs              ON DELETE CASCADE
-       └─ password_reset_tokens   ON DELETE CASCADE
+       ├─ password_reset_tokens   ON DELETE CASCADE
+       └─ refresh_tokens          ON DELETE CASCADE
 ```
 
-The session is invalidated and `JSESSIONID` cleared in the same request — otherwise the session
-would outlive the row and `/me` would answer 404 instead of 401.
+Both token cookies are deleted in the same request — otherwise the browser would keep sending a
+token for a row that is gone and `/me` would answer 404 instead of 401. An access token copied
+elsewhere still verifies for up to 15 minutes, and finds no user.
 
 **What survives, and whether it matters:**
 
@@ -193,7 +198,7 @@ the app deliberately gives up control — the terms page says so, and the link c
 | Account, profile, saved jobs | Until the user deletes the account. **There is no inactivity policy** |
 | `job_match_scores` | `LLM_SCORE_RETENTION_DAYS`, default and minimum 1 day. Enforced on the read, so nothing older is ever served; an hourly purge reclaims the space within an hour of a row expiring |
 | Password reset tokens | 15 minutes of validity. Deleted on use, and when a newer link is requested |
-| Sessions | In the servlet container's memory — a restart drops them all |
+| Refresh tokens | 30 days, or until logout, a password change or reset. A spent or expired row stays in `refresh_tokens` until the account is deleted; nothing sweeps it yet |
 
 One gap: **an expired reset token that is never used and never superseded stays in the table
 indefinitely.** Nothing sweeps `password_reset_tokens` on a schedule the way `job_match_scores` is

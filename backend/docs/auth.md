@@ -1,11 +1,13 @@
 # Authentication
 
-Two ways into an account — a password, or Google — and one session mechanism behind both. The
-email address is the identity: it is the session principal, the reset lookup, and the unique index,
-which is why it cannot be edited and why the Google flow works the way it does.
+Two ways into an account — a password, or Google — and one pair of token cookies behind both
+(Day 13; before it, a session). The email address is the identity: it is the principal, the reset
+lookup, and the unique index, which is why it cannot be edited and why the Google flow works the
+way it does.
 
-Everything here lives in [`auth/`](../src/main/java/nl/hackyourfuture/project/backend/auth) and
-[`config/SecurityConfig`](../src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java).
+Everything here lives in identity's [`auth/`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth) and
+[`token/`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token), and
+[`config/SecurityConfig`](../app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java).
 The endpoint-by-endpoint contract — bodies, statuses, validation — is in [`api.md`](api.md); this
 document is about how the pieces fit and what happens when they do not.
 
@@ -13,11 +15,11 @@ document is about how the pieces fit and what happens when they do not.
 
 ## Table of contents
 
-- [1. The three ways a session starts](#1-the-three-ways-a-session-starts)
+- [1. The three ways in](#1-the-three-ways-in)
 - [2. Registration](#2-registration)
 - [3. Password login](#3-password-login)
 - [4. Google sign-in](#4-google-sign-in)
-- [5. The session](#5-the-session)
+- [5. The tokens](#5-the-tokens)
 - [6. Passwords: change, forget, reset](#6-passwords-change-forget-reset)
 - [7. Agreeing to the terms](#7-agreeing-to-the-terms)
 - [8. Deleting the account](#8-deleting-the-account)
@@ -27,14 +29,14 @@ document is about how the pieces fit and what happens when they do not.
 
 ---
 
-# 1. The three ways a session starts
+# 1. The three ways in
 
 ```mermaid
 flowchart TD
     REG["POST /api/auth/register"] --> ACC[("users + user_credentials<br/>terms_accepted_at stamped")]
     ACC --> LOGIN
 
-    LOGIN["POST /api/auth/login"] -->|"password matches"| SESSION(["JSESSIONID<br/>principal = email"])
+    LOGIN["POST /api/auth/login"] -->|"password matches"| SESSION(["access_token + refresh_token<br/>principal = email"])
 
     G["GET /api/oauth2/authorization/google"] --> VERIFY{"email_verified?"}
     VERIFY -->|"no"| FAIL["/login?error=oauth"]
@@ -57,12 +59,12 @@ flowchart TD
 
 Three things are worth reading off that picture:
 
-- **A session is a session.** However it started, the principal is the lowercased email string and
-  every later request is authenticated by the cookie. Nothing downstream knows or cares which door
-  the user came through.
+- **Signed in is signed in.** However it started, the principal is the lowercased email string and
+  every later request is authenticated by the access-token cookie. Nothing downstream knows or
+  cares which door the user came through.
 - **A Google identity is never linked on an email match alone.** That is the `google_link_required`
   branch, and [section 4](#4-google-sign-in) explains why.
-- **The terms gate is after the session, not before it.** A Google user is logged in while they are
+- **The terms gate is after signing in, not before it.** A Google user is logged in while they are
   on `/accept-terms`; what they cannot do yet is have a profile, because they have not agreed to
   anything being stored.
 
@@ -73,7 +75,7 @@ Three things are worth reading off that picture:
 `POST /api/auth/register` with name, email, password and `acceptedTerms: true`.
 
 The email is lowercased before anything else happens
-([`AuthenticationService.register`](../src/main/java/nl/hackyourfuture/project/backend/auth/AuthenticationService.java)),
+([`AuthenticationService.register`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/AuthenticationService.java)),
 so `User@Example.com` and `user@example.com` are one account. `V9` normalised the existing rows and
 put the unique index on `lower(email)`, so the database enforces the same thing the code assumes.
 
@@ -93,7 +95,7 @@ There is a `getUserByEmail` check before the insert *and* a `DuplicateKeyExcepti
 The check is for the message; the catch is for the race, where two registrations for one address
 arrive together and the unique index picks a winner. Both answer 409.
 
-Registration does not start a session. The frontend sends the user to `/login?registered=true`.
+Registration does not sign anyone in. The frontend sends the user to `/login?registered=true`.
 
 ---
 
@@ -107,16 +109,9 @@ That is the point: a wrong email, a wrong password, and an address that only exi
 account all answer the same `401 Invalid email or password`. The response cannot be used to discover
 which addresses are registered, or how they sign in.
 
-On success, `establishSession` does three things in order:
-
-1. builds a `UsernamePasswordAuthenticationToken` whose principal is the **email string** — not a
-   `UserDetails`, which is why every controller resolves the principal with a small helper that
-   accepts either and rejects `"anonymousUser"`;
-2. calls `changeSessionId()`, so a cookie captured before login is worthless after it;
-3. stores the security context on the session under
-   `HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY`.
-
-Then `completePendingGoogleLink` runs — see the next section.
+On success, [`AuthCookies.issue`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AuthCookies.java) mints an
+access token and issues a refresh token, and sets both as cookies ([section 5](#5-the-tokens)).
+Nothing is stored in a session. Then `completePendingGoogleLink` runs — see the next section.
 
 The response carries `termsAcceptedAt`. Null means the user has never agreed, and the frontend sends
 them to the terms screen instead of the app.
@@ -126,7 +121,7 @@ them to the terms screen instead of the app.
 # 4. Google sign-in
 
 Enabled only when `GOOGLE_CLIENT_ID` is set.
-[`GoogleOAuth2Config`](../src/main/java/nl/hackyourfuture/project/backend/config/GoogleOAuth2Config.java)
+[`GoogleOAuth2Config`](../app/src/main/java/nl/hackyourfuture/project/backend/config/GoogleOAuth2Config.java)
 is `@ConditionalOnExpression` on it, and `SecurityConfig` only calls `oauth2Login(...)` when a
 `ClientRegistrationRepository` bean exists. Without credentials the routes simply do not exist and
 the app logs `Google sign-in disabled` at startup — rather than failing to boot, which is what
@@ -141,12 +136,12 @@ Both URIs sit under `/api` so the Next.js proxy forwards them and the cookie sta
 
 **The verified-email check comes first.** The custom `OidcUserService` rejects a Google account
 whose `email_verified` is false, or that has no email at all, *before* the success handler runs and
-before any session is authenticated. An unverified address could otherwise be used to claim an
+before anyone is signed in. An unverified address could otherwise be used to claim an
 account by email match.
 
 ## What the success handler does
 
-[`OAuth2LoginSuccessHandler`](../src/main/java/nl/hackyourfuture/project/backend/auth/OAuth2LoginSuccessHandler.java)
+[`OAuth2LoginSuccessHandler`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/OAuth2LoginSuccessHandler.java)
 resolves the identity in this order:
 
 1. **Already linked** (`oauth_provider = GOOGLE` and `oauth_provider_id = sub`) → that account.
@@ -155,6 +150,8 @@ resolves the identity in this order:
    which they cannot, because reset requires an existing credential row.
 3. **The email already belongs to an account** → refuse, and park the identity.
 
+In the first two cases it sets the token cookies, as login does, then redirects.
+
 ## Why an email match is not enough
 
 Registration never proved the user owns the address they typed. If a Google sign-in linked itself to
@@ -162,8 +159,9 @@ any account with a matching email, then registering `someone-elses@gmail.com` fi
 their Google identity — and with it, a permanent way in.
 
 So the identity waits instead.
-[`PendingGoogleLink`](../src/main/java/nl/hackyourfuture/project/backend/auth/PendingGoogleLink.java)
-stores the email and the provider id in the session, no authentication is established, and the
+[`PendingGoogleLink`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/PendingGoogleLink.java)
+stores the email and the provider id in the session — the one session left, until Day 14 moves it
+to the database — no one is signed in, and the
 browser goes to `/login?error=google_link_required`. The next successful **password** login for that
 same address claims the parked identity and links it:
 
@@ -181,10 +179,10 @@ sequenceDiagram
     B->>B: PendingGoogleLink.save(session, email, sub)
     B-->>U: 302 /login?error=google_link_required
     U->>B: POST /api/auth/login (email + password)
-    B->>B: password matches → establishSession
+    B->>B: password matches → token cookies
     B->>B: PendingGoogleLink.claim(session, email)
     B->>DB: linkProvider(userId, GOOGLE, sub)
-    B-->>U: 200, session, Google now linked
+    B-->>U: 200, cookies, Google now linked
 ```
 
 `claim` only hands the provider id over if the session's parked email matches the one that just
@@ -209,21 +207,41 @@ message.
 
 ---
 
-# 5. The session
+# 5. The tokens
 
-A cookie, not a token. There is no JWT anywhere in this backend.
+Two cookies since Day 13, set at login, at a password change and by Google sign-in
+([`AuthCookies`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AuthCookies.java)):
 
-| Property | Value | Set by |
-| --- | --- | --- |
-| Name | `JSESSIONID` | servlet container |
-| `HttpOnly` | true | `server.servlet.session.cookie.http-only` |
-| `SameSite` | `Lax` | `server.servlet.session.cookie.same-site` |
-| `Secure` | `SESSION_COOKIE_SECURE`, default **false** | must be `true` wherever the site is HTTPS |
+| Cookie | Holds | Attributes | Lives |
+| --- | --- | --- | --- |
+| `access_token` | an RS256 JWT: `sub` = user id, `email`, `iss` = `jobmatch-identity`, `aud` = `jobmatch-api`, `jti` | `HttpOnly; SameSite=Lax; Path=/` | 15 minutes |
+| `refresh_token` | 32 random bytes; the database keeps only their SHA-256 (`identity.refresh_tokens`) | `HttpOnly; SameSite=Lax; Path=/api/auth` | 30 days |
 
-JavaScript cannot read the cookie, so browser calls have to opt in to sending it. The shared
-`request()` helper in [`frontend/src/lib/api.ts`](../../frontend/src/lib/api.ts) sets
-`credentials: "include"` for every call that goes through it; a call written by hand that forgets it
-looks exactly like being logged out:
+No `Secure` on either yet: it was left out of Day 13 by decision, and must be added before an
+HTTPS deployment relies on it ([section 10](#10-known-limitations)).
+
+**Every request brings its access token.** The session policy is `STATELESS`. The resource server
+reads `access_token` and verifies it in process against the key identity signs with (Day 12's
+`JWT_PRIVATE_KEY_FILE`), checking `iss` and `aud` as well as the times
+([`AccessTokenAuthentication`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AccessTokenAuthentication.java)). The
+principal it builds is the token's `email` claim, the same plain string the session used to hold,
+so every controller reads the user as before. A backend restart signs no one out.
+
+**A stale cookie reads as no cookie.** An expired or tampered access token is not handed to the
+resource server at all, so a public route answers as it does for anyone and a protected one answers
+`401`, as it does for anyone. Otherwise a browser whose token had just expired would get `401` from
+login, from the job list and from the refresh itself.
+
+**Refresh.** `POST /api/auth/refresh` needs no access token. It spends the refresh cookie — revoked
+in the same statement that finds it, so two requests cannot both use one — and sets both cookies
+anew. A spent, expired or unknown refresh token gets `401` and both cookies deleted. The frontend
+([`frontend/src/lib/api.ts`](../../frontend/src/lib/api.ts)) calls it once when an API call outside
+`/api/auth/` answers `401`, sharing one refresh between calls made at the same time, and retries the
+call once; if the refresh fails, the user is signed out.
+
+JavaScript cannot read either cookie, so browser calls have to opt in to sending them. The shared
+`request()` helper sets `credentials: "include"` for every call that goes through it; a call written
+by hand that forgets it looks exactly like being logged out:
 
 ```js
 fetch("/api/users/me", { credentials: "include" })
@@ -237,9 +255,10 @@ above the broader `permitAll()` lines they carve out of.
 | Rule | Effect |
 | --- | --- |
 | `PATCH /api/auth/password` | authenticated |
-| `/api/auth/**` | public |
+| `/api/auth/**` (login, register, refresh, logout, the password reset) | public |
 | `/error`, `/api/docs/**` | public |
 | `/api/oauth2/**`, `/api/login/oauth2/**` | public |
+| `GET /.well-known/jwks.json` | public: the key tokens verify with |
 | `GET /api/jobs/top-matches` | authenticated |
 | `GET /api/jobs`, `/api/jobs/filters`, `/api/jobs/*` | public |
 | everything else | authenticated |
@@ -255,13 +274,15 @@ it never reaches `GlobalExceptionHandler`.
 
 ## Logout
 
-`POST /api/auth/logout` is handled by the chain's logout handler, not a controller: it invalidates
-the session, deletes `JSESSIONID`, and writes `{"message": "Logged out successfully"}`. Because no
-controller is involved it does **not** appear in the generated OpenAPI document.
+`POST /api/auth/logout` is handled by the chain's logout handler, not a controller: it revokes the
+refresh token the browser sent, deletes both cookies, and writes
+`{"message": "Logged out successfully"}`. Because no controller is involved it does **not** appear
+in the generated OpenAPI document. The access token itself stays valid until it expires, at most 15
+minutes; nothing revokes it.
 
-`DELETE /api/users/me` repeats the same two handlers by hand
-(`SecurityContextLogoutHandler` + `CookieClearingLogoutHandler`) — otherwise the session would
-outlive the deleted row and `/me` would answer 404 instead of 401.
+`DELETE /api/users/me` deletes both cookies too — otherwise the browser would keep sending a token
+for an account that no longer exists, and `/me` would answer 404 instead of 401. Its refresh tokens
+go with the row.
 
 ---
 
@@ -275,10 +296,11 @@ there is no `user_credentials` row, so there is no current password to verify an
 
 ### Change — `PATCH /api/auth/password`
 
-Session required, and it is the one route under `/api/auth/**` that is not public. The current
+Signing in required, and it is the one route under `/api/auth/**` that is not public. The current
 password must match; then the hash is replaced, `updated_at` moves (this is what `/api/users/me`
-reports as `passwordUpdatedAt`), and `establishSession` runs again so the session id changes. Another
-session holding the old cookie is dropped.
+reports as `passwordUpdatedAt`), **every** refresh token the user holds is revoked, and the caller
+gets a new pair of cookies. Another device keeps its access token for at most 15 minutes and then
+cannot refresh.
 
 ### Forget — `POST /api/auth/forgot-password`
 
@@ -300,7 +322,9 @@ address that does not exist, which is the same property the flow already relies 
 ### Reset — `POST /api/auth/reset-password`
 
 The token must exist and have `expiry_date > CURRENT_TIMESTAMP`. On success the hash is replaced and
-**every** token for that user is deleted, which is what makes the link single-use.
+**every** token for that user is deleted, which is what makes the link single-use. Every refresh
+token the user holds is revoked too, so whoever had the old password is signed out within 15
+minutes.
 
 An invalid, expired, or already-used token is one message: `Invalid or expired password reset token`.
 
@@ -332,20 +356,22 @@ credentials, profile, saved jobs, outstanding reset tokens, refresh tokens.
 `job_match_scores` has no foreign key to `users` on purpose — it is keyed on a hash of the skill set
 rather than on a person — so there is nothing user-identifying left behind after the cascade.
 
-The session is ended and the cookie cleared in the same request, as described above.
+Both cookies are deleted in the same request, as described above. An access token copied elsewhere
+still verifies for up to 15 minutes, and finds no user.
 
 ---
 
 # 9. Configuration
 
 All of it reads an environment variable with a local-development fallback; see
-[`application.yaml`](../src/main/resources/application.yaml) and
+[`application.yaml`](../app/src/main/resources/application.yaml) and
 [`.env.example`](../.env.example).
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address of the environment. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** — the redirect URIs append to it, and `//` will not match what Google has registered. Production is `https://c55c.hyf.dev`. |
-| `SESSION_COOKIE_SECURE` | `false` | Must be `true` on any HTTPS deployment |
+| `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with. **No key, no start.** Replacing it invalidates every access token; browsers refresh silently, since refresh tokens are not signed |
+| `SESSION_COOKIE_SECURE` | `false` | Since Day 13, only the Google flow's session cookie. Must be `true` on any HTTPS deployment |
 | `GOOGLE_CLIENT_ID` | empty | Set it and Google sign-in exists; leave it and the routes do not |
 | `GOOGLE_CLIENT_SECRET` | empty | |
 | `GOOGLE_REDIRECT_URI` | `${APP_BASE_URL}/api/login/oauth2/code/google` | Must match the Google Cloud Console entry character for character |
@@ -379,11 +405,16 @@ backend, and that is what keeps the cookie on one origin.
 Honest list. None of these is a bug in the current deployment; all of them are things to know before
 changing it.
 
-- **Sessions live in the servlet container's memory.** There is no Spring Session, no Redis, no
-  database-backed store. A backend restart logs everyone out, and running two backend instances
-  needs sticky sessions or a shared store first.
-- **CSRF protection is `SameSite=Lax` and nothing else.** CSRF tokens are disabled and the session
-  is a cookie, so `Lax` — which withholds the cookie from cross-site POSTs — is what stands between
+- **An access token cannot be revoked.** Logout, a password change or reset and account deletion
+  all stop the refresh token, but the access token already issued verifies until it expires, up to
+  15 minutes. Closing that window needs a denylist.
+- **The token cookies are not `Secure`.** Left out of Day 13 by decision; until they are, nothing
+  but the deployment's own HTTPS redirect stops a browser sending them over plain HTTP.
+- **The Google flow still uses a session** for the authorization request and the pending link, in
+  the servlet container's memory, until Day 14. Two backend instances need sticky sessions for
+  Google sign-in until then; nothing else does.
+- **CSRF protection is `SameSite=Lax` and nothing else.** CSRF tokens are disabled and the tokens
+  are cookies, so `Lax` — which withholds the cookie from cross-site POSTs — is what stands between
   the API and a cross-site form. That is adequate for the current shape; it stops being adequate the
   day something is served from another origin.
 - **No rate limiting.** Nothing throttles login attempts or password-reset requests, so no endpoint
@@ -409,10 +440,11 @@ changing it.
 | Sign-in succeeds but the browser lands on `localhost:3000` in production | `APP_BASE_URL` is unset there, so every redirect still holds its local default |
 | `/login?error=google_link_required` | Working as designed: that email already has a password account. Log in with the password once and the identity attaches itself |
 | `/login?error=oauth` | The failure handler. Most often the Google account's email is not verified; check the log |
-| Every browser call answers 401 even though login succeeded | The `fetch` is missing `credentials: "include"`, or the cookie was rejected — `SESSION_COOKIE_SECURE=true` on plain HTTP will do that |
-| Everyone is logged out after a deploy | Sessions are in memory; a restart drops them. Expected until a shared session store exists |
+| Every browser call answers 401 even though login succeeded | The `fetch` is missing `credentials: "include"`, or a proxy strips `Set-Cookie` |
+| Signed out about 15 minutes after signing in | The refresh failed: `refresh_token` is not reaching `/api/auth/refresh` (its path is `/api/auth`), or it was revoked by a password change or reset elsewhere |
+| The backend will not start, naming `JWT_PRIVATE_KEY_FILE` | No signing key. Compose writes one on first start; elsewhere run `scripts/jwt-key.sh` and point the variable at it |
 | Login answers 401 for an account the user is sure exists | It may be a Google-only account: no credentials row, so the password path cannot find it |
 | Reset email never arrives | `MAIL_USERNAME` / `MAIL_PASSWORD` unset — the startup log warns, and `forgot-password` still answers 200 by design |
 | `Invalid or expired password reset token` on a fresh link | Older than 15 minutes, already used, or a newer link was requested — requesting one deletes the previous token |
 | A new endpoint answers 401 for a logged-out caller when it should be public | Unlisted paths are `authenticated()` by default; add it to `SecurityConfig` |
-| `/api/users/me` answers 404 rather than 401 | The session points at an account that no longer exists — normally only reachable if the row was deleted outside `DELETE /api/users/me` |
+| `/api/users/me` answers 404 rather than 401 | The access token belongs to an account that no longer exists: one copied before the account was deleted, for up to 15 minutes, or a row deleted outside `DELETE /api/users/me` |
