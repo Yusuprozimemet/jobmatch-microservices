@@ -27,7 +27,7 @@ deliberately not here.
 - [6. Jobs](#6-jobs)
 - [7. Matching](#7-matching)
 - [8. Saved jobs](#8-saved-jobs)
-- [9. Sessions and access rules](#9-sessions-and-access-rules)
+- [9. Tokens and access rules](#9-tokens-and-access-rules)
 - [10. Error responses](#10-error-responses)
 - [11. Email](#11-email)
 - [12. Not in the API](#12-not-in-the-api)
@@ -119,29 +119,30 @@ is why the saved-jobs query is a `LEFT JOIN`.
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | POST | /api/auth/register | none | Create an account, agreeing to the terms |
-| POST | /api/auth/login | none | Start a session |
-| POST | /api/auth/logout | none | End the session |
+| POST | /api/auth/login | none | Sign in |
+| POST | /api/auth/refresh | none | Trade the refresh cookie for new access and refresh cookies |
+| POST | /api/auth/logout | none | Sign out |
 | POST | /api/auth/forgot-password | none | Email a password reset link |
 | POST | /api/auth/reset-password | none | Set a new password using a token |
-| PATCH | /api/auth/password | session | Change the logged-in user's password |
+| PATCH | /api/auth/password | signed in | Change the logged-in user's password |
 | GET | /api/oauth2/authorization/google | none | Start Google sign-in (browser navigation) |
-| GET | /api/users/me | session | Get the logged-in user |
-| PUT | /api/users/me | session | Update the logged-in user's name |
-| DELETE | /api/users/me | session | Delete the logged-in user's account |
-| POST | /api/users/me/accept-terms | session | Agree to the terms after signing up with Google |
-| GET | /api/profile | session | Get the logged-in user's job preferences |
-| PUT | /api/profile | session | Save the logged-in user's job preferences |
+| GET | /api/users/me | signed in | Get the logged-in user |
+| PUT | /api/users/me | signed in | Update the logged-in user's name |
+| DELETE | /api/users/me | signed in | Delete the logged-in user's account |
+| POST | /api/users/me/accept-terms | signed in | Agree to the terms after signing up with Google |
+| GET | /api/profile | signed in | Get the logged-in user's job preferences |
+| PUT | /api/profile | signed in | Save the logged-in user's job preferences |
 | GET | /api/jobs | none | Search and filter job postings |
 | GET | /api/jobs/filters | none | List the values available to filter on |
 | GET | /api/jobs/{postingId} | none | Get one job posting in full |
-| GET | /api/jobs/top-matches | session | Rank jobs against the user's profile |
-| GET | /api/saved-jobs | session | List the user's saved jobs |
-| POST | /api/saved-jobs | session | Save a job |
-| PATCH | /api/saved-jobs/{postingId} | session | Move a saved job to another state |
-| DELETE | /api/saved-jobs/{postingId} | session | Unsave a job |
-| GET | /api/saved-jobs/stats | session | Count saved jobs per state |
+| GET | /api/jobs/top-matches | signed in | Rank jobs against the user's profile |
+| GET | /api/saved-jobs | signed in | List the user's saved jobs |
+| POST | /api/saved-jobs | signed in | Save a job |
+| PATCH | /api/saved-jobs/{postingId} | signed in | Move a saved job to another state |
+| DELETE | /api/saved-jobs/{postingId} | signed in | Unsave a job |
+| GET | /api/saved-jobs/stats | signed in | Count saved jobs per state |
 
-Everything the user can act on is **self-service**: the account is resolved from the session and
+Everything the user can act on is **self-service**: the account is resolved from the access token and
 never from a path or body parameter, so no request can name someone else's row. That is why there is
 no `/api/users/{id}` — see [section 12](#12-not-in-the-api).
 
@@ -149,7 +150,7 @@ no `/api/users/{id}` — see [section 12](#12-not-in-the-api).
 
 # 3. Authentication
 
-> How sessions, the Google link flow and the password lifecycle actually work is in
+> How the tokens, the Google link flow and the password lifecycle actually work is in
 > [`auth.md`](auth.md). What follows is the contract.
 
 ### POST /api/auth/register
@@ -166,7 +167,7 @@ Create an account, agreeing to the terms
 | Returns | 201 · 400 validation · 409 email already registered |
 
 ### POST /api/auth/login
-Start a session
+Sign in
 
 | Endpoint | /api/auth/login |
 | --- | --- |
@@ -175,13 +176,13 @@ Start a session
 | Request body | `{ "email": "string", "password": "string" }` |
 | Response body | `{ "email": "string", "name": "string", "termsAcceptedAt": "date-time or null" }` |
 | Validations | Both fields required, email well-formed. A wrong email and a wrong password give the same 401, so the response cannot be used to discover which addresses are registered. Google-only accounts have no password hash and always fail here. |
-| Behaviour | On success the session id is regenerated (`changeSessionId`) before the security context is stored, so a cookie captured before login is useless after it. A Google identity parked by a refused sign-in is claimed here and linked — see the Google section below. |
-| Returns | 200 + `JSESSIONID` cookie · 400 validation · 401 invalid credentials |
+| Behaviour | On success an access token and a refresh token are issued as cookies; nothing is stored in a session. A Google identity parked by a refused sign-in is claimed here and linked — see the Google section below. |
+| Returns | 200 + `access_token` and `refresh_token` cookies · 400 validation · 401 invalid credentials |
 
 A null `termsAcceptedAt` means the user has never agreed; the frontend sends them to `/accept-terms`.
 
 ### POST /api/auth/logout
-End the session
+Sign out
 
 | Endpoint | /api/auth/logout |
 | --- | --- |
@@ -189,8 +190,20 @@ End the session
 | Auth | none |
 | Request body | none |
 | Response body | `{ "message": "Logged out successfully" }` |
-| Behaviour | Handled by the security filter chain's logout handler, not by a controller, so it does **not** appear in the generated OpenAPI document. Invalidates the session and deletes `JSESSIONID`. |
+| Behaviour | Handled by the security filter chain's logout handler, not by a controller, so it does **not** appear in the generated OpenAPI document. Revokes the refresh token the browser sent and deletes both cookies. The access token stays valid until it expires, at most 15 minutes. |
 | Returns | 200 |
+
+### POST /api/auth/refresh
+Trade the refresh cookie for new access and refresh cookies
+
+| Endpoint | /api/auth/refresh |
+| --- | --- |
+| Method | POST |
+| Auth | none — it is the expired access token this replaces |
+| Request body | none; the `refresh_token` cookie |
+| Response body | none |
+| Behaviour | Spends the refresh token (revoked in the same statement that finds it, so two requests cannot both use one) and sets both cookies anew. The frontend calls it once when an API call answers 401, then retries that call once. |
+| Returns | 200 + both cookies · 401 no live refresh token, with both cookies deleted |
 
 ### POST /api/auth/forgot-password
 Email a password reset link
@@ -224,12 +237,12 @@ Change the password of the logged-in user
 | Endpoint | /api/auth/password |
 | --- | --- |
 | Method | PATCH |
-| Auth | session — the one route under `/api/auth/**` that is not public |
+| Auth | signed in — the one route under `/api/auth/**` that is not public |
 | Request body | `{ "currentPassword": "string", "newPassword": "string" }` |
 | Response body | none |
 | Validations | Both required, new password at least 6 characters, current password must match the stored hash. Google-only accounts are rejected: there is no password to verify. |
-| Behaviour | The session is re-established with a new id afterwards, so another session holding the old cookie is dropped. |
-| Returns | 200 · 400 wrong current password or Google-only account · 401 no session |
+| Behaviour | Every refresh token the user holds is revoked and the caller gets a new pair of cookies, so another device is signed out once its access token expires, within 15 minutes. |
+| Returns | 200 · 400 wrong current password or Google-only account · 401 not signed in |
 
 ### GET /api/oauth2/authorization/google
 Start Google sign-in
@@ -240,7 +253,7 @@ Start Google sign-in
 | Auth | none |
 | Response | a redirect, never JSON |
 | Registered when | `GOOGLE_CLIENT_ID` is set. Without it the route does not exist and the app logs "Google sign-in disabled" at startup. |
-| Behaviour | Both URIs sit under `/api` so the Next.js proxy forwards them and `JSESSIONID` stays on one origin; Google returns to `/api/login/oauth2/code/google`. A Google account whose email is not verified is rejected in the `OidcUserService`, before any session is authenticated — an unverified address could otherwise claim an account by email match. |
+| Behaviour | Both URIs sit under `/api` so the Next.js proxy forwards them and the cookies stay on one origin; Google returns to `/api/login/oauth2/code/google`. A Google account whose email is not verified is rejected in the `OidcUserService`, before anyone is signed in — an unverified address could otherwise claim an account by email match. |
 | Returns | 302 to the frontend, per the table below |
 
 | Outcome | Redirect |
@@ -264,44 +277,44 @@ password login, which is the proof that was missing.
 | Endpoint | /api/users/me |
 | --- | --- |
 | Method | GET |
-| Auth | session |
+| Auth | signed in |
 | Response body | `{ "id", "email", "name", "termsAcceptedAt", "createdAt", "oauthProvider", "oauthProviderId", "passwordUpdatedAt" }` |
-| Validations | The account is resolved from the session, so a caller can only ever read their own. |
+| Validations | The account is resolved from the access token, so a caller can only ever read their own. |
 | Notes | Everything past `name` exists for the data export rather than for the UI: `createdAt`, which Google account is linked (`oauthProviderId`, where `oauthProvider` only says that one is), and `passwordUpdatedAt` — null for Google-only accounts, and for a fresh account the moment of registration rather than a later change. The password hash is never returned. |
-| Returns | 200 · 401 no session · 404 the session points at an account that no longer exists |
+| Returns | 200 · 401 not signed in · 404 the token belongs to an account that no longer exists |
 
 ### PUT /api/users/me
 
 | Endpoint | /api/users/me |
 | --- | --- |
 | Method | PUT |
-| Auth | session |
+| Auth | signed in |
 | Request body | `{ "name": "string", "email": "string" }` |
 | Response body | same as `GET /api/users/me` |
-| Validations | Email is required, well-formed and 3–100 characters — and is then **ignored**. The address is the login identity: the session principal, the reset lookup and the unique index all key on it, so changing it needs a verification flow that does not exist yet. |
+| Validations | Email is required, well-formed and 3–100 characters — and is then **ignored**. The address is the login identity: the principal, the reset lookup and the unique index all key on it, so changing it needs a verification flow that does not exist yet. |
 | Behaviour | Only `name` is applied, and a null name leaves the existing one (unlike `PUT /api/profile`, which clears what is left out). `termsAcceptedAt`, `createdAt` and the OAuth columns are carried through untouched, so an edit can neither erase nor forge an agreement. |
-| Returns | 200 · 400 invalid body · 401 no session · 404 account gone |
+| Returns | 200 · 400 invalid body · 401 not signed in · 404 account gone |
 
 ### DELETE /api/users/me
 
 | Endpoint | /api/users/me |
 | --- | --- |
 | Method | DELETE |
-| Auth | session |
+| Auth | signed in |
 | Response body | none |
-| Behaviour | Every foreign key onto `users` cascades, so credentials, profile, saved jobs and outstanding reset tokens go with the account. The session is invalidated and `JSESSIONID` cleared in the same request — otherwise the session would outlive the row and `/me` would answer 404 instead of 401. Cached match scores are keyed on the skill set, not the user, so there is nothing personal left behind. This is the GDPR Art. 17 erasure path. |
-| Returns | 204 · 401 no session · 404 account gone |
+| Behaviour | Every foreign key onto `users` cascades, so credentials, profile, saved jobs, outstanding reset tokens and refresh tokens go with the account. Both cookies are deleted in the same request — otherwise the browser would keep sending a token for a row that is gone and `/me` would answer 404 instead of 401. Cached match scores are keyed on the skill set, not the user, so there is nothing personal left behind. This is the GDPR Art. 17 erasure path. |
+| Returns | 204 · 401 not signed in · 404 account gone |
 
 ### POST /api/users/me/accept-terms
 
 | Endpoint | /api/users/me/accept-terms |
 | --- | --- |
 | Method | POST |
-| Auth | session |
+| Auth | signed in |
 | Request body | none — being logged in and calling it is the agreement |
 | Response body | same as `GET /api/users/me` |
 | Behaviour | Registration already stamps `terms_accepted_at`, so this exists for Google sign-ups, which never see the checkbox. The timestamp is only set while it is still null, so calling it twice keeps the first one: an agreement cannot be moved forward. |
-| Returns | 200 · 401 no session · 404 account gone |
+| Returns | 200 · 401 not signed in · 404 account gone |
 
 ---
 
@@ -314,23 +327,23 @@ The profile is what matching runs on. `skills` is the field that matters; the re
 | Endpoint | /api/profile |
 | --- | --- |
 | Method | GET |
-| Auth | session |
+| Auth | signed in |
 | Response body | `{ "userId", "skills": ["string"], "category", "preferredCity", "workMode", "experienceLevel", "employmentType", "salaryPreference" }` |
 | Behaviour | An account with no row in `user_profiles` gets every preference null and `skills: []` — **not a 404**. A new user has to be able to open the profile screen, and the data export must not fail on someone who never filled the form in. `skills` is never null, so the caller renders it without a check. Skills come back in the spelling they were saved in. |
-| Returns | 200 · 401 no session · 404 account gone |
+| Returns | 200 · 401 not signed in · 404 account gone |
 
 ### PUT /api/profile
 
 | Endpoint | /api/profile |
 | --- | --- |
 | Method | PUT |
-| Auth | session |
+| Auth | signed in |
 | Request body | `{ "skills": ["string"], "category", "preferredCity", "workMode", "experienceLevel", "employmentType", "salaryPreference" }` |
 | Response body | same as `GET /api/profile`, as stored |
 | Validations | 5–20 skills, each at most 100 characters. Text preferences at most 255 characters, matching their `varchar(255)` columns, so an over-long value is a 400 naming the field rather than a 500 from Postgres. `salaryPreference` must be non-negative with at most 8 digits and 2 decimals, matching `numeric(10,2)`. |
 | Behaviour | **A PUT replaces the whole profile**: an optional field left out is cleared, which is the only way a user can empty something they filled in before. Skills are the exception — they are required, so leaving them out is a 400. A blank or whitespace-only value is stored as null, so "cleared" and "never filled in" stay one state. Blank skills are dropped, and skills that canonicalise the same way collapse to one (`React`, `react`, ` REACT ` are one skill), but **the spelling that was sent is what is stored and shown back**. The floor is then re-checked on the normalised list, so five entries that collapse to two are a 400 rather than a 200 the matcher would refuse to rank. The first save creates the row; there is no separate POST. |
 | Canonical form | Lowercase, with hyphens and runs of whitespace collapsed to a single space — the mart holds `machine-learning` and `machine learning` as different skills. Note the matcher canonicalises differently: see [section 7](#7-matching). |
-| Returns | 200 · 400 invalid body, or fewer than 5 skills after normalising · 401 no session · 404 account gone |
+| Returns | 200 · 400 invalid body, or fewer than 5 skills after normalising · 401 not signed in · 404 account gone |
 
 The three columns `V2` created that no form field feeds — `preferred_role`, `preferred_country`,
 `education_level` — are left in place, neither read nor written.
@@ -395,10 +408,10 @@ Rank jobs against the logged-in user's profile
 | Endpoint | /api/jobs/top-matches |
 | --- | --- |
 | Method | GET |
-| Auth | session |
+| Auth | signed in |
 | Query | none — no `limit`, the answer is at most 25 rows |
 | Response body | An array of `{ postingId, title, company, location, category, postedDate, matchedSkills, matchedCount, ofSkills, jobSkillCount, matchScore, matchPercent, label, score, reason, aiScored }`, best first |
-| Returns | 200 · 401 no session · 422 no profile, or fewer than 5 skills on it |
+| Returns | 200 · 401 not signed in · 422 no profile, or fewer than 5 skills on it |
 
 **Two steps, and the split is the design.**
 
@@ -461,60 +474,63 @@ saved state — are in [`saving-tracking.md`](saving-tracking.md).
 | Endpoint | /api/saved-jobs |
 | --- | --- |
 | Method | POST |
-| Auth | session |
+| Auth | signed in |
 | Request body | `{ "postingId": "string" }` |
 | Response body | none |
 | Behaviour | Inserts with state `SAVED`. The posting id is not checked against the mart: an id that is not published yet, or not any more, is still the user's to keep. |
-| Returns | 201 · 400 blank `postingId` · 401 no session · 409 already saved |
+| Returns | 201 · 400 blank `postingId` · 401 not signed in · 409 already saved |
 
 ### GET /api/saved-jobs
 
 | Endpoint | /api/saved-jobs |
 | --- | --- |
 | Method | GET |
-| Auth | session |
+| Auth | signed in |
 | Response body | An array of `{ postingId, jobState, title, companyName, location, workMode, isRemote, skills, employmentType, postedDate, source, category, freshnessClass, ageDays }` |
 | Behaviour | A `LEFT JOIN` onto the mart, on purpose. There is no foreign key across the schema boundary, so a posting the next publish drops leaves a row whose job fields are all null while `postingId` and `jobState` stand. Render or skip that case deliberately — an inner join would silently delete rows from the user's own list. `location` here is the mart's raw location text, not the resolved city list that `/api/jobs` builds. |
-| Returns | 200 · 401 no session |
+| Returns | 200 · 401 not signed in |
 
 ### PATCH /api/saved-jobs/{postingId}
 
 | Endpoint | /api/saved-jobs/{postingId} |
 | --- | --- |
 | Method | PATCH |
-| Auth | session |
+| Auth | signed in |
 | Request body | `{ "newState": "SAVED \| APPLIED \| REJECTED \| ACCEPTED \| DECLINED" }` |
 | Response body | none |
 | Behaviour | Any state can move to any other: the `job_state` enum constrains the values, not the transitions, and nothing in the backend adds a flow on top. An unknown value is a 400 from JSON binding. |
-| Returns | 200 · 400 missing or unknown state · 401 no session · 404 the user has not saved this posting |
+| Returns | 200 · 400 missing or unknown state · 401 not signed in · 404 the user has not saved this posting |
 
 ### DELETE /api/saved-jobs/{postingId}
 
 | Endpoint | /api/saved-jobs/{postingId} |
 | --- | --- |
 | Method | DELETE |
-| Auth | session |
-| Returns | 204 · 401 no session · 404 the user has not saved this posting |
+| Auth | signed in |
+| Returns | 204 · 401 not signed in · 404 the user has not saved this posting |
 
 ### GET /api/saved-jobs/stats
 
 | Endpoint | /api/saved-jobs/stats |
 | --- | --- |
 | Method | GET |
-| Auth | session |
+| Auth | signed in |
 | Response body | `{ "APPLIED": 3, "SAVED": 7 }` |
 | Behaviour | A `GROUP BY` over the user's rows, so **a state with no rows is absent from the map rather than zero**. Callers must default a missing key to 0. Reads only `saved_jobs`, so it works against an empty mart. |
-| Returns | 200 · 401 no session |
+| Returns | 200 · 401 not signed in |
 
 ---
 
-# 9. Sessions and access rules
+# 9. Tokens and access rules
 
-A session cookie, not a token. `POST /api/auth/login` or a Google sign-in sets `JSESSIONID`; every
-later request is authenticated by sending it back.
+Since Day 13, two cookies and no session. `POST /api/auth/login`, a password change or a Google
+sign-in sets `access_token` (an RS256 JWT, 15 minutes, `Path=/`) and `refresh_token` (opaque, 30
+days, `Path=/api/auth`); every later request is authenticated by the access token, verified in the
+backend. `POST /api/auth/refresh` trades the second for a new pair.
 
-The cookie is `HttpOnly` and `SameSite=Lax`, and `Secure` in production (`SESSION_COOKIE_SECURE`).
-JavaScript cannot read it, so browser calls have to opt in to sending it:
+Both cookies are `HttpOnly` and `SameSite=Lax`; neither is `Secure` yet (see
+[`auth.md`](auth.md#10-known-limitations)). JavaScript cannot read them, so browser calls have to
+opt in to sending them:
 
 ```js
 fetch("/api/users/me", { credentials: "include" })
@@ -525,7 +541,7 @@ The filter chain, in order:
 | Rule | Effect |
 | --- | --- |
 | `PATCH /api/auth/password` | authenticated — listed first, or the next rule would make it public |
-| `/api/auth/**` | public |
+| `/api/auth/**` | public, refresh included |
 | `/api/docs/**`, `/error` | public |
 | `/api/oauth2/**`, `/api/login/oauth2/**` | public |
 | `GET /api/jobs/top-matches` | authenticated — listed before the public job routes |
@@ -537,8 +553,8 @@ proxy. The unauthenticated entry point is a plain `401`, not a redirect — with
 `oauth2Login` would redirect an API call to Google, a `fetch` would follow it cross-origin, and the
 caller would see a network error instead of "not logged in".
 
-The session id is regenerated on login and on password change, so a cookie captured before either is
-useless afterwards.
+An expired or tampered access token counts as no token: a public route answers as it does for anyone,
+a protected one answers 401. A password change or reset revokes every refresh token the user holds.
 
 ---
 
@@ -571,8 +587,8 @@ show.
 | Status | When |
 | --- | --- |
 | 400 | Validation failed; fewer than 5 skills after normalising; invalid or expired reset token; wrong current password; a Google-only account asked to change or reset a password |
-| 401 | No session, or wrong email/password on login |
-| 404 | No such job posting; a saved job the user does not have; a session pointing at a deleted account |
+| 401 | Not signed in (no access token, or an expired or tampered one), a spent refresh token, or wrong email/password on login |
+| 404 | No such job posting; a saved job the user does not have; an access token for a deleted account |
 | 409 | Email already registered; job already saved |
 | 422 | `top-matches` with no profile, or fewer than 5 skills on it |
 
@@ -609,7 +625,7 @@ it changes with a deploy, not with a request. What the backend contributes is th
 agreement — `terms_accepted_at`, written at registration or by `accept-terms`.
 
 **No data-export endpoint.** The GDPR Art. 15 export is assembled in the browser from three calls,
-each sending the session cookie:
+each sending the access-token cookie:
 
 | Call | Section of the export |
 | --- | --- |
