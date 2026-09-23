@@ -17,7 +17,7 @@ With the default `admin` / `password` credentials. Do not use those credentials 
 docker run --name hyf-postgres -e POSTGRES_DB=project_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18.4-alpine
 ```
 
-> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates the `project_db` database with an `app` and an `analytics` schema and one least-privilege role for each. Then run the app with `DB_SCHEMA=app`, `DB_USER=app_user` and the password the script prints.
+> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates the `project_db` database with an `app` and an `analytics` schema, a schema per backend module (`identity`, `applications`, `matching`), and one least-privilege role for each, plus a read-only `jobs_user`. Then run the app with `DB_SCHEMA=app`, `DB_USER=app_user` and the password the script prints.
 
 ### 2. Set up configuration
 

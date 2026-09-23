@@ -8,6 +8,8 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The one Postgres container the whole test run shares.
@@ -19,13 +21,24 @@ import java.sql.Statement;
  * never stopped; Testcontainers' Ryuk sidecar removes it when the JVM exits.
  *
  * <p>The mart schema is created here, immediately after start and before Spring boots, because
- * the application queries {@code analytics.fct_postings} and Flyway does not create it.
+ * the application queries {@code analytics.fct_postings} and Flyway does not create it. So are
+ * the module roles and their schemas, which production gets from {@code scripts/db-setup.py}
+ * and compose from {@code scripts/db-init/}: a precondition of the migrations, not their work.
  */
 public final class PostgresContainer {
 
     // Same image tag as docker-compose.yml, so tests and local dev cannot disagree on
     // Postgres behaviour.
     private static final String IMAGE = "postgres:18.4-alpine";
+
+    /** Each module's schema, owned by a role of the same name plus {@code _user}. */
+    public static final List<String> MODULE_SCHEMAS = List.of("identity", "applications", "matching");
+
+    /** Every schema a module's tables can be in, in the order unqualified names resolve. */
+    public static final List<String> TABLE_SCHEMAS = List.of("identity", "applications", "matching", "app");
+
+    // The one password every module role has here. Test-only; compose and production set their own.
+    private static final String ROLE_PASSWORD = "password";
 
     private static final PostgreSQLContainer CONTAINER;
     private static final DataSource DATA_SOURCE;
@@ -46,6 +59,7 @@ public final class PostgresContainer {
         // extension's view inside the schema Flyway owns.
         execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA public");
         execute(SqlScripts.read("fixtures/analytics-schema.sql"));
+        createModuleRoles();
     }
 
     private PostgresContainer() {
@@ -84,10 +98,43 @@ public final class PostgresContainer {
         }
     }
 
+    /**
+     * The module roles, and a schema owned by each: identity_user owns identity, and so on.
+     * jobs_user owns nothing; it only ever reads. Every other role may use a schema but not
+     * create in it, the rule {@code db-setup.py} applies. Grants on the tables themselves come
+     * with the migrations that move the tables in, since grants do not follow a moved table.
+     */
+    private static void createModuleRoles() {
+        List<String> statements = new ArrayList<>();
+        for (String schema : MODULE_SCHEMAS) {
+            statements.add("CREATE ROLE " + schema + "_user LOGIN PASSWORD '" + ROLE_PASSWORD + "'");
+        }
+        statements.add("CREATE ROLE jobs_user LOGIN PASSWORD '" + ROLE_PASSWORD + "'");
+        for (String schema : MODULE_SCHEMAS) {
+            statements.add("CREATE SCHEMA " + schema + " AUTHORIZATION " + schema + "_user");
+            statements.add("GRANT USAGE ON SCHEMA " + schema + " TO " + othersThan(schema));
+        }
+        execute(String.join(";\n", statements));
+    }
+
+    private static String othersThan(String schema) {
+        List<String> roles = new ArrayList<>();
+        for (String other : MODULE_SCHEMAS) {
+            if (!other.equals(schema)) {
+                roles.add(other + "_user");
+            }
+        }
+        roles.add("jobs_user");
+        return String.join(", ", roles);
+    }
+
+    // The harness looks in every module schema, so a fixture or an assertion that names a table
+    // unqualified finds it wherever its module keeps it, before Day 11's moves and after.
     private static DataSource buildDataSource() {
         var dataSource = new SimpleDriverDataSource();
         dataSource.setDriverClass(org.postgresql.Driver.class);
-        dataSource.setUrl(jdbcUrl());
+        String url = CONTAINER.getJdbcUrl();
+        dataSource.setUrl(url + (url.contains("?") ? "&" : "?") + "currentSchema=" + String.join(",", TABLE_SCHEMAS));
         dataSource.setUsername(CONTAINER.getUsername());
         dataSource.setPassword(CONTAINER.getPassword());
         return dataSource;
