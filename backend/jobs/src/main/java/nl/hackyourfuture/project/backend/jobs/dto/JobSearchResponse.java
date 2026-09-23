@@ -21,4 +21,10 @@ public record JobSearchResponse(
         String freshnessClass,
         Integer ageDays,
         int savedCount
-) {}
+) {
+
+    public JobSearchResponse withSavedCount(int count) {
+        return new JobSearchResponse(postingId, title, companyName, location, workMode, isRemote, skills,
+                employmentType, postedDate, source, category, freshnessClass, ageDays, count);
+    }
+}

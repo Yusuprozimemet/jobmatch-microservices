@@ -30,4 +30,12 @@ public record JobDetailResponse(
         String sourceUrl,
         String status,
         int savedCount
-) {}
+) {
+
+    public JobDetailResponse withSavedCount(int count) {
+        return new JobDetailResponse(postingId, title, companyName, location, workMode, isRemote, skills,
+                employmentType, postedDate, source, category, freshnessClass, ageDays, description,
+                experienceLevel, educationLevel, salaryMin, salaryMax, salaryCurrency, salaryPeriod,
+                sourceUrl, status, count);
+    }
+}
