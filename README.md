@@ -412,6 +412,24 @@ tests green.
 - *Estimated 3 pull requests, took 6.* Two came from the spec change (a tests-first track, and
   data sources as a track of their own), one from the 400-line gate splitting a track.
 
+**Day 12 — JWT issuance and JWKS.** `identity` can mint RS256 access tokens, publish the key
+they verify with at `/.well-known/jwks.json`, and issue, redeem and revoke refresh tokens stored
+only as their hash. Nothing uses them yet: login is untouched until Day 13. 255 tests green.
+
+- **The first day audited by agents with a fresh context** (#73). Before any work, the
+  plan-auditor and the spec-auditor found that neither of the spec's checks could fail, that
+  its key could come from nowhere without breaking the clean compose start, that identity's
+  first migration would break two Day 1 harness tests, and that a missing `jti` would have made
+  a Day 13 test flaky. All of it was fixed in the spec before the work (#74).
+- **Breaking the code on purpose found one more:** the check that other modules cannot read the
+  token hashes passed with the migration's revoke removed, as long as the test database lacked
+  the default privileges production has. The test now asserts that they are there.
+- **Two Day 1 harness tests changed, by decision before the work:** they pinned identity's
+  table list and migration history, which the day's first migration grows. `contract/` was not
+  touched.
+- *Estimated 3 pull requests, took 3.* The spec change raised it to 4 for a split of the key
+  track under the 400-line gate, which was not needed.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -449,10 +467,10 @@ the test the plan was built around, now with the database roles in place under i
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again. Day 11 split the database by module: zero again.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 5 specs that could not be met, 2 spec verify commands that ran no tests, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 1 protected behaviour with no test behind it, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 1 database object a spec missed, 1 setting that did nothing, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 10 of 11 days worked; Days 5, 8, 9, 10 and 11 needed two, Day 8's first made on Day 3 while writing its gate, Days 10's and 11's on Day 9) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again. Day 11 split the database by module: zero again. Day 12 added token issuance: zero again, and 73 lines added to `support/` for a signing key and production's default privileges.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 6 specs that could not be met, 3 spec verify commands that ran no tests, 1 spec check that could not fail, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 1 protected behaviour with no test behind it, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 3 database objects a spec missed (a moved enum, a cascade, a revoke), 1 missing claim that would have made a test flaky, 1 migration that broke two harness tests by construction, 1 setting that did nothing, 2 fixtures unlike production, 1 CI build that re-downloaded the world) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 11 of 12 days worked; Days 5, 8, 9, 10, 11 and 12 needed two, Day 8's first made on Day 3 while writing its gate, those of Days 10, 11 and 12 on Day 9) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split four times, the fourth Day 11's Track D) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
