@@ -56,6 +56,8 @@ public abstract class IntegrationTest {
         registry.add("app.datasource.jobs.url", () -> PostgresContainer.jdbcUrl("analytics"));
         registry.add("app.datasource.jobs.username", () -> "jobs_user");
         registry.add("app.datasource.jobs.password", PostgresContainer::rolePassword);
+        // The application does not start without a signing key (Day 12), and none is committed.
+        registry.add("app.jwt.private-key-file", () -> TestSigningKey.path().toString());
     }
 
     @BeforeEach
