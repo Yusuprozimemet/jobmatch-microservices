@@ -5,16 +5,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import nl.hackyourfuture.project.backend.matching.dto.JobMatchResponse;
-import org.springframework.http.HttpStatus;
+import nl.hackyourfuture.project.backend.shared.web.CurrentUserId;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 
 @RestController
@@ -38,26 +37,9 @@ public class JobMatchController {
     @ApiResponse(responseCode = "200", description = "Up to 25 matching jobs, best first")
     @ApiResponse(responseCode = "401", description = "Not logged in")
     @ApiResponse(responseCode = "422", description = "No profile, or fewer than 5 skills on it")
-    public ResponseEntity<List<JobMatchResponse>> getTopMatches(
-            @AuthenticationPrincipal Object principal
-    ) {
-        Optional<String> email = resolveEmail(principal);
-        if (email.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        return ResponseEntity.ok(jobMatchService.getTopMatches(email.get()));
-    }
-
-    private static Optional<String> resolveEmail(Object principal) {
-        if (principal instanceof String principalEmail) {
-            if ("anonymousUser".equals(principalEmail) || principalEmail.isBlank()) {
-                return Optional.empty();
-            }
-            return Optional.of(principalEmail);
-        }
-        if (principal instanceof UserDetails userDetails) {
-            return Optional.of(userDetails.getUsername());
-        }
-        return Optional.empty();
+    public ResponseEntity<List<JobMatchResponse>> getTopMatches(@CurrentUserId Optional<UUID> userId) {
+        // No account is answered like no profile: there is nothing to rank against.
+        UUID id = userId.orElseThrow(JobMatchService::noProfile);
+        return ResponseEntity.ok(jobMatchService.getTopMatches(id));
     }
 }

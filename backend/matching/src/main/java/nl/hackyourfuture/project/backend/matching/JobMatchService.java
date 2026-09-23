@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import nl.hackyourfuture.project.backend.matching.dto.JobMatchResponse;
 import nl.hackyourfuture.project.backend.shared.identity.ProfileDirectory;
 import nl.hackyourfuture.project.backend.shared.identity.ProfileSnapshot;
-import nl.hackyourfuture.project.backend.shared.identity.UserDirectory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,6 +19,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 // Ranks open postings against the user's profile in two steps:
 // 1. SQL narrows the mart down to a shortlist by city and exact skill overlap.
@@ -42,11 +42,10 @@ public class JobMatchService {
     private final PostingShortlist postingShortlist;
     private final JobMatchScoreRepository jobMatchScoreRepository;
     private final ProfileDirectory profileDirectory;
-    private final UserDirectory userDirectory;
     private final MatchScorer matchScorer;
 
-    public List<JobMatchResponse> getTopMatches(String email) {
-        ProfileSnapshot profile = loadProfile(email);
+    public List<JobMatchResponse> getTopMatches(UUID userId) {
+        ProfileSnapshot profile = profileDirectory.forUser(userId).orElseThrow(JobMatchService::noProfile);
         List<String> skills = canonicalise(profile.skills());
 
         if (skills.size() < MINIMUM_PROFILE_SKILLS) {
@@ -98,12 +97,10 @@ public class JobMatchService {
     }
 
     // No account and no profile are the same answer to the caller: there is nothing to rank
-    // against. Asking identity for both keeps the users and user_profiles tables out of here.
-    private ProfileSnapshot loadProfile(String email) {
-        return userDirectory.findUserIdByEmail(email)
-                .flatMap(profileDirectory::forUser)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "Fill in your profile to see matching jobs."));
+    // against. The controller gives it for a session with no user, this class for no profile.
+    static ResponseStatusException noProfile() {
+        return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                "Fill in your profile to see matching jobs.");
     }
 
     // Just lowercase + trim. Doesn't collapse hyphens like ProfileService does - the mart's

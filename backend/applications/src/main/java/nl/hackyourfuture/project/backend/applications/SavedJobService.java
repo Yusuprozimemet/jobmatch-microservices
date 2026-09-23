@@ -2,7 +2,6 @@ package nl.hackyourfuture.project.backend.applications;
 
 import nl.hackyourfuture.project.backend.applications.dto.SavedJobResponse;
 import nl.hackyourfuture.project.backend.applications.SavedJobRepository.SavedRow;
-import nl.hackyourfuture.project.backend.shared.identity.UserDirectory;
 import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
 import nl.hackyourfuture.project.backend.shared.jobs.PostingLookup;
 import nl.hackyourfuture.project.backend.shared.jobs.PostingSummary;
@@ -26,27 +25,15 @@ public class SavedJobService {
             .thenComparing(SavedJobResponse::postingId);
 
     private final SavedJobRepository savedJobRepository;
-    private final UserDirectory userDirectory;
     private final PostingLookup postingLookup;
 
-    public SavedJobService(SavedJobRepository savedJobRepository, UserDirectory userDirectory,
-                           PostingLookup postingLookup) {
+    public SavedJobService(SavedJobRepository savedJobRepository, PostingLookup postingLookup) {
         this.savedJobRepository = savedJobRepository;
-        this.userDirectory = userDirectory;
         this.postingLookup = postingLookup;
     }
 
-    // Resolves user email to UUID or fails if not found. Asks identity rather than reading
-    // its table: this module no longer knows that users have a table at all.
-    private UUID getUserIdByEmail(String email) {
-        return userDirectory.findUserIdByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-    }
-
     // Save a new job for a user if not already saved
-    public void saveJobByEmail(String email, String postingId) {
-        UUID userId = getUserIdByEmail(email);
-
+    public void saveJob(UUID userId, String postingId) {
         if (savedJobRepository.isJobSaved(userId, postingId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is already saved");
         }
@@ -58,8 +45,7 @@ public class SavedJobService {
     // jobs, so the whole list is hydrated in one call and the page is cut here, never in SQL.
     // Totals therefore come from saved_jobs alone, whatever the mart has lost. A personal
     // tracker is tens of rows; revisit if a list is ever long enough to measure.
-    public PageResponse<SavedJobResponse> getSavedJobsByEmail(String email, int page, int size) {
-        UUID userId = getUserIdByEmail(email);
+    public PageResponse<SavedJobResponse> getSavedJobs(UUID userId, int page, int size) {
         List<SavedRow> rows = savedJobRepository.findSavedJobs(userId);
         Map<String, PostingSummary> postings = postingLookup.byIds(
                 rows.stream().map(SavedRow::postingId).toList());
@@ -85,20 +71,17 @@ public class SavedJobService {
     }
 
     // Update the state of a saved job
-    public boolean updateJobStateByEmail(String email, String postingId, JobState newState) {
-        UUID userId = getUserIdByEmail(email);
+    public boolean updateJobState(UUID userId, String postingId, JobState newState) {
         return savedJobRepository.updateJobState(userId, postingId, newState);
     }
 
     // Remove a saved job
-    public boolean removeSavedJobByEmail(String email, String postingId) {
-        UUID userId = getUserIdByEmail(email);
+    public boolean removeSavedJob(UUID userId, String postingId) {
         return savedJobRepository.removeSavedJob(userId, postingId);
     }
 
     // Get statistics of saved jobs grouped by state
-    public Map<JobState, Integer> getJobStatsByEmail(String email) {
-        UUID userId = getUserIdByEmail(email);
+    public Map<JobState, Integer> getJobStats(UUID userId) {
         return savedJobRepository.getJobStats(userId);
     }
 }
