@@ -8,15 +8,15 @@ import nl.hackyourfuture.project.backend.applications.dto.SaveJobRequest;
 import nl.hackyourfuture.project.backend.applications.dto.SavedJobResponse;
 import nl.hackyourfuture.project.backend.applications.dto.UpdateJobStateRequest;
 import nl.hackyourfuture.project.backend.shared.dto.PageResponse;
+import nl.hackyourfuture.project.backend.shared.web.CurrentUserId;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/saved-jobs")
@@ -34,12 +34,10 @@ public class SavedJobController {
     @Operation(summary = "Save a job posting")
     @ApiResponse(responseCode = "201", description = "Job successfully saved")
     public ResponseEntity<Void> saveJob(
-            @AuthenticationPrincipal Object principal,
+            @CurrentUserId Optional<UUID> userId,
             @Valid @RequestBody SaveJobRequest request
     ) {
-        String email = getCurrentUserEmail(principal)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not logged in"));
-        savedJobService.saveJobByEmail(email, request.postingId());
+        savedJobService.saveJob(requireUser(userId), request.postingId());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
@@ -49,13 +47,11 @@ public class SavedJobController {
     @ApiResponse(responseCode = "200", description = "Job state updated successfully")
     @ApiResponse(responseCode = "404", description = "Saved job not found")
     public ResponseEntity<Void> updateJobState(
-            @AuthenticationPrincipal Object principal,
+            @CurrentUserId Optional<UUID> userId,
             @PathVariable String postingId,
             @Valid @RequestBody UpdateJobStateRequest request
     ) {
-        String email = getCurrentUserEmail(principal)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not logged in"));
-        boolean updated = savedJobService.updateJobStateByEmail(email, postingId, request.newState());
+        boolean updated = savedJobService.updateJobState(requireUser(userId), postingId, request.newState());
         if (!updated) {
             return ResponseEntity.notFound().build();
         }
@@ -68,12 +64,10 @@ public class SavedJobController {
     @ApiResponse(responseCode = "204", description = "Saved job removed successfully")
     @ApiResponse(responseCode = "404", description = "Saved job not found")
     public ResponseEntity<Void> removeSavedJob(
-            @AuthenticationPrincipal Object principal,
+            @CurrentUserId Optional<UUID> userId,
             @PathVariable String postingId
     ) {
-        String email = getCurrentUserEmail(principal)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not logged in"));
-        boolean removed = savedJobService.removeSavedJobByEmail(email, postingId);
+        boolean removed = savedJobService.removeSavedJob(requireUser(userId), postingId);
         if (!removed) {
             return ResponseEntity.notFound().build();
         }
@@ -85,11 +79,9 @@ public class SavedJobController {
     @Operation(summary = "Get saved job statistics by state")
     @ApiResponse(responseCode = "200", description = "Statistics retrieved successfully")
     public ResponseEntity<Map<JobState, Integer>> getJobStats(
-            @AuthenticationPrincipal Object principal
+            @CurrentUserId Optional<UUID> userId
     ) {
-        String email = getCurrentUserEmail(principal)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not logged in"));
-        Map<JobState, Integer> stats = savedJobService.getJobStatsByEmail(email);
+        Map<JobState, Integer> stats = savedJobService.getJobStats(requireUser(userId));
         return ResponseEntity.ok(stats);
     }
 
@@ -98,7 +90,7 @@ public class SavedJobController {
     @Operation(summary = "List user's saved jobs")
     @ApiResponse(responseCode = "200", description = "Saved jobs retrieved successfully")
     public ResponseEntity<PageResponse<SavedJobResponse>> getSavedJobs(
-            @AuthenticationPrincipal Object principal,
+            @CurrentUserId Optional<UUID> userId,
             @RequestParam(defaultValue = "0") int page, // Default page index 0
             @RequestParam(defaultValue = "20") int size  // Default page size 20
     ) {
@@ -114,23 +106,12 @@ public class SavedJobController {
 
         // Cap maximum page size to prevent large database loads
         int cappedSize = Math.min(size, 100);
-        String email = getCurrentUserEmail(principal)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not logged in"));
-        PageResponse<SavedJobResponse> savedJobs = savedJobService.getSavedJobsByEmail(email, page, cappedSize);
+        PageResponse<SavedJobResponse> savedJobs = savedJobService.getSavedJobs(requireUser(userId), page, cappedSize);
         return ResponseEntity.ok(savedJobs);
     }
 
-    // Extracts the user email from Spring Security to identify the current user and retrieve their database ID.
-    private static Optional<String> getCurrentUserEmail(Object principal) {
-        if (principal instanceof String principalEmail) {
-            if ("anonymousUser".equals(principalEmail) || principalEmail.isBlank()) {
-                return Optional.empty();
-            }
-            return Optional.of(principalEmail);
-        }
-        if (principal instanceof UserDetails userDetails) {
-            return Optional.of(userDetails.getUsername());
-        }
-        return Optional.empty();
+    // A session whose account is gone: this module has always called that a missing user.
+    private static UUID requireUser(Optional<UUID> userId) {
+        return userId.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 }
