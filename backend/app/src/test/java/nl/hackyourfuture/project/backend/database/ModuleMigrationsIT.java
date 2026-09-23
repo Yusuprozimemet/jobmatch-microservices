@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.database;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
@@ -27,14 +28,15 @@ class ModuleMigrationsIT extends IntegrationTest {
                 .contains(module + "_user");
     }
 
+    // identity's history gained its first migration on Day 12, as the spec decided before the work.
     @ParameterizedTest
-    @ValueSource(strings = {"identity", "applications", "matching"})
-    void andItStartsAtTheBaseline(String module) {
+    @CsvSource({"identity, 0 BASELINE|1 SQL", "applications, 0 BASELINE", "matching, 0 BASELINE"})
+    void andItStartsAtTheBaseline(String module, String history) {
         assertThat(jdbc()
                 .sql("SELECT version || ' ' || type FROM " + module + ".flyway_schema_history ORDER BY installed_rank")
                 .query(String.class)
                 .list())
-                .containsExactly("0 BASELINE");
+                .containsExactly(history.split("\\|"));
     }
 
     @Test

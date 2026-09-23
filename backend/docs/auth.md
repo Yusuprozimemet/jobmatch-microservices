@@ -327,7 +327,7 @@ an agreement forward. `PUT /api/users/me` carries the column through untouched f
 # 8. Deleting the account
 
 `DELETE /api/users/me` removes the `users` row. Every table that points at it cascades:
-credentials, profile, saved jobs, outstanding reset tokens.
+credentials, profile, saved jobs, outstanding reset tokens, refresh tokens.
 
 `job_match_scores` has no foreign key to `users` on purpose — it is keyed on a hash of the skill set
 rather than on a person — so there is nothing user-identifying left behind after the cascade.
