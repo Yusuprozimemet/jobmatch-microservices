@@ -393,6 +393,24 @@ green.
   the class the day's grep checks is gone.
 - *Estimated 3 pull requests, took 4.* The fourth is the tests-first track the spec change added.
 
+**Day 11 — split the database by module.** Every table is in its module's schema, owned by its
+module's role, and each module connects as that role: a write into another module's tables is
+refused by Postgres. Each module has its own migrations and history. The end of Phase 1. 232
+tests green.
+
+- **The spec's plan could not have run.** It had each module's own migrations move its tables,
+  but only a table's owner can move it. Tried on a throwaway Postgres before any work, and the
+  moves now run as the owner and hand each table over.
+- **Account deletion still works under the strict roles,** because Postgres runs a cascade as
+  the owner of the table it deletes from. A test for it landed first; nothing had covered it.
+- **Four more things only running found:** an enum that does not move with its table, a
+  read-only pool setting that did nothing, an apostrophe that broke Flyway, and four default-sized
+  pools that ran the test run out of connections.
+- **One Day 1 test was rewritten, by decision:** it pinned every table to the old schema, the
+  layout the day existed to change. `contract/` was not touched.
+- *Estimated 3 pull requests, took 6.* Two came from the spec change (a tests-first track, and
+  data sources as a track of their own), one from the 400-line gate splitting a track.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -413,15 +431,28 @@ came from reading the system, checking a spec against it, or running the thing a
 hard evidence comes at Day 13, when the session-auth rewrite must pass Day 2's 49 tests
 unchanged.
 
+**Read at the end of Phase 1.** The modules are separated three ways now: at compile time (the
+Maven enforcer, Day 6), in the test suite (ArchUnit, Day 7), and in the database (one role and one
+schema each, Day 11). Across Days 6–11, which moved about seventy classes, removed three
+cross-module reads and split the database, no existing contract test was changed; `contract/`
+only gained tests.
+
+The shape of the findings changed after Day 9. Until then they came from reading a spec against
+the code. Since then a second source has found as much: **breaking the code on purpose.** A check
+has to be seen failing before it counts, and doing that found a gate that did not pin the order it
+claimed to (Day 9), statuses the spec protected with no test behind them (Day 10), and a setting
+that did nothing (Day 11). Still no finding has come from reviewing the agent's code. Day 13 is
+the test the plan was built around, now with the database roles in place under it.
+
 ## What is being measured
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 5 specs that could not be met, 2 spec verify commands that ran no tests, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 1 protected behaviour with no test behind it, 1 dead branch copied into four controllers, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 9 of 10 days worked; Days 5, 8, 9 and 10 needed two, Day 8's first made on Day 3 while writing its gate and Day 10's on Day 9) |
-| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split three times) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again. Day 11 split the database by module: zero again.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 5 specs that could not be met, 2 spec verify commands that ran no tests, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 1 protected behaviour with no test behind it, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 1 database object a spec missed, 1 setting that did nothing, 1 fixture unlike production, 1 CI build that re-downloaded the world) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 10 of 11 days worked; Days 5, 8, 9, 10 and 11 needed two, Day 8's first made on Day 3 while writing its gate, Days 10's and 11's on Day 9) |
+| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split four times, the fourth Day 11's Track D) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
 ## Running it
