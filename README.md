@@ -9,8 +9,9 @@ Every change is driven by a numbered day specification with acceptance criteria 
 any code exists. The implementer is [Claude Opus 5](https://www.anthropic.com/claude) running at
 high reasoning effort; the architecture, the specifications and every merge decision are mine.
 
-> **Status:** in progress — Phase 0, Day 2 of 37 complete. This is an open lab notebook, not a
-> finished system. Findings so far are in [Results to date](#results-to-date).
+> **Status:** in progress. The [migration dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/) shows the current day
+> and the next step; it is rebuilt from the repository after every merge. This is an open lab
+> notebook, not a finished system. Findings so far are in [Results to date](#results-to-date).
 
 ---
 

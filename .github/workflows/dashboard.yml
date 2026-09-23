@@ -1,0 +1,62 @@
+name: Dashboard
+
+# Rebuilds the migration dashboard after every merge to main and publishes it
+# to GitHub Pages, so anyone can see where the migration stands without an
+# account. The page is docs/dashboard/; scripts/spec-drift.py --build fills in
+# the data from git history and the pull request list.
+#
+# Pull requests do not trigger it: the dashboard reports main, and running on
+# pull_request_target to show open PRs would run in the base repository's
+# context for any fork. It shows open PRs as of the last merge.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: dashboard
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # every merge on main is a snapshot
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install numpy
+
+      - name: Measure and build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p site
+          python scripts/spec-drift.py --build site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Publish to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
