@@ -6,8 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Puts the database back to its starting state between tests: an empty {@code app} schema and
- * the baseline mart.
+ * Puts the database back to its starting state between tests: empty module schemas and the
+ * baseline mart.
  *
  * <p>Truncate rather than roll back a transaction. The tests drive the application over HTTP,
  * so the writes happen on the server's own connections and there is no test-side transaction
@@ -54,8 +54,9 @@ public final class TestDatabase {
         return JDBC.sql("""
                         SELECT quote_ident(schemaname) || '.' || quote_ident(tablename)
                         FROM pg_tables
-                        WHERE schemaname = 'app' AND tablename <> :flywayHistory
+                        WHERE schemaname IN (:schemas) AND tablename <> :flywayHistory
                         """)
+                .param("schemas", PostgresContainer.TABLE_SCHEMAS)
                 .param("flywayHistory", FLYWAY_HISTORY)
                 .query(String.class)
                 .list();

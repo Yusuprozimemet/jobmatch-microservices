@@ -7,6 +7,12 @@ login role per owner: 'app_user' owns 'app', 'analytics_user' owns 'analytics',
 schemas it owns and read-only access to the others, for both existing and future
 objects.
 
+Each backend module has a schema and a role too (Day 11): 'identity_user' owns
+'identity', 'applications_user' 'applications', 'matching_user' 'matching', and
+'jobs_user' owns nothing and only reads. 'app_user' still runs the migrations that
+move the tables out of 'app', so it is made a member of the three module roles:
+moving a table into a schema and handing it to that schema's role needs both.
+
 The third role is the reason there are two analytics schemas. Trainees write
 'analytics_dev' by hand while they build a mart; the scheduled pipeline writes
 'analytics', which the backend reads. Giving both schemas to one role would mean
@@ -55,8 +61,13 @@ APP_ROLE = "app_user"
 ANALYTICS_ROLE = "analytics_user"
 ANALYTICS_DEV_ROLE = "analytics_dev_user"
 
+# One schema and one role per backend module, the role named after the schema.
+MODULE_SCHEMAS = ("identity", "applications", "matching")
+MODULE_ROLES = tuple(f"{schema}_user" for schema in MODULE_SCHEMAS)
+# The jobs module reads the analytics mart and owns nothing.
+JOBS_ROLE = "jobs_user"
 
-ROLES = (APP_ROLE, ANALYTICS_ROLE, ANALYTICS_DEV_ROLE)
+ROLES = (APP_ROLE, ANALYTICS_ROLE, ANALYTICS_DEV_ROLE, *MODULE_ROLES, JOBS_ROLE)
 
 # Every schema, and the role that owns it. A role gets full access to the schemas
 # it owns and read-only access to all the others, so adding a schema here is the
@@ -65,6 +76,7 @@ SCHEMA_OWNERS = {
     APP_SCHEMA: APP_ROLE,
     ANALYTICS_SCHEMA: ANALYTICS_ROLE,
     ANALYTICS_DEV_SCHEMA: ANALYTICS_DEV_ROLE,
+    **dict(zip(MODULE_SCHEMAS, MODULE_ROLES)),
 }
 
 
@@ -304,8 +316,8 @@ def report(args: argparse.Namespace, passwords: dict[str, str | None]) -> None:
         read_only = [s for s in SCHEMA_OWNERS if s not in owned]
         print(f"  {role}")
         print(f"    password : {passwords[role] or unchanged}")
-        print(f"    access   : full on {', '.join(owned)} — "
-              f"read-only on {', '.join(read_only)}")
+        full = f"full on {', '.join(owned)} — " if owned else ""
+        print(f"    access   : {full}read-only on {', '.join(read_only)}")
 
 
 # --- Entry point -----------------------------------------------------------
@@ -325,6 +337,12 @@ def main() -> None:
         step("Creating roles: %s", ", ".join(roles))
         passwords = setup_roles(conn, roles)
         grant_role_membership(conn, roles, args.admin_user)
+        # app_user runs the migrations that move tables into the module schemas and hand them
+        # over (OWNER TO), which both need membership. Not a superuser, so always granted.
+        for role in MODULE_ROLES:
+            execute(conn, "GRANT {role} TO {member}",
+                    role=sql.Identifier(role), member=sql.Identifier(APP_ROLE))
+        done("'%s' is a member of %s", APP_ROLE, ", ".join(MODULE_ROLES))
         # A database-level grant, so it does not need the connection below.
         grant_connect(conn, NEW_DATABASE, roles)
 
