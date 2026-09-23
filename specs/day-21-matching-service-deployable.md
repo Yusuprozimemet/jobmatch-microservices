@@ -11,13 +11,14 @@ that serve job search.
 - `backend/matching` → `services/matching-service`: own pom, Dockerfile, CI, compose service.
 - Gateway routes `GET /api/jobs/top-matches` to `matching-service`.
 - It calls `job-service`'s shortlist endpoint using the Day 19 client.
-- `ProfileSkills` still resolves in-process via the shared database, for one more day.
+- `ProfileDirectory` still resolves in-process via the shared database, for one more day.
 - The LLM API key moves to this service alone. No other service gets it.
 - Dedicated thread pool and a hard request timeout below the gateway's.
 
 ## Out of scope
 - NoSQL — Days 22 and 23.
-- `ProfileSkills` over HTTP — Day 24.
+- `ProfileDirectory` over HTTP — Day 24. (Earlier drafts called it `ProfileSkills`; Day 10
+  kept the interface Day 07 built.)
 
 ## Tracks
 

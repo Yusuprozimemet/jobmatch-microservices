@@ -14,7 +14,13 @@ the database and is still called in-process by nothing — the gateway routes to
   **Decide today and write the decision down** — this choice repeats for every extraction.
 - Gateway routes `/api/jobs`, `/api/jobs/filters`, `/api/jobs/*` to `job-service`.
   `/api/jobs/top-matches` still goes to the monolith.
-- OTel agent, actuator, JWT validation — same setup as every other service.
+- Micrometer tracing with `spring-boot-starter-opentelemetry`, actuator, JWT validation —
+  same setup as every other service. Not the OTel Java agent; Day 05 removed it.
+- **`SavedJobCounts` needs an implementation on its first day out.** The only one is
+  `applications`' in-process `ApplicationsDirectory`, which stays in the monolith. So the
+  monolith exposes the counts (`POST /internal/saved-counts`) and `job-service` calls it —
+  today, not on Day 25 where the endpoint was first written. The alternative, `job-service`
+  reading `saved_jobs` again because the database is still shared, undoes Day 08.
 - Database unchanged: both containers still connect to the same Postgres.
 
 ## Out of scope
@@ -30,17 +36,20 @@ the database and is still called in-process by nothing — the gateway routes to
 | C | | `shared` distribution decision + implementation |
 
 ## Acceptance criteria
-- [ ] `docker compose ps` shows `job-service` running with no published port.
-- [ ] Day 03's job tests pass **unedited** against the gateway.
-- [ ] `job-service` has no published port; only the gateway reaches it.
+- [ ] `docker compose ps` shows `job-service` running with no published port; only the
+      gateway reaches it.
+- [ ] Day 03's job tests pass **unedited** against the gateway, `JobSavedCountIT` included.
 - [ ] A trace spans gateway → job-service.
-- [ ] The monolith no longer serves `/api/jobs`.
+- [ ] The monolith no longer serves `/api/jobs`: a request to it from inside the compose
+      network returns 404.
 
 ## Verify
 ```bash
 docker compose up -d --build
 curl -s localhost:8080/api/jobs | head -c 200
-docker compose logs backend | grep -c "GET /api/jobs" # expect 0
+# The backend logs no request lines, so grepping its logs for GET /api/jobs finds 0
+# whether or not it served one. Ask it directly instead:
+docker compose exec job-service curl -s -o /dev/null -w '%{http_code}' http://backend:8080/api/jobs   # 404
 ```
 
 ## Notes
@@ -48,3 +57,8 @@ docker compose logs backend | grep -c "GET /api/jobs" # expect 0
   stop and fix the process before attempting Day 21.
 - The `shared` decision is the one that compounds. Prefer duplication of small DTOs
   over a shared artifact that couples deployments.
+- **Corrected on Day 09 from a read of every remaining spec** — still provisional; this fixes
+  what is already known to be wrong, not the phase review.
+  Four things: the OTel agent; `SavedJobCounts` having no implementation once `job-service`
+  leaves the process (Day 25 was the first day that gave it one); a log grep that returns 0
+  whatever happens; and the same criterion written twice.

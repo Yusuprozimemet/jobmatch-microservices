@@ -11,7 +11,8 @@ rather than as users.
 - `POST /internal/postings/batch` — body: posting ids; returns the `PostingSummary` fields
   from Day 09. Caps the id count; rejects oversized requests.
 - `POST /internal/postings/shortlist` — body: city, skills, limit; returns the ranked
-  shortlist `JobMatchRepository` produces today. **The SQL stays in `job-service`.**
+  shortlist `PostingShortlist` produces. Day 09 moved that SQL into `jobs`, so it is already
+  in `job-service`; this puts HTTP in front of it.
 - Service tokens: `identity` issues a JWT with `aud: internal` and a service subject.
   Services validate against the same JWKS from Day 12 — no new mechanism.
 - `/internal/**` is rejected at the gateway, so it is never reachable from outside.

@@ -7,7 +7,10 @@
 Email leaves the request path entirely. `identity-service` never talks to SMTP again.
 
 ## In scope
-- `functions/mailer`: queue-triggered, consumes `user.registered` and password-reset events.
+- `functions/mailer`: queue-triggered, consumes password-reset events. **Not
+  `user.registered`:** registration sends no email today — `EmailService` has one method,
+  `sendPasswordResetEmail` — so a welcome email would be a new email type, which is out of
+  scope below.
 - Templates move out of `EmailService`; delete it from `identity-service` along with
   `spring-boot-starter-mail`.
 - Password reset becomes an event. **The token must still be single-use and expiring** —
@@ -29,7 +32,7 @@ Email leaves the request path entirely. `identity-service` never talks to SMTP a
 ## Acceptance criteria
 - [ ] Day 02's password-reset tests pass **unedited**.
 - [ ] `identity-service` has no mail dependency (check the pom).
-- [ ] Registration returns before any email is sent.
+- [ ] Requesting a password reset returns before the email is sent.
 - [ ] A duplicate event sends exactly one email.
 - [ ] With SMTP down, events retry and eventually deliver; nothing is lost.
 - [ ] Login latency is unchanged or better (measure it).
