@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import nl.hackyourfuture.project.backend.identity.PrincipalEmail;
+import nl.hackyourfuture.project.backend.identity.token.AuthCookies;
 import nl.hackyourfuture.project.backend.identity.user.dto.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -17,7 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.web.bind.annotation.*;
 
@@ -78,7 +78,7 @@ public class UserController {
     @DeleteMapping("/me")
     @Operation(summary = "Delete the current logged-in user",
             description = "Self-service only: the account is taken from the session, so a caller "
-                    + "cannot delete anyone else. Also ends the session and clears JSESSIONID.")
+                    + "cannot delete anyone else. Also signs the browser out, deleting both token cookies.")
     @ApiResponse(responseCode = "204", description = "The account was deleted")
     @ApiResponse(responseCode = "401", description = "Not logged in")
     public ResponseEntity<Void> deleteCurrentUser(
@@ -98,10 +98,11 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    // Same as the logout handler in SecurityConfig.
+    // Signs the browser out, as logout does. The refresh tokens went with the account (cascade);
+    // an access token copied elsewhere lasts its 15 minutes and finds no user.
     private static void endSession(HttpServletRequest request, HttpServletResponse response) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         new SecurityContextLogoutHandler().logout(request, response, authentication);
-        new CookieClearingLogoutHandler("JSESSIONID").logout(request, response, authentication);
+        AuthCookies.clear(response);
     }
 }

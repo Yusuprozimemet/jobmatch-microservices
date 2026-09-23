@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.config;
 
 import lombok.extern.slf4j.Slf4j;
 import nl.hackyourfuture.project.backend.identity.auth.OAuth2LoginSuccessHandler;
+import nl.hackyourfuture.project.backend.identity.token.AccessTokenAuthentication;
 import nl.hackyourfuture.project.backend.identity.token.AuthCookies;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
@@ -63,6 +65,7 @@ public class SecurityConfig {
             ObjectProvider<OAuth2UserService<OidcUserRequest, OidcUser>> oidcUserService,
             OAuth2LoginSuccessHandler oauth2LoginSuccessHandler,
             AuthCookies authCookies,
+            AccessTokenAuthentication accessTokens,
             Environment environment) {
         http
                 .authorizeHttpRequests(auth -> auth
@@ -84,6 +87,15 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
+                // No session holds a login: every request brings its access token (Day 13). The
+                // Google routes still keep their authorization request in one until Day 14.
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .bearerTokenResolver(accessTokens.cookieResolver())
+                        .jwt(jwt -> jwt
+                                .decoder(accessTokens.decoder())
+                                .jwtAuthenticationConverter(AccessTokenAuthentication::emailPrincipal))
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -91,7 +103,6 @@ public class SecurityConfig {
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
                         .addLogoutHandler((request, response, authentication) -> authCookies.logout(request, response))
-                        .deleteCookies("JSESSIONID")
                         .logoutSuccessHandler((request, response, authentication) -> {
                             response.setStatus(HttpStatus.OK.value());
                             response.setContentType("application/json");

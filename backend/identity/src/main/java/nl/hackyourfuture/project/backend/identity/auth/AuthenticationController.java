@@ -41,7 +41,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Log in a user", description = "Verifies user credentials, creates a session cookie, and returns account details.")
+    @Operation(summary = "Log in a user", description = "Verifies user credentials, sets the token cookies, and returns account details.")
     @ApiResponse(responseCode = "200", description = "Login successful")
     @ApiResponse(responseCode = "401", description = "Invalid email or password")
     public LoginResponse login(@Valid @RequestBody LoginRequest request, jakarta.servlet.http.HttpServletRequest httpRequest,

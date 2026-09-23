@@ -84,8 +84,7 @@ public class AuthenticationService {
         );
     }
 
-    // Checks the password, starts the session (JSESSIONID) and sets the token cookies, which
-    // nothing reads until the session goes (Day 13).
+    // Checks the password and sets the token cookies.
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         String normalizedEmail = request.email().toLowerCase(Locale.ROOT);
         // Look up user credentials by email or fail with a generic security error
@@ -99,7 +98,6 @@ public class AuthenticationService {
             throw new BadCredentialsException("Invalid email or password");
         }
 
-        establishSession(credentials.email(), httpRequest);
         authCookies.issue(httpResponse, credentials.id(), credentials.email());
         completePendingGoogleLink(credentials, httpRequest);
 
@@ -197,7 +195,6 @@ public class AuthenticationService {
 
         userRepository.updatePasswordHash(userId, newPasswordHash);
         // Refresh/re-establish the session to invalidate any old/stolen session contexts
-        establishSession(email, httpRequest);
         // Nothing issued before the change stays in play; the caller gets a new pair.
         refreshTokens.revokeAll(userId);
         authCookies.issue(httpResponse, userId, email);
@@ -219,7 +216,8 @@ public class AuthenticationService {
                 });
     }
 
-    // Stores the security context on a fresh session (JSESSIONID). Shared with Google sign-in.
+    // Stores the security context on a fresh session (JSESSIONID). Unused since Day 13, when the
+    // token cookies replaced the session; deleted on Day 16.
     public void establishSession(String email, HttpServletRequest httpRequest) {
         // Create Spring Security authentication token
         var authToken = new UsernamePasswordAuthenticationToken(
