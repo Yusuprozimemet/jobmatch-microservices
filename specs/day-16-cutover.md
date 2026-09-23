@@ -9,8 +9,8 @@ code is gone.
 ## In scope
 - `docker-compose.yml`: publish `api-gateway` on 8080; **remove the backend's `ports:`**.
   Frontend `BACKEND_API_URL` points at the gateway.
-- Delete the dead session code left behind on Day 13, and the backend's CORS config now
-  that the gateway owns it.
+- Delete the backend's CORS config now that the gateway owns it. (The session code went on
+  Day 14.)
 - Deployment: gateway gets the public ingress, backend goes internal-only.
 - Docs: update `backend/docs/auth.md` and `api.md` for JWT.
 - Two architecture diagrams in `backend/docs/architecture.md`, as Mermaid so they render on
@@ -27,7 +27,7 @@ code is gone.
 | Track | Owner | Work |
 |---|---|---|
 | A | | Compose + deployment wiring, backend port removal |
-| B | | Delete session and CORS code |
+| B | | Delete CORS code |
 | C | | Docs, README, charts, release tag |
 
 ## Acceptance criteria
@@ -56,3 +56,8 @@ cd backend && ./mvnw clean verify && ./mvnw -B checkstyle:check
   `hiearchy-backend.md` does not exist — Day 02 found this, and it was never taken out here.
   "Both architecture charts" named nothing that exists or is described anywhere; the two
   diagrams are now defined.
+- **Spec corrected on Day 14, before that day's work.** Deleting `establishSession` and the rest of
+  the session code moved to Day 14, whose grep (`HttpSession|getSession|changeSessionId`) could not
+  pass while it survived; the `JSESSIONID|HttpSession|establishSession` criterion here should hold
+  from then on, and `backend/docs/auth.md` was rewritten for tokens on Day 13 (#89). Both are for
+  this day's own spec change to re-tag.
