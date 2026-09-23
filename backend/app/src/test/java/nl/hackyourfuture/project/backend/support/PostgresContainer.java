@@ -55,7 +55,7 @@ public final class PostgresContainer {
                         "-c", "shared_preload_libraries=pg_stat_statements");
         CONTAINER.start();
         DATA_SOURCE = buildDataSource();
-        // In public, not app: the connection's currentSchema=app would otherwise put the
+        // In public, not a module schema: the connection's first schema would otherwise get the
         // extension's view inside the schema Flyway owns.
         execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA public");
         execute(SqlScripts.read("fixtures/analytics-schema.sql"));
@@ -82,10 +82,10 @@ public final class PostgresContainer {
         return DATA_SOURCE;
     }
 
-    /** JDBC URL with {@code currentSchema=app}, matching how the application connects. */
+    /** JDBC URL looking in every module schema and then {@code app}, as the application connects. */
     public static String jdbcUrl() {
         String url = CONTAINER.getJdbcUrl();
-        return url + (url.contains("?") ? "&" : "?") + "currentSchema=app";
+        return url + (url.contains("?") ? "&" : "?") + "currentSchema=" + String.join(",", TABLE_SCHEMAS);
     }
 
     /** Runs a multi-statement script. Postgres accepts these over the simple query protocol. */
@@ -128,13 +128,10 @@ public final class PostgresContainer {
         return String.join(", ", roles);
     }
 
-    // The harness looks in every module schema, so a fixture or an assertion that names a table
-    // unqualified finds it wherever its module keeps it, before Day 11's moves and after.
     private static DataSource buildDataSource() {
         var dataSource = new SimpleDriverDataSource();
         dataSource.setDriverClass(org.postgresql.Driver.class);
-        String url = CONTAINER.getJdbcUrl();
-        dataSource.setUrl(url + (url.contains("?") ? "&" : "?") + "currentSchema=" + String.join(",", TABLE_SCHEMAS));
+        dataSource.setUrl(jdbcUrl());
         dataSource.setUsername(CONTAINER.getUsername());
         dataSource.setPassword(CONTAINER.getPassword());
         return dataSource;
