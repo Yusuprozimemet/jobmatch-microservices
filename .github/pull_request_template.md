@@ -30,3 +30,5 @@ None
 - [ ] Tests pass locally
 - [ ] No secrets, tokens, or connection strings in the diff
 - [ ] This pull request does one thing
+- [ ] Spec changes only: every acceptance criterion is tagged `new` or `hold`, and each check
+      has been seen to fail (see `specs/README.md`)

@@ -19,7 +19,10 @@
 | B | | |
 
 ## Acceptance criteria
-- [ ] <checkable by someone who did not write the code>
+- [ ] **new** — <checkable by someone who did not write the code>. Red today: <how it fails
+      on the code as it is, e.g. "the grep finds two">.
+- [ ] **hold** — <true before the change and must stay true after it>. Broken on purpose:
+      <what was broken, and what the check reported>.
 
 ## Verify
 ```bash
