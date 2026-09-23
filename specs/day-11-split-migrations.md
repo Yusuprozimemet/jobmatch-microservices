@@ -79,21 +79,32 @@ removes the user's saved jobs. No Day 01–04 test calls that route. It lands fi
 single schema, and is broken on purpose (a foreign key without the cascade) before it is trusted.
 
 ## Acceptance criteria
-- [ ] **hold** — No migration that existed before the day is modified or deleted: the second
-      command in **Verify** prints nothing. Broken on purpose in Track B's PR, by editing a
-      comment in V1.
-- [ ] **new** — Each module has its own `flyway_schema_history` table. Red today: there is one,
-      in `app`.
-- [ ] **hold** — A clean `docker compose up` migrates from empty to current with no manual step.
-      True today, as the admin; it must stay true with the module roles. Broken on purpose in
-      Track C's PR by starting without the init script: the move must stop with its message.
-- [ ] **new** — `identity`'s role cannot write `applications.saved_jobs` (test it). Red today:
-      neither the role nor the schema exists.
-- [ ] **new** — Each module's `DataSource` logs in as its own role (assert `current_user` per
-      module). Red today: one `DataSource`, logged in as the container's admin.
-- [ ] **hold** — `DELETE /api/users/me` still removes the user's saved jobs, across the schema
-      boundary. Track 0's test, green on the single schema before anything moves.
-- [ ] **hold** — All Day 1–4 tests pass **unedited**.
+- [x] **hold** — No migration that existed before the day is modified or deleted: the second
+      command in **Verify** prints nothing. It prints nothing on `main` at the close; V12–V14 are
+      the only additions. Broken on purpose in #68: an edit to a comment in V1 showed at once.
+- [x] **new** — Each module has its own `flyway_schema_history` table. `ModuleMigrationsIT` (#71):
+      one per module, owned by the module's role, starting at `0 BASELINE`. Red on `main` before
+      #71 (6 of 7); a probe `V1` in `db/identity` was applied by identity's own instance.
+- [x] **hold** — A clean `docker compose up` migrates from empty to current with no manual step.
+      Run at the close in its own project and volume: 14 migrations, three module baselines,
+      backend, db and frontend running. Broken on purpose in #68: on a database without the
+      module roles, V12 stops with its message naming `db-setup.py` and `docker compose down -v`.
+- [x] **new** — `identity`'s role cannot write `applications.saved_jobs` (test it).
+      `ModuleConnectionsIT` (#70): `permission denied for table saved_jobs`, through the
+      application's own pool. Red before #69; red again with identity's pool given
+      `applications_user`.
+- [x] **new** — Each module's `DataSource` logs in as its own role (assert `current_user` per
+      module). Same test: `identity_user identity`, `applications_user applications`,
+      `matching_user matching`, `jobs_user analytics`.
+- [x] **hold** — `DELETE /api/users/me` still removes the user's saved jobs, across the schema
+      boundary. `AccountDeletionIT` (#66), green before the move, after it (#68), and deleting as
+      `identity_user`, which cannot write `saved_jobs` (#69). Broken on purpose in #66 by
+      dropping the foreign key: 2 rows left.
+- [x] **hold** — All Day 1–4 tests pass **unedited**, with one departure. No existing file in
+      `contract/` changed. `BackendApplicationTests.flywayHasMigratedTheAppSchema`, a Day 01
+      harness self-test outside `contract/`, asserted every table was in `app`, the layout this
+      day exists to change; it was rewritten in #68 to assert the new one, by decision, and is
+      recorded below.
 
 ## Verify
 ```bash
@@ -147,3 +158,36 @@ git diff --stat --diff-filter=MDR "$BASE" HEAD -- app/src/main/resources/db/migr
     `identity.refresh_tokens` is the first migration a module instance applies.
   - Criteria tagged `new` or `hold` under #55's rule. Track 0 made explicit: the spec asked for
     the deletion test "before the move" without a track to land it in. *Estimate 4 → 5.*
+- **Done on Day 11.** Spec change #65, then #66 (Track 0, account deletion), #67 (Track C, the
+  roles and schemas in three places), #68 (Track B, the moves), #69 and #70 (Track D, a
+  connection per module and the tests that prove it, split under the 400-line gate) and #71
+  (Track A, a Flyway per module). 232 tests green, checkstyle clean.
+  *Estimated 3 pull requests as first written, 5 after the spec change, took 6.* The sixth is the
+  gate's split of Track D.
+- **The tracks ran C → B → D → A, not in the table's order.** Each depends on the one before:
+  the moves hand tables to roles that must exist, the connections log in as those roles, and
+  the module migrations run on those connections.
+- **The one departure from "unedited", by decision.** `BackendApplicationTests` pinned the schema
+  layout, not behaviour. It was stopped at, not patched: the choice between rewriting it,
+  replacing it, and amending the criterion first went to review, and rewriting it won.
+- **Found by running what reading could not settle:**
+  - Only a table's owner can move it, so the moves run as the owner that ran V1–V11 and hand
+    each table over (#65, tried on Postgres 18 before the work).
+  - A cascade runs as the owner of the referencing table, so `identity_user`, forbidden to write
+    `saved_jobs`, still deletes them through `fk_saved_jobs_user` (#65, then #69 in the app).
+  - V2's `job_state` enum does not move with `saved_jobs`, and the repository casts to it
+    unqualified. V13 moves it too (#68). Neither the spec nor #65 mentioned it.
+  - A read-only Hikari pool does not stop an autocommit write; the driver applies read-only only
+    inside explicit transactions. The role is the guard, and the flag is gone (#69).
+  - Flyway writes its baseline description into its history unescaped; an apostrophe failed
+    every context (#71).
+  - Four pools of Hikari's default ten, opened at startup by the module migrations, ran the test
+    run's cached contexts out of Postgres's connection slots. Each module pool is now at most
+    five, one kept idle (#71).
+- **Deployment changes.** Five logins instead of one: `DB_USER`/`DB_PASSWORD` are the migration
+  owner, and each module has `DB_<MODULE>_USER`/`_PASSWORD`; `DB_SCHEMA` is gone. A compose
+  volume from before this day stops at V12 with its message and needs `docker compose down -v`.
+  Production needs `db-setup.py` re-run first, for the roles, the schemas, and `app_user`'s
+  membership in the module roles.
+- `db-setup.py`'s final report crashes on a Windows console using cp1252, after all its work is
+  done, because it prints an emoji. Found in #67, not changed; `PYTHONIOENCODING=utf-8` avoids it.
