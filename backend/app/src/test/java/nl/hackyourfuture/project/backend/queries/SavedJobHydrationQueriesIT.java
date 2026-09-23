@@ -6,6 +6,7 @@ import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.StatementCounter;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -59,5 +60,20 @@ class SavedJobHydrationQueriesIT extends IntegrationTest {
         // The page really is that big - otherwise the sizes would all test the same thing.
         assertThat(response.at("/content").size()).isEqualTo(Math.min(size, SAVED.size()));
         assertThat(StatementCounter.statementsMentioning("fct_postings")).isEqualTo(1);
+    }
+
+    // Added with the rewrite, not before it: the LEFT JOIN ran even with nothing to join, so
+    // this was one statement until the lookup learned to skip an empty list.
+    @Test
+    void doesNotAskTheMartAboutAnEmptyList() {
+        ApiClient nobodySaved = authenticatedAs(aUser().create());
+        StatementCounter.reset();
+
+        ApiResponse response = nobodySaved.get("/api/saved-jobs");
+
+        assertThat(response.status()).isEqualTo(200);
+        assertThat(response.at("/totalElements").asLong()).isZero();
+        assertThat(response.at("/content").size()).isZero();
+        assertThat(StatementCounter.statementsMentioning("fct_postings")).isZero();
     }
 }
