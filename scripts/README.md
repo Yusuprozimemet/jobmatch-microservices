@@ -24,6 +24,8 @@ chmod +x scripts/*.sh
   - Restarts local Astro for DAG-driven execution (path B setup).
 - scripts/run-all.sh
   - Runs preflight and then the full Path A sequence.
+- scripts/spec-drift.py
+  - Measures the migration from git history: how far the specs drifted from `plan.md`, how far spec and code sit apart, and each day's status and next step. Writes the data for the migration dashboard; rerun after every merge. Needs git, the `gh` CLI and numpy.
 
 ## Typical flow
 
