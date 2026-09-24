@@ -110,10 +110,13 @@ public final class PostgresContainer {
 
     /**
      * The module roles, and a schema owned by each: identity_user owns identity, and so on.
-     * jobs_user owns nothing; it only ever reads. Every other role may use a schema but not
-     * create in it, the rule {@code db-setup.py} applies. Grants on the tables themselves come
-     * with the migrations that move the tables in, since grants do not follow a moved table; what
-     * a module creates in its own schema later is readable by the others, as in production.
+     * jobs_user owns nothing; it only ever reads.
+     *
+     * <p>Every other module role is granted the schema and what the module creates in it later,
+     * as {@code db-setup.py} and compose did for every database set up before Day 38. They no
+     * longer do; the harness still does, so that the suite runs each module's revoking migration
+     * against the grants production has, and fails if one of them misses something. A harness
+     * that granted nothing would pass without the migrations.
      */
     private static void createModuleRoles() {
         List<String> statements = new ArrayList<>();
@@ -124,8 +127,6 @@ public final class PostgresContainer {
         for (String schema : MODULE_SCHEMAS) {
             statements.add("CREATE SCHEMA " + schema + " AUTHORIZATION " + schema + "_user");
             statements.add("GRANT USAGE ON SCHEMA " + schema + " TO " + othersThan(schema));
-            // db-setup.py's read-only rule for what the module creates later, so a table that
-            // must not be read by the others (identity's refresh_tokens) is tested against it.
             for (String objects : List.of("TABLES", "SEQUENCES")) {
                 statements.add("ALTER DEFAULT PRIVILEGES FOR ROLE " + schema + "_user IN SCHEMA " + schema
                         + " GRANT SELECT ON " + objects + " TO " + othersThan(schema));

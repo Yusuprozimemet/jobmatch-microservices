@@ -223,12 +223,14 @@ database, six schemas, and one login role per owner.
 | Schema | Owner role | Written by | Read by |
 | --- | --- | --- | --- |
 | `app` | `app_user` | the backend's migrations, V1–V14 | everyone, read-only |
-| `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11) | everyone, read-only |
+| `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11) | its owner only (Day 38) |
 | `analytics` | `analytics_user` | the scheduled pipeline | everyone, read-only; the backend reads it as `jobs_user`, which owns nothing |
 | `analytics_dev` | `analytics_dev_user` | trainees, by hand | everyone, read-only |
 
 Each role has full access to what it owns and read-only access to the others, for existing and future
-objects. **The separation is enforced by grants, not by agreement** — that is the whole point, and it
+objects, except the module schemas: no other login reads them, so a module that leaves the process
+takes a login that reads only its own data. A database set up before Day 38 had those grants; each
+module's own migration revokes them. **The separation is enforced by grants, not by agreement** — that is the whole point, and it
 is what makes "the backend cannot corrupt the marts" a fact rather than a promise.
 
 The third schema exists so a trainee building a mart never needs the credential that owns

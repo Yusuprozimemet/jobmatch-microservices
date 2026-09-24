@@ -6,8 +6,9 @@
 # have to exist first. A volume created before Day 11 never ran this: start it again with
 # `docker compose down -v`, or run db-setup.py against it.
 #
-# identity_user owns identity, and so on; jobs_user owns nothing and only reads. Every other role
-# may use a schema but not create in it, the rule db-setup.py applies.
+# identity_user owns identity, and so on; jobs_user owns nothing and only reads the mart. No module
+# reads another's schema (Day 38), the rule db-setup.py applies; a volume created before Day 38 had
+# the grants, and each module's own migration revokes them.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
@@ -23,25 +24,6 @@ CREATE ROLE jobs_user LOGIN PASSWORD :'jobs_password';
 CREATE SCHEMA identity AUTHORIZATION identity_user;
 CREATE SCHEMA applications AUTHORIZATION applications_user;
 CREATE SCHEMA matching AUTHORIZATION matching_user;
-
-GRANT USAGE ON SCHEMA identity TO applications_user, matching_user, jobs_user;
-GRANT USAGE ON SCHEMA applications TO identity_user, matching_user, jobs_user;
-GRANT USAGE ON SCHEMA matching TO identity_user, applications_user, jobs_user;
-
--- db-setup.py's read-only rule for what each module creates in its own schema later, so compose
--- grants a new table what production does (identity's migrations revoke what must stay private).
-ALTER DEFAULT PRIVILEGES FOR ROLE identity_user IN SCHEMA identity
-    GRANT SELECT ON TABLES TO applications_user, matching_user, jobs_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE identity_user IN SCHEMA identity
-    GRANT SELECT ON SEQUENCES TO applications_user, matching_user, jobs_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE applications_user IN SCHEMA applications
-    GRANT SELECT ON TABLES TO identity_user, matching_user, jobs_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE applications_user IN SCHEMA applications
-    GRANT SELECT ON SEQUENCES TO identity_user, matching_user, jobs_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE matching_user IN SCHEMA matching
-    GRANT SELECT ON TABLES TO identity_user, applications_user, jobs_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE matching_user IN SCHEMA matching
-    GRANT SELECT ON SEQUENCES TO identity_user, applications_user, jobs_user;
 
 -- jobs reads the mart. In compose anything in analytics is created by this admin, so its future
 -- tables are granted too; production gets the same from db-setup.py's read-only rule.

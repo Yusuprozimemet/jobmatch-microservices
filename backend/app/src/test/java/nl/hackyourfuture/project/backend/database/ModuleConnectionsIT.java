@@ -3,6 +3,8 @@ package nl.hackyourfuture.project.backend.database;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -45,17 +47,55 @@ class ModuleConnectionsIT extends IntegrationTest {
                 .update())
                 // Spring's exception says "bad SQL grammar"; Postgres's own words are underneath.
                 .rootCause()
-                .hasMessageContaining("permission denied for table saved_jobs");
+                .hasMessageContaining("permission denied for schema applications");
     }
 
-    // Read-only across modules is the rule db-setup.py applies; Days 08-09 removed the reads.
-    @Test
-    void identityMayStillReadThem() {
-        assertThat(JdbcClient.create(identity)
-                .sql("SELECT count(*) FROM applications.saved_jobs")
+    // Days 08-10 removed the reads; Day 38 revoked what allowed them, before the modules leave
+    // the process with these logins.
+    @ParameterizedTest
+    @CsvSource({"identity, applications.saved_jobs", "jobs, identity.user_credentials",
+        "applications, matching.job_match_scores", "matching, identity.users"})
+    void noModuleCanReadAnothersSchema(String module, String table) {
+        assertThatThrownBy(() -> JdbcClient.create(pool(module))
+                .sql("SELECT count(*) FROM " + table)
                 .query(Long.class)
                 .single())
-                .isZero();
+                .rootCause()
+                .hasMessageContaining("permission denied for schema " + table.substring(0, table.indexOf('.')));
+    }
+
+    // Created through identity's own pool, so identity_user is its creator, as for a migration:
+    // through the harness's connection, a superuser's, the table would get no grants either way.
+    @Test
+    void norATableAModuleCreatesLater() {
+        JdbcClient owner = JdbcClient.create(identity);
+        owner.sql("CREATE TABLE later_table (id INT)").update();
+        try {
+            for (String other : new String[] {"applications_user", "matching_user", "jobs_user"}) {
+                assertThat(jdbc().sql("SELECT has_table_privilege(:role, 'identity.later_table', 'SELECT')")
+                        .param("role", other)
+                        .query(Boolean.class)
+                        .single())
+                        .as(other)
+                        .isFalse();
+            }
+        } finally {
+            owner.sql("DROP TABLE later_table").update();
+        }
+    }
+
+    // Default privileges registered for any creator but the owner, db-setup.py's admin among them.
+    @Test
+    void noModuleSchemaGrantsWhatIsCreatedLaterToAnyoneElse() {
+        assertThat(jdbc()
+                .sql("""
+                        SELECT n.nspname || ': ' || pg_get_userbyid(acl.grantee)
+                        FROM pg_default_acl d JOIN pg_namespace n ON n.oid = d.defaclnamespace, aclexplode(d.defaclacl) acl
+                        WHERE n.nspname IN ('identity', 'applications', 'matching') AND acl.grantee <> n.nspowner
+                        """)
+                .query(String.class)
+                .list())
+                .isEmpty();
     }
 
     // The role refuses it. A read-only pool would not have: the driver applies read-only only
@@ -67,6 +107,16 @@ class ModuleConnectionsIT extends IntegrationTest {
                 .update())
                 .rootCause()
                 .hasMessageContaining("permission denied for table fct_postings");
+    }
+
+    private DataSource pool(String module) {
+        return switch (module) {
+            case "identity" -> identity;
+            case "applications" -> applications;
+            case "matching" -> matching;
+            case "jobs" -> jobs;
+            default -> throw new IllegalArgumentException(module);
+        };
     }
 
     private static String whoAndWhere(DataSource dataSource) {
