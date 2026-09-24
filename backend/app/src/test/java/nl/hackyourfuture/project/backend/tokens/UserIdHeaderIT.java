@@ -24,6 +24,6 @@ class UserIdHeaderIT extends IntegrationTest {
         TestUser user = aUser().create();
         assertThat(authenticatedAs(user).get(path).status()).as("signed in, the route answers").isEqualTo(200);
 
-        assertThat(anonymous().withHeader(USER_ID, user.id().toString()).get(path).status()).isEqualTo(401);
+        assertThat(direct().withHeader(USER_ID, user.id().toString()).get(path).status()).isEqualTo(401);
     }
 }
