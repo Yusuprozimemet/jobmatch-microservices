@@ -11,3 +11,9 @@ gateway:
   backend-url: ${BACKEND_URL:http://localhost:8080}
   # The key set access tokens are verified with; the backend publishes it.
   jwks-url: ${gateway.backend-url}/.well-known/jwks.json
+  rate-limit:
+    # Login, register and the two password-reset steps, per client, per minute (Day 15).
+    auth-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:10}
+  # A regex of proxy addresses whose X-Forwarded-For is believed: the frontend, from Day 16.
+  # Empty believes none.
+  trusted-proxies: ${GATEWAY_TRUSTED_PROXIES:}

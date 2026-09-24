@@ -52,6 +52,8 @@ public final class Gateway {
                 // A local build, never a pull: an image by this name on a registry is not ours.
                 .withImagePullPolicy(name -> false)
                 .withEnv("BACKEND_URL", "http://host.testcontainers.internal:" + applicationPort)
+                // The suite logs in from one address far more than ten times a minute.
+                .withEnv("RATE_LIMIT_AUTH_PER_MINUTE", "1000000")
                 .withExposedPorts(PORT)
                 .waitingFor(Wait.forListeningPort());
         try {
