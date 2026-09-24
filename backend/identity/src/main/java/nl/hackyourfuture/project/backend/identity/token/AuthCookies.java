@@ -4,6 +4,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import nl.hackyourfuture.project.backend.identity.user.User;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
@@ -19,7 +20,9 @@ import java.util.UUID;
  * the refresh token only where it is used, under {@code /api/auth}.
  *
  * <p>Both are {@code HttpOnly}, so page scripts cannot read them, and {@code SameSite=Lax}, so
- * other sites cannot send them with a form post. Each lives as long as its token.
+ * other sites cannot send them with a form post. Each lives as long as its token. Both are
+ * {@code Secure} when {@code SESSION_COOKIE_SECURE} is, as the Google flow's cookies are, so a
+ * deployment behind HTTPS never sends them over plain HTTP; off by default, for local HTTP.
  */
 @Component
 public class AuthCookies {
@@ -33,10 +36,13 @@ public class AuthCookies {
 
     private final AccessTokens accessTokens;
     private final RefreshTokens refreshTokens;
+    private final boolean secure;
 
-    public AuthCookies(AccessTokens accessTokens, RefreshTokens refreshTokens) {
+    public AuthCookies(AccessTokens accessTokens, RefreshTokens refreshTokens,
+                       @Value("${server.servlet.session.cookie.secure:false}") boolean secure) {
         this.accessTokens = accessTokens;
         this.refreshTokens = refreshTokens;
+        this.secure = secure;
     }
 
     /** A new access token and a new refresh token for this user, as cookies on the response. */
@@ -78,14 +84,15 @@ public class AuthCookies {
     }
 
     /** Deletes both cookies: what signing out, however it happens, leaves in the browser. */
-    public static void clear(HttpServletResponse response) {
+    public void clear(HttpServletResponse response) {
         add(response, ACCESS, "", "/", Duration.ZERO);
         add(response, REFRESH, "", REFRESH_PATH, Duration.ZERO);
     }
 
-    private static void add(HttpServletResponse response, String name, String value, String path, Duration maxAge) {
+    private void add(HttpServletResponse response, String name, String value, String path, Duration maxAge) {
         ResponseCookie cookie = ResponseCookie.from(name, value)
                 .httpOnly(true)
+                .secure(secure)
                 .sameSite("Lax")
                 .path(path)
                 .maxAge(maxAge)

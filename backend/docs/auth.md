@@ -228,8 +228,9 @@ Two cookies since Day 13, set at login, at a password change and by Google sign-
 | `access_token` | an RS256 JWT: `sub` = user id, `email`, `iss` = `jobmatch-identity`, `aud` = `jobmatch-api`, `jti` | `HttpOnly; SameSite=Lax; Path=/` | 15 minutes |
 | `refresh_token` | 32 random bytes; the database keeps only their SHA-256 (`identity.refresh_tokens`) | `HttpOnly; SameSite=Lax; Path=/api/auth` | 30 days |
 
-No `Secure` on either yet: it was left out of Day 13 by decision, and must be added before an
-HTTPS deployment relies on it ([section 10](#10-known-limitations)).
+Both are `Secure` when `SESSION_COOKIE_SECURE=true`, as the Google flow's cookies are; off by
+default, so local HTTP works. Left out of Day 13 by decision; added once Phase 2 had closed,
+because `plan.md` asks for it there.
 
 **Every request brings its access token.** The session policy is `STATELESS`. The resource server
 reads `access_token` and verifies it in process against the key identity signs with (Day 12's
@@ -390,7 +391,7 @@ All of it reads an environment variable with a local-development fallback; see
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address of the environment. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** — the redirect URIs append to it, and `//` will not match what Google has registered. Production is `https://c55c.hyf.dev`. |
 | `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with. **No key, no start.** Replacing it invalidates every access token; browsers refresh silently, since refresh tokens are not signed |
-| `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the Google flow's two cookies, `google_auth_request` and `pending_google_link`. Must be `true` on any HTTPS deployment |
+| `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the two token cookies and the Google flow's two, `google_auth_request` and `pending_google_link`. Must be `true` on any HTTPS deployment |
 | `GOOGLE_CLIENT_ID` | empty | Set it and Google sign-in exists; leave it and the routes do not |
 | `GOOGLE_CLIENT_SECRET` | empty | |
 | `GOOGLE_REDIRECT_URI` | `${APP_BASE_URL}/api/login/oauth2/code/google` | Must match the Google Cloud Console entry character for character |
@@ -427,8 +428,9 @@ changing it.
 - **An access token cannot be revoked.** Logout, a password change or reset and account deletion
   all stop the refresh token, but the access token already issued verifies until it expires, up to
   15 minutes. Closing that window needs a denylist.
-- **The token cookies are not `Secure`.** Left out of Day 13 by decision; until they are, nothing
-  but the deployment's own HTTPS redirect stops a browser sending them over plain HTTP.
+- **`Secure` is a setting, not a default.** A deployment behind HTTPS that leaves
+  `SESSION_COOKIE_SECURE` at `false` sends the token cookies over plain HTTP whenever a browser
+  asks for it; only the deployment's own HTTPS redirect stops that.
 - **CSRF protection is `SameSite=Lax` and nothing else.** CSRF tokens are disabled and the tokens
   are cookies, so `Lax` — which withholds the cookie from cross-site POSTs — is what stands between
   the API and a cross-site form. That is adequate for the current shape; it stops being adequate the
