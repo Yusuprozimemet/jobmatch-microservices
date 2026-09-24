@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: api-gateway
+
+# 8081 until Day 16 moves the gateway to 8080 and takes the backend's port away.
+server:
+  port: 8081
+
+gateway:
+  # The backend's base URL: http://backend:8080 in compose.
+  backend-url: ${BACKEND_URL:http://localhost:8080}
