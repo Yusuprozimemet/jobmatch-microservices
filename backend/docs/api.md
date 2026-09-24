@@ -265,8 +265,9 @@ Start Google sign-in
 
 `google_link_required` is deliberate. Registration never proved the user owns that address, so
 linking on an email match alone would hand the account to whoever typed the address first. The
-Google identity waits in the session (`PendingGoogleLink`) and is attached by the next successful
-password login, which is the proof that was missing.
+Google identity waits in `identity.pending_google_links`, for ten minutes, and is attached by the
+next successful password login for that account, which is the proof that was missing; the browser
+carries the claim code there in the `pending_google_link` cookie.
 
 ---
 

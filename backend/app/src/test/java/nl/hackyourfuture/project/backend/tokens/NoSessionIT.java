@@ -13,8 +13,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * No route outside Google sign-in sets a session cookie, not even to delete one (Day 13). The
- * Google routes keep a session for the authorization request until Day 14.
+ * No route outside Google sign-in sets a session cookie, not even to delete one (Day 13). Google
+ * sign-in's steps are in {@code GoogleNoSessionIT} (Day 14).
  */
 class NoSessionIT extends IntegrationTest {
 

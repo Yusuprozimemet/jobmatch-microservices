@@ -36,6 +36,7 @@ All of it is in the module schemas (`identity`, `applications`, `matching`). The
 | `user_profiles` | `skills[]`, `category`, `preferred_city`, `work_mode`, `experience_level`, `employment_type`, `salary` | What the user is looking for, and what matching runs on |
 | `password_reset_tokens` | `token`, `expiry_date`, `user_id` | A 15-minute single-use link |
 | `refresh_tokens` | `token_hash`, `created_at`, `expires_at`, `revoked_at`, `user_id` | What keeps a browser signed in for 30 days. Only the SHA-256 of the token is stored |
+| `pending_google_links` | `user_id`, `provider_id`, `code_hash`, `created_at`, `expires_at`, `claimed_at` | A Google identity whose email belongs to a password account, waiting up to 10 minutes for that account's password login. Only the SHA-256 of the claim code is stored |
 | `saved_jobs` | `posting_id`, `job_state` | Which jobs the user kept, and how far each application got |
 | `job_match_scores` | `skills_hash`, `posting_id`, `score`, `reason` | Cached model verdicts — **keyed on a hash of a skill set, not on a user** |
 
@@ -66,7 +67,8 @@ Worth stating, because it is a short list and it makes the shape of the app clea
   external URLs at all beyond the team's own GitHub profile links on the About page, so a visitor's
   browser talks to one origin and nothing else.
 - **Two cookies**, `access_token` and `refresh_token`, strictly functional: they are the login.
-  (Google sign-in also sets a session cookie for the length of the sign-in.) Nothing is stored in
+  (Google sign-in also sets `google_auth_request` for the five minutes between leaving for Google
+  and coming back, and `pending_google_link` when the email needs a password first.) Nothing is stored in
   `localStorage`.
 - **No IP addresses, user agents or request logs of our own.** Whatever the hosting layer keeps is
   outside this codebase.
@@ -114,11 +116,15 @@ GDPR Art. 15 — the right to get a copy. On the profile page, *Your data export
 Plus an `exportedAt` timestamp. If any call answers 401 the user is sent to the login page rather
 than handed a partial file.
 
-**Between them those three cover every table that holds anything personal**, which is why `/me`
-returns fields the UI never displays — `createdAt`, `oauthProvider`, `oauthProviderId`,
+**Between them those three cover every table that holds anything personal but one**, which is why
+`/me` returns fields the UI never displays — `createdAt`, `oauthProvider`, `oauthProviderId`,
 `passwordUpdatedAt` all exist for this export. `password_reset_tokens` and `refresh_tokens` are
 excluded deliberately: a live token is a credential, and putting it in a downloadable file would be
 worse than omitting it.
+**The one is `pending_google_links`** (Day 14), and leaving it out is a gap, not a decision. Its
+`code_hash` is a credential like the tokens, but its `provider_id` (the Google identity waiting to
+be linked) and its times are not, and the export does not return them. A claimed or expired row
+stays until the account parks another or is deleted ([section 7](#7-retention)).
 `job_match_scores` is excluded because it is not personal data — no row in it identifies anyone.
 
 Two real weaknesses:
@@ -146,7 +152,8 @@ users ─┬─ user_credentials        ON DELETE CASCADE
        ├─ user_profiles           ON DELETE CASCADE
        ├─ saved_jobs              ON DELETE CASCADE
        ├─ password_reset_tokens   ON DELETE CASCADE
-       └─ refresh_tokens          ON DELETE CASCADE
+       ├─ refresh_tokens          ON DELETE CASCADE
+       └─ pending_google_links    ON DELETE CASCADE
 ```
 
 Both token cookies are deleted in the same request — otherwise the browser would keep sending a
@@ -199,6 +206,7 @@ the app deliberately gives up control — the terms page says so, and the link c
 | `job_match_scores` | `LLM_SCORE_RETENTION_DAYS`, default and minimum 1 day. Enforced on the read, so nothing older is ever served; an hourly purge reclaims the space within an hour of a row expiring |
 | Password reset tokens | 15 minutes of validity. Deleted on use, and when a newer link is requested |
 | Refresh tokens | 30 days, or until logout, a password change or reset. A spent or expired row stays in `refresh_tokens` until the account is deleted; nothing sweeps it yet |
+| Pending Google links | 10 minutes of validity. Deleted when the account parks a newer one or is deleted; a claimed or expired row otherwise stays, as refresh tokens do |
 
 One gap: **an expired reset token that is never used and never superseded stays in the table
 indefinitely.** Nothing sweeps `password_reset_tokens` on a schedule the way `job_match_scores` is

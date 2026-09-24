@@ -100,7 +100,7 @@ All of it in [`application.yaml`](../src/main/resources/application.yaml).
 | Variable | Default | |
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** |
-| `SESSION_COOKIE_SECURE` | `false` | Since Day 13, only the Google flow's session cookie; the token cookies carry no `Secure` yet. Must be `true` on HTTPS |
+| `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the Google flow's two cookies, `google_auth_request` and `pending_google_link`; the token cookies carry no `Secure` yet. Must be `true` on HTTPS |
 | `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with: a PEM, PKCS#8 file of at least 2048 bits. **Required**, in every profile; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/private.pem` |
 | `SPRING_PROFILES_ACTIVE` | none | `dev` or `prod`. The Docker image sets `SPRING_PROFILES_DEFAULT=prod` |
 
@@ -231,7 +231,7 @@ feature rather than breaking the app.
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Reset emails never arrive; `forgot-password` still answers 200, by design | Startup: *"Mail service warning..."* |
 | `GOOGLE_CLIENT_ID` | The Google button 404s — the routes are not registered | Startup: *"Google sign-in disabled..."* |
 | An empty `analytics` schema | Jobs list is empty, filters are empty, matches are `[]`. No errors | Only by looking |
-| `SESSION_COOKIE_SECURE=true` on plain HTTP | The browser silently drops the Google flow's session cookie; Google sign-in fails | Nowhere — this one is invisible |
+| `SESSION_COOKIE_SECURE=true` on plain HTTP | The browser silently drops the Google flow's cookies; Google sign-in fails | Nowhere — this one is invisible |
 | `DB_*` under the `prod` profile | The app does not start | Immediately |
 | `JWT_PRIVATE_KEY_FILE`, in any profile | The app does not start. It is not optional: a key made at startup would sign everyone out on each restart | Startup: *"JWT_PRIVATE_KEY_FILE is not set..."*, or names the file and what is wrong with it |
 
@@ -291,5 +291,6 @@ with `permission denied for schema`. The repository SQL uses unqualified table n
 them through the same setting.
 
 **Restarting the backend signs no one out** since Day 13: the login is a token the browser holds,
-not a session in the container's memory. Only Google sign-in still keeps a session, for the length
-of the sign-in, so two backend instances would need sticky sessions for that flow until Day 14.
+not a session in the container's memory. Since Day 14 Google sign-in keeps none either: its state is
+in the browser's cookies and `identity.pending_google_links`, so two backend instances need no
+sticky sessions.
