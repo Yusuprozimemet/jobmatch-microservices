@@ -9,3 +9,5 @@ server:
 gateway:
   # The backend's base URL: http://backend:8080 in compose.
   backend-url: ${BACKEND_URL:http://localhost:8080}
+  # The key set access tokens are verified with; the backend publishes it.
+  jwks-url: ${gateway.backend-url}/.well-known/jwks.json
