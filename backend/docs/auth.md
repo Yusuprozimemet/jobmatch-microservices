@@ -134,6 +134,15 @@ Both URIs sit under `/api` so the Next.js proxy forwards them and the cookie sta
 | Start | `/api/oauth2/authorization/google` — a browser navigation, never `fetch` |
 | Callback | `/api/login/oauth2/code/google` |
 
+**Between the two, the browser holds the request.** Spring's `oauth2Login` needs the start's
+`state`, nonce, redirect URI and PKCE verifier back at the callback. It keeps them in no session:
+[`AuthorizationRequestCookie`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/AuthorizationRequestCookie.java)
+puts them in `google_auth_request` (`HttpOnly; SameSite=Lax; Path=/api/login/oauth2/code;
+Max-Age=300`), a JWS signed with the key access tokens are signed with, and the callback deletes it.
+`Lax`, not `Strict`: Google's redirect back is a cross-site navigation. A missing, altered or
+expired cookie fails the sign-in as a forged `state` does, with `/login?error=oauth`; so does
+replacing the signing key while someone is at Google's screen.
+
 **The verified-email check comes first.** The custom `OidcUserService` rejects a Google account
 whose `email_verified` is false, or that has no email at all, *before* the success handler runs and
 before anyone is signed in. An unverified address could otherwise be used to claim an

@@ -1,5 +1,6 @@
 package nl.hackyourfuture.project.backend.tokens;
 
+import nl.hackyourfuture.project.backend.identity.auth.AuthorizationRequestCookie;
 import nl.hackyourfuture.project.backend.identity.auth.PendingGoogleLinks;
 import nl.hackyourfuture.project.backend.support.GoogleSignIn;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
@@ -30,6 +31,14 @@ class SecureGoogleCookiesIT extends IntegrationTest {
         TestUser owner = aUser().email("secure@example.test").create();
 
         String header = GoogleSignIn.as(anonymous(), "google-sub-secure", owner.email()).setCookie(PendingGoogleLinks.COOKIE);
+
+        assertThat(header).containsIgnoringCase("; Secure");
+    }
+
+    @Test
+    void theAuthorizationRequestCookieIsSecure() {
+        String header = GoogleSignIn.start(anonymous(), "google-sub-secure-start", "secure-start@example.test", true)
+                .setCookie(AuthorizationRequestCookie.COOKIE);
 
         assertThat(header).containsIgnoringCase("; Secure");
     }

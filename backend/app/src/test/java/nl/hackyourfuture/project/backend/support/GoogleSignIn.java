@@ -32,15 +32,28 @@ public final class GoogleSignIn {
      * {@code nonce}, tell the stub what to sign, and come back to the callback as Google would.
      */
     public static ApiResponse as(ApiClient client, String subject, String email) {
+        return callback(client, start(client, subject, email, true));
+    }
+
+    /** The first step: the redirect to Google, with the stub told what to sign for its nonce. */
+    public static ApiResponse start(ApiClient client, String subject, String email, boolean emailVerified) {
         ApiResponse start = client.get("/api/oauth2/authorization/google");
         if (start.status() != 302) {
             throw new IllegalStateException("The authorization request was not a redirect: " + start.status());
         }
+        StubOidcProvider.instance().willIssue(subject, email, emailVerified, "Google User", query(start, "nonce"));
+        return start;
+    }
+
+    /** The second step: Google's redirect back, with the {@code state} that start issued. */
+    public static ApiResponse callback(ApiClient client, ApiResponse start) {
+        return client.get("/api/login/oauth2/code/google?code=stub-code&state={state}", query(start, "state"));
+    }
+
+    private static String query(ApiResponse start, String name) {
         MultiValueMap<String, String> query =
                 UriComponentsBuilder.fromUriString(start.location()).build().getQueryParams();
-        StubOidcProvider.instance().willIssue(subject, email, true, "Google User", decode(query.getFirst("nonce")));
-        return client.get("/api/login/oauth2/code/google?code=stub-code&state={state}",
-                decode(query.getFirst("state")));
+        return decode(query.getFirst(name));
     }
 
     private static String decode(String value) {
