@@ -21,13 +21,14 @@ services:
       timeout: 5s
       retries: 10
 
-  # The key identity signs tokens with (Day 12). Runs and exits: it writes a key into the
-  # jwt-keys volume on the first start and keeps it after that, until `docker compose down -v`.
-  # Never in git, and never made by the backend, which does not start without one. The backend's
-  # own runtime image, because it already has openssl and is already pulled.
+  # Writes identity's user key and the monolith's service key (Day 39). Runs and exits: it
+  # writes both keys into the jwt-keys volume on the first start and keeps them after that, until
+  # `docker compose down -v`. Never in git, and never made by the backend, which does not start
+  # without them. The backend's own runtime image, because it already has openssl and is already
+  # pulled.
   jwt-key:
     image: eclipse-temurin:25-jre
-    command: ["sh", "/jwt-key.sh", "/keys/private.pem"]
+    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem"]
     volumes:
       - jwt-keys:/keys
       - ./scripts/jwt-key.sh:/jwt-key.sh:ro
@@ -63,6 +64,7 @@ services:
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
       # Written by jwt-key above, read-only here.
       JWT_PRIVATE_KEY_FILE: /run/keys/private.pem
+      SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/service.pem
     volumes:
       - jwt-keys:/run/keys:ro
     # No published port (Day 16): the gateway below is the way in, on 8080. 9090, the management

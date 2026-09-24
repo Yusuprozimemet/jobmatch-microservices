@@ -40,11 +40,7 @@ public class SigningKey {
     private final RSAKey key;
 
     public SigningKey(@Value("${app.jwt.private-key-file:}") String file) {
-        if (file == null || file.isBlank()) {
-            throw fail("is not set. Point it at an RSA private key (PEM, PKCS#8), for example one "
-                    + "written by scripts/jwt-key.sh");
-        }
-        this.key = load(Path.of(file));
+        this.key = read(VARIABLE, file);
         log.info("Signing tokens with key {}", key.getKeyID());
     }
 
@@ -63,16 +59,28 @@ public class SigningKey {
         return key.toPublicJWK();
     }
 
-    private static RSAKey load(Path file) {
+    /**
+     * The key in the PEM file {@code variable} names, after every check above; each failure names
+     * the variable. How the service key (Day 39) is read too, so both keys are held to one standard.
+     */
+    public static RSAKey read(String variable, String file) {
+        if (file == null || file.isBlank()) {
+            throw fail(variable, "is not set. Point it at an RSA private key (PEM, PKCS#8), for example one "
+                    + "written by scripts/jwt-key.sh");
+        }
+        return load(variable, Path.of(file));
+    }
+
+    private static RSAKey load(String variable, Path file) {
         String pem;
         try {
             pem = Files.readString(file, StandardCharsets.US_ASCII);
         } catch (IOException e) {
-            throw fail("points at " + file + ", which cannot be read: " + e);
+            throw fail(variable, "points at " + file + ", which cannot be read: " + e);
         }
-        RSAPrivateCrtKey privateKey = parse(pem, file);
+        RSAPrivateCrtKey privateKey = parse(variable, pem, file);
         if (privateKey.getModulus().bitLength() < MIN_BITS) {
-            throw fail("points at a " + privateKey.getModulus().bitLength() + "-bit key; "
+            throw fail(variable, "points at a " + privateKey.getModulus().bitLength() + "-bit key; "
                     + MIN_BITS + " bits is the minimum");
         }
         try {
@@ -86,17 +94,17 @@ public class SigningKey {
                     .keyID(unnamed.computeThumbprint().toString())
                     .build();
         } catch (GeneralSecurityException | JOSEException e) {
-            throw fail("points at " + file + ", whose public key cannot be derived: " + e);
+            throw fail(variable, "points at " + file + ", whose public key cannot be derived: " + e);
         }
     }
 
-    private static RSAPrivateCrtKey parse(String pem, Path file) {
+    private static RSAPrivateCrtKey parse(String variable, String pem, Path file) {
         String begin = "-----BEGIN PRIVATE KEY-----";
         String end = "-----END PRIVATE KEY-----";
         int from = pem.indexOf(begin);
         int to = pem.indexOf(end);
         if (from < 0 || to < from) {
-            throw fail("points at " + file + ", which is not a PKCS#8 PEM private key "
+            throw fail(variable, "points at " + file + ", which is not a PKCS#8 PEM private key "
                     + "(\"" + begin + "\")");
         }
         try {
@@ -106,14 +114,14 @@ public class SigningKey {
                 return rsa;
             }
         } catch (IllegalArgumentException | GeneralSecurityException e) {
-            throw fail("points at " + file + ", which is not an RSA private key: " + e.getMessage());
+            throw fail(variable, "points at " + file + ", which is not an RSA private key: " + e.getMessage());
         }
-        throw fail("points at " + file + ", an RSA key without the parameters needed to derive "
+        throw fail(variable, "points at " + file + ", an RSA key without the parameters needed to derive "
                 + "its public key");
     }
 
-    private static IllegalStateException fail(String problem) {
-        return new IllegalStateException(VARIABLE + " " + problem + ". Tokens cannot be signed "
-                + "without it, and identity never generates a key of its own.");
+    private static IllegalStateException fail(String variable, String problem) {
+        return new IllegalStateException(variable + " " + problem + ". Tokens cannot be signed "
+                + "without it, and the application never generates a key of its own.");
     }
 }
