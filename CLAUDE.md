@@ -71,7 +71,10 @@ Their findings are advice to the maintainer. What becomes a PR is the maintainer
 - A test that passes before and after a change proves nothing until it has been seen to fail.
   Break the code on purpose, run it, record what it reported, revert. The break never merges.
 - The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
-  split the PR along a line where each part stands alone. The gate has never been overridden.
+  split the PR along a line where each part stands alone. An `Oversized:` line in the
+  description turns the failure into a warning; it was used three times, on #1, #2 and #3 (Days
+  1-2 and the README rewrite), and never since. `main` is protected, so the check must pass
+  before a merge.
 - A grep criterion cannot tell a comment from code: do not name, in a comment, the thing the
   day's grep checks is gone.
 
