@@ -62,6 +62,15 @@ else carries them forward, and that is where most gaps have come from.
 
 Their findings are advice to the maintainer. What becomes a PR is the maintainer's call.
 
+## The implementer
+
+`.claude/agents/implementer.md`, on Haiku: the maintainer's choice, so that code is written by a
+smaller model and everything else stays with the main session. For each track, the main session
+writes the brief (files, changes, tests), sends it, and then does what the implementer does not:
+reviews the diff, runs the full checks in "Before pushing", breaks the code on purpose, commits,
+and writes the PR. Specs, audits, spec-change PRs and closing PRs stay with the main session. The
+implementer never commits or pushes.
+
 ## Before pushing
 
 - From `backend/`: `./mvnw clean verify` **and** `./mvnw -B checkstyle:check`. `verify` does not
