@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      # The suite also runs through the gateway, so a gateway change runs it too (Day 15).
+      - "services/api-gateway/**"
       - ".github/workflows/backend-ci-cd.yaml"
   pull_request:
     paths:
       - "backend/**"
+      # The suite also runs through the gateway, so a gateway change runs it too (Day 15).
+      - "services/api-gateway/**"
       - ".github/workflows/backend-ci-cd.yaml"
 
 # Cancel previous runs on new pushes
@@ -44,6 +48,20 @@ jobs:
       - name: Run tests
         working-directory: ./backend
         run: ./mvnw -B verify
+
+      # The Day 1-4 suite, and the stale-cookie and refresh tests, again through the API gateway
+      # (Day 15): the harness starts this image in front of the application and sends every
+      # request through it. In addition to the run above, never instead: only that one shows the
+      # backend still checks tokens itself.
+      - name: Build the gateway image
+        run: docker build -t jobmatch-api-gateway:harness services/api-gateway
+
+      - name: Run the suite through the gateway
+        working-directory: ./backend
+        run: >-
+          ./mvnw -B verify -pl app -am -Dharness.gateway=true
+          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT'
+          -Dsurefire.failIfNoSpecifiedTests=false
 
   build:
     needs: lint-and-test

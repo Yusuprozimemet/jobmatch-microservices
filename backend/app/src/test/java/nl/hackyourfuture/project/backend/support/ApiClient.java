@@ -30,17 +30,29 @@ public final class ApiClient {
     private static final JdkClientHttpRequestFactory REQUEST_FACTORY = new JdkClientHttpRequestFactory(
             HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build());
 
+    private final String baseUrl;
     private final RestClient http;
     private final Map<String, String> cookieJar = new LinkedHashMap<>();
     private final Map<String, String> headers = new LinkedHashMap<>();
 
-    private ApiClient(RestClient http) {
+    private ApiClient(String baseUrl, RestClient http) {
+        this.baseUrl = baseUrl;
         this.http = http;
     }
 
+    /** Where this client's requests go. */
+    public String baseUrl() {
+        return baseUrl;
+    }
+
     public static ApiClient onPort(int port) {
-        return new ApiClient(RestClient.builder()
-                .baseUrl("http://localhost:" + port)
+        return at("http://localhost:" + port);
+    }
+
+    /** A client for this base URL: the application's own, or the gateway's in front of it. */
+    public static ApiClient at(String baseUrl) {
+        return new ApiClient(baseUrl, RestClient.builder()
+                .baseUrl(baseUrl)
                 .requestFactory(REQUEST_FACTORY)
                 .defaultStatusHandler(status -> true, (request, response) -> { })
                 .build());

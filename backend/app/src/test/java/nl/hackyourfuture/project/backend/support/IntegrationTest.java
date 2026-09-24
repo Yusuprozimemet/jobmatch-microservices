@@ -82,8 +82,16 @@ public abstract class IntegrationTest {
         return new PostingBuilder(jdbc());
     }
 
-    /** A client with no cookies - what a logged-out visitor gets. */
+    /**
+     * A client with no cookies - what a logged-out visitor gets. Through the gateway when the run
+     * asks for it ({@link Gateway}).
+     */
     protected ApiClient anonymous() {
+        return ApiClient.at(Gateway.baseUrl(port));
+    }
+
+    /** A client that always talks to the application itself, gateway or not. */
+    protected ApiClient direct() {
         return ApiClient.onPort(port);
     }
 
