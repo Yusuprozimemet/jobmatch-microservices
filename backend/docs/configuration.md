@@ -105,9 +105,13 @@ All of it in [`application.yaml`](../src/main/resources/application.yaml).
 | `DB_HOST` | `localhost` | `db` under compose |
 | `DB_PORT` | `5432` | |
 | `DB_NAME` | `project_db` | |
-| `DB_SCHEMA` | `app` | Also the schema Flyway migrates |
-| `DB_USER` | `admin` | `app_user` in a production-like setup |
+| `DB_USER` | `admin` | The owner of the migrations; only Flyway logs in as it. `app_user` in a production-like setup |
 | `DB_PASSWORD` | `password` | |
+| `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_MATCHING_USER`, `DB_JOBS_USER` | `identity_user`, … | Each module's own login, with its own schema as the search path (Day 11). `jobs_user` only reads the mart |
+| `DB_IDENTITY_PASSWORD`, `DB_APPLICATIONS_PASSWORD`, `DB_MATCHING_PASSWORD`, `DB_JOBS_PASSWORD` | `password` | Their passwords |
+
+There is no schema setting since Day 11: the owner's Flyway migrates `app` (V1–V14), and each
+module's Flyway migrates its own schema as its own login.
 
 ## Application
 
@@ -214,12 +218,13 @@ The one that matters to the backend team is **`BACKEND_PG_PUBLISH_SCHEMA`** — 
 # 6. The database: schemas and roles
 
 [`scripts/db-setup.py`](../../scripts/db-setup.py) creates the production-like arrangement: the
-database, three schemas, and one login role per owner.
+database, six schemas, and one login role per owner.
 
 | Schema | Owner role | Written by | Read by |
 | --- | --- | --- | --- |
-| `app` | `app_user` | the backend | the pipeline (read-only) |
-| `analytics` | `analytics_user` | the scheduled pipeline | the backend (read-only) |
+| `app` | `app_user` | the backend's migrations, V1–V14 | everyone, read-only |
+| `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11) | everyone, read-only |
+| `analytics` | `analytics_user` | the scheduled pipeline | everyone, read-only; the backend reads it as `jobs_user`, which owns nothing |
 | `analytics_dev` | `analytics_dev_user` | trainees, by hand | everyone, read-only |
 
 Each role has full access to what it owns and read-only access to the others, for existing and future
@@ -258,8 +263,9 @@ say so once, loudly, rather than fail per request.
 
 What must be set beyond the defaults, in one place:
 
-- [ ] `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SCHEMA=app`, `DB_USER=app_user`, `DB_PASSWORD` — the
-      `prod` profile has no fallbacks
+- [ ] `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER=app_user`, `DB_PASSWORD`, and each module's login:
+      `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_MATCHING_USER`, `DB_JOBS_USER` with their
+      `_PASSWORD`s — the `prod` profile has no fallbacks, and the backend does not start without them
 - [ ] `JWT_PRIVATE_KEY_FILE`, pointing at a key from the secret store — the backend does not start
       without it. Replacing the key later signs every user out
 - [ ] `APP_BASE_URL=https://c55c.hyf.dev`, no trailing slash
@@ -303,9 +309,10 @@ it, older Compose versions read every service's `env_file` while loading the pro
 inactive profile — and `docker compose up -d db` failed on a clean clone before anyone had written
 `data/.env`.
 
-**Flyway migrates `DB_SCHEMA`.** Point it at a schema the `DB_USER` does not own and startup fails
-with `permission denied for schema`. The repository SQL uses unqualified table names and resolves
-them through the same setting.
+**Two kinds of migration, two logins.** `DB_USER` migrates `app` (V1–V14, in
+`app/src/main/resources/db/migration`); each module's Flyway migrates its own schema as that module's
+login (`<module>/src/main/resources/db/<module>`, baselined at 0). A login that does not own the
+schema its Flyway points at fails startup with `permission denied for schema`.
 
 **Restarting the backend signs no one out** since Day 13: the login is a token the browser holds,
 not a session in the container's memory. Since Day 14 Google sign-in keeps none either: its state is
