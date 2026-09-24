@@ -17,8 +17,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * One trace spans the gateway and what is behind it: the backend receives a {@code traceparent}
@@ -58,8 +60,10 @@ class TracingTest {
         String traceparent = BACKEND.received().getFirst().headers().getFirst(TRACEPARENT);
         assertThat(traceparent).as("W3C, sampled").matches("00-[0-9a-f]{32}-[0-9a-f]{16}-01");
         String traceId = traceparent.split("-")[1];
-        assertThat(output.getOut().lines().filter(line -> line.contains("GET /api/jobs 200")))
-                .singleElement().asString().contains(traceId);
+        // The line is written once the request is done, which can be after the client has the answer.
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+                assertThat(output.getOut().lines().filter(line -> line.contains("GET /api/jobs 200")))
+                        .singleElement().asString().contains(traceId));
     }
 
     @Test
