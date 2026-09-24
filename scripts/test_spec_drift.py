@@ -147,6 +147,21 @@ Days keep their numbers; they run in this order:
         days = sd.settle([a_day(28, kinds=["close"]), a_day(29)], [28, 29])
         self.assertIn("stop and evaluate", sd.next_step(days, [], [28, 29], 28))
 
+    def test_numbered_tracks_are_their_own_and_a_split_track_is_its_letter(self):
+        tracks_section = """| Track | Owner | Work |
+|---|---|---|
+| 0 | | Work |
+| A1 | | Work |
+| A2 | | Work |
+| B | | Work |"""
+        self.assertEqual(sd.track_names(tracks_section), ["0", "A1", "A2", "B"])
+        self.assertEqual(sd.merged_tracks(["day-39/track-0-x", "day-39/track-a1-key"], ["0", "A1", "A2", "B"]),
+                         ["0", "A1"])
+        self.assertEqual(sd.merged_tracks(["day-15/track-c1-rate", "day-15/track-c2-cors", "day-38/track-c-fix-harness"],
+                                          ["0", "A", "B", "C", "D"]),
+                         ["C"])
+        self.assertEqual(sd.merged_tracks(["day-39/spec-written"], ["0", "A1", "A2", "B"]), [])
+
 
 if __name__ == "__main__":
     unittest.main()
