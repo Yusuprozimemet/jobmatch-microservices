@@ -269,9 +269,11 @@ compose check uses the API docs as its public route.
   preflights and strips `Access-Control-*` instead.
 - **Spring Boot 4 turns trace propagation off while span export is off.** Its W3C propagator is
   `@ConditionalOnEnabledTracingExport`; otherwise it installs a no-op. The gateway declares the
-  propagator itself (#102). **The backend has the same gap, not fixed here:** in default
-  compose it ignores the gateway's `traceparent` and logs a trace id of its own, so "the backend
-  already logs it" holds only with export on. A one-bean change; raised with the maintainer.
+  propagator itself (#102). **The backend had the same gap:** in default compose it ignored the
+  gateway's `traceparent` and logged a trace id of its own, so "the backend already logs it" held
+  only with export on. Fixed after the close in Track C3, with the same bean
+  (`config/TracingConfig`): `tokens/TraceContinuedIT`, export off, logs the password change under
+  the caller's trace; red before the bean (`expected: "4bf92f35…" but was: "eef593a8…"`).
 - **Mistakes of mine, recorded in their PRs:**
   - #99: my first report of the breaks attached failures to the wrong test names (a pattern
     that missed self-closing test cases), and two breaks were invalid at first: one stopped the
