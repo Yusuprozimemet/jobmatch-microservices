@@ -1,6 +1,7 @@
 package nl.hackyourfuture.project.backend.config;
 
 import lombok.extern.slf4j.Slf4j;
+import nl.hackyourfuture.project.backend.identity.auth.AuthorizationRequestCookie;
 import nl.hackyourfuture.project.backend.identity.auth.OAuth2LoginSuccessHandler;
 import nl.hackyourfuture.project.backend.identity.token.AccessTokenAuthentication;
 import nl.hackyourfuture.project.backend.identity.token.AuthCookies;
@@ -64,6 +65,7 @@ public class SecurityConfig {
             ObjectProvider<ClientRegistrationRepository> clientRegistrations,
             ObjectProvider<OAuth2UserService<OidcUserRequest, OidcUser>> oidcUserService,
             OAuth2LoginSuccessHandler oauth2LoginSuccessHandler,
+            AuthorizationRequestCookie authorizationRequestCookie,
             AuthCookies authCookies,
             AccessTokenAuthentication accessTokens,
             Environment environment) {
@@ -87,8 +89,8 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
-                // No session holds a login: every request brings its access token (Day 13). The
-                // Google routes still keep their authorization request in one until Day 14.
+                // No session holds a login: every request brings its access token (Day 13). A
+                // failed Google sign-in still creates one, for the exception, until the end of Day 14.
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .bearerTokenResolver(accessTokens.cookieResolver())
@@ -115,7 +117,9 @@ public class SecurityConfig {
         if (clientRegistrations.getIfAvailable() != null) {
             String loginRedirect = environment.getRequiredProperty("app.oauth2.failure-redirect");
             http.oauth2Login(oauth2 -> oauth2
-                    .authorizationEndpoint(endpoint -> endpoint.baseUri(AUTHORIZATION_BASE_URI))
+                    .authorizationEndpoint(endpoint -> endpoint
+                            .baseUri(AUTHORIZATION_BASE_URI)
+                            .authorizationRequestRepository(authorizationRequestCookie))
                     .redirectionEndpoint(endpoint -> endpoint.baseUri(REDIRECTION_BASE_URI))
                     // Named explicitly so the email-verified check can't silently disappear.
                     .userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService.getObject()))
