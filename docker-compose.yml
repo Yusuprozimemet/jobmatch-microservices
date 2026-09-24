@@ -81,6 +81,9 @@ services:
     build: ./services/api-gateway
     environment:
       BACKEND_URL: http://backend:8080
+      # Tracing as the backend's, above: off unless TRACING_EXPORT_ENABLED=true, to the same Tempo.
+      TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
+      OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     ports:
       - "8081:8081"
     depends_on:
