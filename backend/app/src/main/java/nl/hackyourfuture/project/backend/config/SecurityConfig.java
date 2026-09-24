@@ -79,6 +79,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/oauth2/**", "/api/login/oauth2/**").permitAll()
                         // The public key tokens are verified with. Whoever verifies has no token yet.
                         .requestMatchers(HttpMethod.GET, "/.well-known/jwks.json").permitAll()
+                        // The service key set, for services verifying the monolith's tokens (Day 39).
+                        .requestMatchers(HttpMethod.GET, "/.well-known/service-jwks.json").permitAll()
                         // Only these /api/jobs routes are public - top-matches stays private.
                         .requestMatchers(HttpMethod.GET, "/api/jobs/top-matches").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/jobs", "/api/jobs/filters", "/api/jobs/*").permitAll()
