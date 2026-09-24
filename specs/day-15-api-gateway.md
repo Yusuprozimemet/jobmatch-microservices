@@ -254,7 +254,8 @@ compose check uses the API docs as its public route.
 - **Departures, and choices the spec left open:**
   - **The four credential routes share one bucket per client:** 10 a minute across login,
     register and both reset steps, stricter than "the 11th login". The gateway's filter keys on
-    the client alone; a bucket per route would give a guesser 40 tries a minute.
+    the client alone; a bucket per route would give a guesser 40 tries a minute. Kept, by decision
+    after the close: one budget per client across the credential routes is the design.
   - **The rules check two more stale tokens** than the criterion names: another issuer, and
     garbage.
   - **Verify's gateway run needed the image built first and the self-test named.** Corrected
@@ -262,7 +263,11 @@ compose check uses the API docs as its public route.
     needs BuildKit (#100).
   - **The backend's wrapper builds the gateway** (`backend/mvnw -f services/api-gateway/pom.xml`),
     the question Track A was left to settle (#98).
-  - **An unreachable backend comes back as 500**, not 502 (#98). Left as it is.
+  - **An unreachable backend came back as 500**, not 502 (#98). Fixed after the close in Track
+    C4: 502 when the backend cannot be reached, 504 when it does not answer within
+    `GATEWAY_READ_TIMEOUT` (30 s, above the 20 s the backend waits for the LLM). On the way:
+    the rate limit adds a header to whatever the route returns, and a plain `ServerResponse`'s
+    headers are read-only, so an error built with it became a 500 on the credential routes.
 - **Cross-origin is not Spring's CORS rejection.** Through the Next.js proxy from Day 16 a
   same-origin request carries the browser's `Origin` with the gateway's host, and Spring refuses
   it: with its rejection in place the frontend's own login got 403 (#102). The gateway refuses

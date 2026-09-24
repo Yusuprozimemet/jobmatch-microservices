@@ -28,6 +28,7 @@ final class RecordingUpstream implements AutoCloseable {
     private final HttpServer server;
     private final List<Received> received = new CopyOnWriteArrayList<>();
     private final Map<String, String> answerHeaders = new ConcurrentHashMap<>();
+    private volatile long answerAfterMillis;
 
     RecordingUpstream() {
         try {
@@ -37,6 +38,11 @@ final class RecordingUpstream implements AutoCloseable {
         }
         server.createContext("/", exchange -> {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            try {
+                Thread.sleep(answerAfterMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             received.add(new Received(exchange.getRequestMethod(), exchange.getRequestURI().toString(),
                     exchange.getRequestHeaders(), body));
             byte[] answer = BODY.getBytes(StandardCharsets.UTF_8);
@@ -60,6 +66,11 @@ final class RecordingUpstream implements AutoCloseable {
     void clear() {
         received.clear();
         answerHeaders.clear();
+    }
+
+    /** Answers only after this long from now on, as a backend that has stalled would. */
+    void answerAfter(java.time.Duration delay) {
+        answerAfterMillis = delay.toMillis();
     }
 
     /** Adds this header to every answer from now on, as a service behind the gateway might. */
