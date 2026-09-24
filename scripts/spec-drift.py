@@ -262,6 +262,30 @@ def settle(days, order):
     return days
 
 
+# A track's name is a letter or a digit, with a number when a day splits one (Day 39's A1, A2).
+TRACK_ROW = re.compile(r"^\| *([0-9A-Z][0-9]?) *\|")
+
+
+def track_names(section_text):
+    """The tracks a day's table lists, in its order."""
+    return [m.group(1) for line in section_text.splitlines() if (m := TRACK_ROW.match(line))]
+
+
+def merged_tracks(branches, tracks):
+    """The tracks with a merged branch. `track-a1-...` is A1 when the table lists A1; otherwise it
+    is part of A, as Day 15's `track-c1`..`c4` were its one track C."""
+    merged = set()
+    for branch in branches:
+        m = re.search(r"/track-([0-9a-z])([0-9]*)(?:-|$)", branch)
+        if m:
+            full_name = (m.group(1) + m.group(2)).upper()
+            if full_name in tracks:
+                merged.add(full_name)
+            else:
+                merged.add(m.group(1).upper())
+    return sorted(merged)
+
+
 def roadmap(snaps, prs, blobs):
     head = snaps[-1]["sha"]
     merged = [p for p in prs.values() if p.get("state") == "MERGED"]
@@ -274,13 +298,11 @@ def roadmap(snaps, prs, blobs):
             continue
         text, first = blobs.read(head, path), blobs.read(snaps[0]["sha"], first_files.get(d, path))
         crit = section(text, "Acceptance criteria")
-        tracks = [r.split("|")[1].strip() for r in section(text, "Tracks").splitlines()
-                  if re.match(r"^\| *[0-9A-Z] *\|", r)]
+        tracks = track_names(section(text, "Tracks"))
         work = {r.split("|")[1].strip(): r.split("|")[3].strip() for r in section(text, "Tracks").splitlines()
-                if re.match(r"^\| *[0-9A-Z] *\|", r)}
+                if TRACK_ROW.match(r)}
         mine = sorted((p for p in merged if p["headRefName"].startswith(f"day-{d:02d}/")), key=lambda p: p["number"])
-        done_tracks = sorted({m.group(1).upper() for p in mine
-                              if (m := re.search(r"/track-([0-9a-z])[0-9]*(?:-|$)", p["headRefName"]))})
+        done_tracks = merged_tracks([p["headRefName"] for p in mine], tracks)
         ticked, total = crit.count("- [x]"), len(CRITERION.findall(crit))
         exp = re.search(r"Expected PRs:\*\* *(\d+)", text)
         exp0 = re.search(r"Expected PRs:\*\* *(\d+)", first)
