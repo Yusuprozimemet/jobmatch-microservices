@@ -15,7 +15,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Only {@code identity} reads the refresh-token hashes (Day 12) and the pending Google links
- * (Day 14), although every other module may read the rest of its schema.
+ * (Day 14). Since Day 38 no other module reads any of its schema, and the refusal is the
+ * schema's; {@code ModuleConnectionsIT} checks that nothing identity creates later is granted.
  *
  * <p>Through the application's own pools, as {@code ModuleConnectionsIT} does, so the role refused
  * is the one each module really logs in as.
@@ -24,23 +25,6 @@ class RefreshTokenGrantsIT extends IntegrationTest {
 
     @Autowired
     private ApplicationContext context;
-
-    // Without these the refusal below would hold by accident: nobody would have been granted
-    // anything to revoke. The harness registers them as db-setup.py does in production.
-    @Test
-    void theOthersAreGrantedWhatIdentityCreates() {
-        assertThat(jdbc()
-                .sql("""
-                        SELECT DISTINCT pg_get_userbyid(acl.grantee)
-                        FROM pg_default_acl d, aclexplode(d.defaclacl) acl
-                        WHERE d.defaclrole = 'identity_user'::regrole AND d.defaclnamespace = 'identity'::regnamespace
-                          AND d.defaclobjtype = 'r' AND acl.privilege_type = 'SELECT'
-                        ORDER BY 1
-                        """)
-                .query(String.class)
-                .list())
-                .containsExactly("applications_user", "jobs_user", "matching_user");
-    }
 
     @ParameterizedTest
     @CsvSource({"applications, refresh_tokens", "matching, refresh_tokens", "jobs, refresh_tokens",
@@ -53,7 +37,7 @@ class RefreshTokenGrantsIT extends IntegrationTest {
                 .query(Long.class)
                 .single())
                 .rootCause()
-                .hasMessageContaining("permission denied for table " + table);
+                .hasMessageContaining("permission denied for schema identity");
     }
 
     @Test

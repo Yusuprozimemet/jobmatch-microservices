@@ -5,11 +5,12 @@ Creates the database, the 'app', 'analytics' and 'analytics_dev' schemas, and a
 login role per owner: 'app_user' owns 'app', 'analytics_user' owns 'analytics',
 'analytics_dev_user' owns 'analytics_dev'. Each role has full access to the
 schemas it owns and read-only access to the others, for both existing and future
-objects.
+objects, except the module schemas below, which only their owner reads.
 
 Each backend module has a schema and a role too (Day 11): 'identity_user' owns
 'identity', 'applications_user' 'applications', 'matching_user' 'matching', and
-'jobs_user' owns nothing and only reads. 'app_user' still runs the migrations that
+'jobs_user' owns nothing and only reads. No other role reads a module's schema (Day 38):
+each module is to leave the process with its login. 'app_user' still runs the migrations that
 move the tables out of 'app', so it is made a member of the three module roles:
 moving a table into a schema and handing it to that schema's role needs both.
 
@@ -313,7 +314,7 @@ def report(args: argparse.Namespace, passwords: dict[str, str | None]) -> None:
     print(f"  schemas  : {', '.join(SCHEMA_OWNERS)}\n")
     for role in ROLES:
         owned = [s for s, owner in SCHEMA_OWNERS.items() if owner == role]
-        read_only = [s for s in SCHEMA_OWNERS if s not in owned]
+        read_only = [s for s in SCHEMA_OWNERS if s not in owned and s not in MODULE_SCHEMAS]
         print(f"  {role}")
         print(f"    password : {passwords[role] or unchanged}")
         full = f"full on {', '.join(owned)} — " if owned else ""
@@ -355,8 +356,10 @@ def main() -> None:
         creators = [args.admin_user, *roles]
         for schema, owner in SCHEMA_OWNERS.items():
             for role in roles:
-                grant_access(conn, schema, role,
-                             FULL_ACCESS if role == owner else READ_ONLY, creators)
+                if role == owner:
+                    grant_access(conn, schema, role, FULL_ACCESS, creators)
+                elif schema not in MODULE_SCHEMAS:
+                    grant_access(conn, schema, role, READ_ONLY, creators)
 
     report(args, passwords)
 
