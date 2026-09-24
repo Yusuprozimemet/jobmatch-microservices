@@ -8,6 +8,8 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -25,6 +27,7 @@ final class RecordingUpstream implements AutoCloseable {
 
     private final HttpServer server;
     private final List<Received> received = new CopyOnWriteArrayList<>();
+    private final Map<String, String> answerHeaders = new ConcurrentHashMap<>();
 
     RecordingUpstream() {
         try {
@@ -38,6 +41,7 @@ final class RecordingUpstream implements AutoCloseable {
                     exchange.getRequestHeaders(), body));
             byte[] answer = BODY.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
+            answerHeaders.forEach((name, value) -> exchange.getResponseHeaders().add(name, value));
             exchange.sendResponseHeaders(200, answer.length);
             exchange.getResponseBody().write(answer);
             exchange.close();
@@ -55,6 +59,12 @@ final class RecordingUpstream implements AutoCloseable {
 
     void clear() {
         received.clear();
+        answerHeaders.clear();
+    }
+
+    /** Adds this header to every answer from now on, as a service behind the gateway might. */
+    void answerWith(String name, String value) {
+        answerHeaders.put(name, value);
     }
 
     @Override

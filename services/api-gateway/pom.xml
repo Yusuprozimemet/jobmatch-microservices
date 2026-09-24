@@ -46,6 +46,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
 		</dependency>
+		<!-- Traces, as the backend makes them since Day 05: Micrometer tracing exporting OTLP, not the
+		     Java agent. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-opentelemetry</artifactId>
+		</dependency>
 		<!-- The rate limit: the gateway's Bucket4j filter, with buckets held in memory by Caffeine,
 		     which drops a client's bucket once it has refilled. One replica needs no shared store. -->
 		<dependency>
@@ -65,6 +71,12 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- @SpringBootTest replaces the tracer with a no-op one; TracingTest needs the real one. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-micrometer-tracing-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

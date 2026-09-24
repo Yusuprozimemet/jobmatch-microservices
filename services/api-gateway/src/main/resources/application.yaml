@@ -6,6 +6,25 @@ spring:
 server:
   port: 8081
 
+# The trace id and span id on every line, the access log's included.
+logging:
+  pattern:
+    correlation: "[%X{traceId:-},%X{spanId:-}] "
+
+# Tracing as the backend does it (Day 05): every request sampled, the trace id in every log line,
+# and spans exported only when TRACING_EXPORT_ENABLED is set, to the same Tempo.
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_PROBABILITY:1.0}
+    export:
+      enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+
 gateway:
   # The backend's base URL: http://backend:8080 in compose.
   backend-url: ${BACKEND_URL:http://localhost:8080}
