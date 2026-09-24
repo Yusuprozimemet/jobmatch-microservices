@@ -42,43 +42,66 @@ All traffic goes through the gateway, and the backend has no public port.
 Track B follows A: it documents A's wiring. No Track 0: the `hold` checks exist already.
 
 ## Acceptance criteria
-- [ ] **new** — Compose publishes no backend port: `docker compose -p day16check ps backend`
+- [x] **new** — Compose publishes no backend port: `docker compose -p day16check ps backend`
       shows no `->`, and `curl localhost:8080/api/docs/openapi.yaml` answers 200 from the
       gateway. Red today: the audit's `ps` showed `backend 0.0.0.0:8080->8080/tcp` and
       `api-gateway 0.0.0.0:8081->8081/tcp`.
-- [ ] **new** — The frontend reaches the backend only through the gateway: with the gateway
+      #109: `backend 8080/tcp, 9090/tcp`, `api-gateway 0.0.0.0:8080->8081/tcp`, docs 200. On
+      `main` at 8dee1e1, `docker compose config` gives the backend no `ports` and the gateway
+      `8080 -> 8081`.
+- [x] **new** — The frontend reaches the backend only through the gateway: with the gateway
       stopped (`docker compose -p day16check stop api-gateway`), `localhost:3000/api/users/me`
       no longer answers 401. Red today: the frontend calls `backend:8080` directly, so it still
       answers 401.
-- [ ] **new** — The limit holds through the frontend: in compose, the 11th wrong-password
+      #109: 500 with the gateway stopped. The frontend's URL is `http://api-gateway:8081` in
+      compose and in `frontend/Dockerfile`.
+- [x] **new** — The limit holds through the frontend: in compose, the 11th wrong-password
       `POST localhost:3000/api/auth/login` in a minute is 429, and still 429 when every request
       sends a different `X-Forwarded-For`. Red today: the audit got 401 eleven times through
       3000. Red again with `GATEWAY_TRUSTED_PROXIES` set to the frontend: twelve spoofed logins
       were `200 ×12` in the audit's chain.
-- [ ] **hold** — The flow works through the frontend in compose, by curl: register 201, login
+      #109: `401 ×10, 429, 429`, plain and with a new `X-Forwarded-For` each time. Red again in
+      compose with the gateway trusting the frontend's address: spoofed `401 ×12`, while plain
+      logins against that same gateway still hit 429 on the 11th.
+- [x] **hold** — The flow works through the frontend in compose, by curl: register 201, login
       200, `/api/users/me` 200, `PATCH /api/auth/password` 200, logout 200 (**Verify**). True today,
       direct to the backend. Broken on purpose in Track A's PR (the frontend pointed at a
       host that does not answer).
-- [ ] **hold** — The Day 1–4 suite, `StaleCookieIT` and `RefreshIT` pass through the gateway with
+      #109: 201, 200, 200, 200, 200 through the gateway. Broken with the gateway stopped: every
+      step 500.
+- [x] **hold** — The Day 1–4 suite, `StaleCookieIT` and `RefreshIT` pass through the gateway with
       `-Dharness.gateway=true` (**Verify**), and the gateway's own 27 tests pass. Seen red on
       Day 15 (#100, #101).
-- [ ] **hold** — No session code: from `backend/`,
+      #109: 203 tests in 26 reports through the gateway, 0 failures; the gateway 27, 0 failures;
+      the backend direct 299, 0 failures, 1 skipped by design. `contract/` and `support/`
+      unchanged across the day.
+- [x] **hold** — No session code: from `backend/`,
       `grep -rn "JSESSIONID\|HttpSession\|establishSession" */src/main docs ../services/api-gateway/src ../frontend/src`
       prints nothing; `tokens/NoSessionIT` and `tokens/GoogleNoSessionIT` are the behavioural
       half. True today (exit 1). Broken on purpose in this spec change: with
       `import jakarta.servlet.http.HttpSession;` added to `BackendApplication.java`, it printed
       that line; reverted.
-- [ ] **hold** — `backend/docs/auth.md` describes tokens, not sessions:
+      #108 for the break. It then caught a real one in #110's first draft: `architecture.md`
+      named the old session cookie, and the grep printed both lines. Exit 1 on `main` at 8dee1e1.
+- [x] **hold** — `backend/docs/auth.md` describes tokens, not sessions:
       `grep -cE "JSESSIONID|HttpSession" backend/docs/auth.md` gives 0. True since Day 13 (#89);
       the same grep gives 4 on the `b178e90` version.
-- [ ] **new** — The docs know the gateway: `grep -n "No rate limiting" backend/docs/api.md
+      0 on `main` at 8dee1e1, after #110 added the gateway to it.
+- [x] **new** — The docs know the gateway: `grep -n "No rate limiting" backend/docs/api.md
       backend/docs/auth.md` prints nothing, and `grep -n "env_file" backend/docs/configuration.md`
       no longer says compose passes `backend/.env` to the backend. Red today: `api.md:649`,
       `auth.md:428` and `configuration.md:31`.
-- [ ] **new** — `backend/docs/architecture.md` has two `mermaid` blocks, before and after, and each
+      #110: the first grep prints nothing; `configuration.md:31` now says compose does not read
+      `backend/.env`, and the only other `env_file` line is about older Compose versions.
+- [x] **new** — `backend/docs/architecture.md` has two `mermaid` blocks, before and after, and each
       renders with `minlag/mermaid-cli`. Red today: the file does not exist.
-- [ ] **new** — The rollback point is tagged: `git ls-remote --tags origin phase-2` prints one
+      #110: both render, exit 0, and were looked at. Red with the gateway node left unclosed:
+      exit 1, `Parse error on line 4`.
+- [x] **new** — The rollback point is tagged: `git ls-remote --tags origin phase-2` prints one
       line, pointing at Track B's merge commit. Red today: `git ls-remote --tags origin` is empty.
+      `phase-2`, annotated, pushed after #110 at the maintainer's word: `ls-remote` prints
+      `7e6247f… refs/tags/phase-2`, the tag object, and `phase-2^{commit}` is 8dee1e1, #110's
+      merge.
 
 ## Verify
 ```bash
@@ -159,3 +182,36 @@ login, Google login, search, save a job, view matches, change password, log out.
     frontend once `BACKEND_API_URL` changes.
   - Next's rewrite timeout (30 s) equals `GATEWAY_READ_TIMEOUT`, so a slow backend may reach the
     browser as the frontend's proxy error rather than the gateway's 504. Recorded, not changed.
+- **Done on Day 16.** Spec change #108, then #109 (Track A: the gateway on 8080, the backend's
+  port gone, the frontend through the gateway) and #110 (Track B: the docs, the README and the two
+  diagrams), and the `phase-2` tag on #110's merge. Estimated 3 pull requests as first written,
+  2 after the audit; took 2.
+- **The audit changed more than the checks.** Of its 14 findings, the one with a design in it was
+  the rate limit: the spec said to trust the frontend's `X-Forwarded-For`, and the frontend passes
+  a client's own header through, so every request could pick its own bucket. It took a chain of
+  real containers to see it; reading `proxy.ts` shows a one-line rewrite and nothing wrong. The
+  maintainer chose one shared bucket locally over a proxy container in front.
+- **Two documents had been wrong since the initial commit.** `configuration.md` said compose passes
+  `backend/.env` into the backend; the backend service has never had an `env_file`, which is why
+  compose runs with Google sign-in off. The README said a fresh database shows an empty job list;
+  `/api/jobs` is 500 until the pipeline publishes. Both corrected in #110, from a compose run, not
+  a read.
+- **Departures and choices:**
+  - The gateway keeps 8081 inside its container and compose maps `8080:8081`, so the harness image
+    and `support/Gateway.java` did not change.
+  - The production ingress is not in the repository; pointing it at the gateway, and trusting it
+    only if it overwrites `X-Forwarded-For`, is the maintainer's change on the live host.
+  - Track B also wrote the gateway's settings table and production checklist lines into
+    `configuration.md`: the spec named the file, not those sections.
+- **Mistakes of mine, recorded in their PRs:**
+  - #109: my first trust-the-frontend override had `"\."` in double-quoted YAML; compose refused
+    it, the gateway did not restart, and that run hit a spent bucket. Rerun after checking the
+    variable inside the container.
+  - #110: my first `architecture.md` named the old session cookie, and the day's session grep
+    printed it. The grep was scoped in #108 to include `docs`; it did its job.
+  - #108 first gave the password change a 204; the contract suite says 200. Fixed before the PR.
+- **For Phase 3:** the backend is reachable only through the gateway, which routes `/api/**` and
+  the key set to one upstream. Extracting job-service means a second route and a second
+  `BACKEND_URL`; the gateway's access table is a copy of the backend's, so a rule changed in one
+  must change in the other. The Day 1–4 suite already runs
+  through the gateway, in CI.
