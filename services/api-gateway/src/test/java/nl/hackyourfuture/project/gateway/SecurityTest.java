@@ -92,6 +92,20 @@ class SecurityTest {
         assertThat(BACKEND.received()).isEmpty();
     }
 
+    // Day 39 adds /internal/** to the backend (service tokens only) and the service key set at
+    // /.well-known/service-jwks.json. Neither is routed through the public port. With a valid
+    // cookie, an unrouted internal path returns 404, proving it is not routed; without one, every
+    // unrouted path returns 401.
+    @Test
+    void internalRoutesAndTheServiceKeySetAreNotRoutedEvenWithAValidCookie() throws Exception {
+        String cookie = KEYS.valid(UUID.randomUUID());
+        for (String route : new String[] {"GET /internal/users/00000000-0000-0000-0000-000000000000", "GET /.well-known/service-jwks.json"}) {
+            assertThat(send(route, null).statusCode()).as(route + " without a cookie").isEqualTo(401);
+            assertThat(send(route, cookie).statusCode()).as(route + " with a valid cookie").isEqualTo(404);
+        }
+        assertThat(BACKEND.received()).isEmpty();
+    }
+
     @Test
     void aPrivateRouteWithAValidCookieReachesTheBackend() throws Exception {
         send("GET /api/profile", KEYS.valid(UUID.randomUUID()));
