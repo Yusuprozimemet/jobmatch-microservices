@@ -1,0 +1,27 @@
+name: Dashboard metric tests
+
+# The dashboard's drift and gap are only worth reading if they move when they
+# should. scripts/test_spec_drift.py builds small repositories and checks that
+# they do; this runs it on every pull request that touches the script.
+
+on:
+  pull_request:
+    paths:
+      - scripts/spec-drift.py
+      - scripts/test_spec_drift.py
+      - .github/workflows/spec-drift-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Drift and gap move when they should
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy
+      - run: python scripts/test_spec_drift.py
