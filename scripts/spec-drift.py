@@ -33,6 +33,9 @@ COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*|--|<!--|#(\s|!|$))")
 COMMENT_TAIL = re.compile(r"/\*.*?\*/|\s(//|--|#)\s.*$")
 CRITERION = re.compile(r"^- \[( |x)\]", re.M)
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
+# The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
+PLATFORM = "platform"
+FINISHED = ("done", "closed")
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
 
 
@@ -68,10 +71,15 @@ def code_like(tok):
     return bool(re.search(r"[a-z][A-Z]", tok)) or ("_" in tok.strip("_") and tok.lower() == tok)
 
 
-def kind(title, branch):
+def kind(title, branch, files=None):
+    """What a merge was. A spec change must touch the spec (a day spec or plan.md) when its files
+    are known: #55 changed the spec rules and #59 and #107 the dashboard, none of them a spec."""
     t, b = title.lower(), branch.lower()
-    if "spec change" in t or "/spec" in b or b.startswith("specs/"):
-        return "spec"
+    if ("spec change" in t or "plan change" in t or re.match(r"day-\d+/spec", b)
+            or b.startswith(("specs/", "plan/"))):
+        if files is None or any(f == "plan.md" or day_of(f) for f in files):
+            return "spec"
+        return "other"
     if "tick" in t or "close" in b:
         return "close"
     if "track" in b or "track" in t or re.match(r"day-0[12]/", b):
@@ -160,7 +168,8 @@ def trajectory(snaps, blobs):
     idf = rarity(snaps[0]["texts"])
     prev, day, rows, vectors = origin, 0, [], []
     for i, s in enumerate(snaps):
-        s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"])
+        touched = run("git", "diff", "--name-only", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").split() if i else []
+        s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"], touched)
         m = re.match(r"day-(\d+)/", s["branch"])
         if m and s["kind"] in ("code", "close"):
             day = max(day, int(m.group(1)))
@@ -208,6 +217,51 @@ def section(text, heading):
     return m.group(1) if m else ""
 
 
+def run_order(plan, spec_days):
+    """The order days run in, from plan.md's "Day-by-day specs" list, and the day after which work
+    stops to be evaluated. Days the list does not name (the finished ones) come first. A day named
+    twice runs at its last mention: Day 24's profile endpoint comes first, the rest of it last."""
+    listed, stop = [], None
+    for line in re.findall(r"^\d+\.\s+(.*(?:\n {3}.*)*)", section(plan, "Day-by-day specs"), re.M):
+        days = []
+        for a, b in re.findall(r"(\d+)(?:\s*[–-]\s*(\d+))?", line):
+            if int(a) < 10:  # a phase number, not a day
+                continue
+            if "numbered from" in line:
+                days += sorted(d for d in spec_days if d >= int(a)) or [PLATFORM]
+            else:
+                days += range(int(a), int(b or a) + 1)
+        listed += days
+        if "Stop and evaluate" in line and days:
+            stop = days[-1]
+    listed = [d for i, d in enumerate(listed) if d not in listed[i + 1:]]
+    return [d for d in sorted(spec_days) if d not in listed] + listed, stop
+
+
+def settle(days, order):
+    """Each day's status. A day is finished once a day later in the run order has code merged, or
+    its own closing PR has; finished with every box ticked is done, with boxes open is closed
+    (Day 01 never ticked its boxes; Day 05 left two open). The first unfinished day is active."""
+    pos = {d: i for i, d in enumerate(order)}
+    worked = max((pos[d["day"]] for d in days if d["day"] in pos
+                  and any(p["kind"] in ("code", "close") for p in d["prs"])), default=-1)
+    for d in days:
+        at = pos.get(d["day"], len(order))
+        c = d["criteria"]
+        if at < worked or (at == worked and any(p["kind"] == "close" for p in d["prs"])):
+            d["status"] = "done" if c["total"] and c["ticked"] == c["total"] else "closed"
+        elif d["status"] == "done":
+            d["status"] = "ready"
+    by_day = {d["day"]: d for d in days}
+    for d in order:
+        if d == PLATFORM:
+            break
+        if by_day[d]["status"] not in FINISHED:
+            by_day[d]["status"] = "active"
+            break
+    return days
+
+
 def roadmap(snaps, prs, blobs):
     head = snaps[-1]["sha"]
     merged = [p for p in prs.values() if p.get("state") == "MERGED"]
@@ -241,18 +295,8 @@ def roadmap(snaps, prs, blobs):
                          track_prs=sum(kind(p["title"], p["headRefName"]) == "code" for p in mine),
                          prs=[dict(number=p["number"], kind=kind(p["title"], p["headRefName"]), title=p["title"]) for p in mine],
                          criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**"))))
-    # Days run in order, so a day is done once a later one has code merged, ticked or not.
-    # Day 01 never ticked its boxes and Day 05 recorded two that did not hold.
-    worked = max((d["day"] for d in days if any(p["kind"] in ("code", "close") for p in d["prs"])), default=0)
-    for d in days:
-        if d["day"] < worked or (d["day"] == worked and any(p["kind"] == "close" for p in d["prs"])):
-            d["status"] = "done"
-        elif d["status"] == "done" and d["day"] > worked:
-            d["status"] = "ready"
-    current = next((d for d in days if d["status"] != "done"), None)
-    if current:
-        current["status"] = "active"
-    return days
+    order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])
+    return settle(days, order), order, stop
 
 
 def conclusion(readme):
@@ -286,12 +330,18 @@ def build(data):
     return fill(page, data, "index.html")
 
 
-def next_step(days, open_prs):
+def next_step(days, open_prs, order, stop):
     if open_prs:
         return "Waiting on " + ", ".join(f"#{p['number']} {p['title']}" for p in open_prs)
-    day = next((d for d in days if d["status"] != "done"), None)
-    if day is None:
+    by_day = {d["day"]: d for d in days}
+    left = [d for d in order if d == PLATFORM or by_day[d]["status"] not in FINISHED]
+    if not left:
         return "Every day is done."
+    if left[0] == PLATFORM:
+        return "The platform step: write its day spec, numbered from 38 (plan.md, Course correction after Phase 2)"
+    if stop is not None and order.index(left[0]) > order.index(stop):
+        return f"Day {stop:02d} is done: stop and evaluate before going on (plan.md)"
+    day = by_day[left[0]]
     if not any(p["kind"] == "spec" for p in day["prs"]):
         return f"Day {day['day']:02d}: read the spec against the code, then the spec-change PR"
     left = [t for t in day["tracks"] if t not in day["tracks_merged"]]
@@ -313,11 +363,11 @@ def main():
     blobs = Blobs()
     snaps = snapshots(prs)
     rows, files, vocab, pca, lines = trajectory(snaps, blobs)
-    days = roadmap(snaps, prs, blobs)
+    days, order, stop = roadmap(snaps, prs, blobs)
     now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
                head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
-               current_day=next((d["day"] for d in days if d["status"] != "done"), None),
-               next_step=next_step(days, open_prs),
+               current_day=next((d["day"] for d in days if d["status"] == "active"), None),
+               next_step=next_step(days, open_prs, order, stop), stop_after=stop,
                open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
     data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
                            vocab_size=vocab, pca_var=pca,

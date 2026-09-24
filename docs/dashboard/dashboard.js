@@ -50,6 +50,7 @@ const byKind = { spec: 0, code: 0, close: 0, other: 0 };
 for (let i = 1; i < N; i++) byKind[R[i].kind] += R[i].gap_full - R[i - 1].gap_full;
 const gapClosed = first.gap_full - last.gap_full;
 const specShare = -byKind.spec / gapClosed;
+const bigStep = Math.max(...R.map(r => r.step));
 const nKind = k => R.filter(r => r.kind === k).length;
 let forward = 0, specEdits = 0;
 R.forEach(r => {
@@ -65,16 +66,18 @@ R.forEach(r => {
 document.getElementById("stats").innerHTML = `
   <div class="stat"><span class="k">Drift from the plan as written</span>
     <span class="v num">${fmt(last.drift)}°</span>
-    <span class="n">0° on Sep 20. It rises by small steps and never jumps.</span></div>
+    <span class="n">0° on Sep 20. ${bigStep < 10 ? "It rises by small steps and never jumps." : `Its biggest single step was ${fmt(bigStep, 2)}° (${prLabel(R.find(r => r.step === bigStep))}).`}</span></div>
   <div class="stat"><span class="k">Gap between spec and code</span>
     <span class="v num">${fmt(first.gap_full)}° → ${fmt(last.gap_full)}°</span>
     <span class="n">${fmt(gapClosed)}° closed across ${N - 1} merges</span></div>
   <div class="stat"><span class="k">Share of the gap closed by the spec</span>
     <span class="v num">${Math.round(specShare * 100)}%</span>
-    <span class="n"><span class="sw" style="background:var(--spec)"></span>${nKind("spec")} spec-change PRs moved the spec toward the code; <span class="sw" style="background:var(--code)"></span>${nKind("code")} code PRs closed ${Math.round(-byKind.code / gapClosed * 100)}%</span></div>
+    <span class="n"><span class="sw" style="background:var(--spec)"></span>${nKind("spec")} spec-change PRs ${specShare >= 0 ? "moved the spec toward the code" : "widened the gap, naming what was not built yet"}; <span class="sw" style="background:var(--code)"></span>${nKind("code")} code PRs closed ${Math.round(-byKind.code / gapClosed * 100)}%</span></div>
   <div class="stat"><span class="k">Spec text since Sep 20</span>
     <span class="v num">−${last.deleted} <small>/ +${last.added} lines</small></span>
     <span class="n">of ${DATA.origin_lines} lines as written: ${Math.round(last.deleted / DATA.origin_lines * 100)}% rewritten, the rest kept</span></div>`;
+document.getElementById("headline").textContent = specShare >= -byKind.code / gapClosed
+  ? "The plan moved to meet the code" : "The spec leads, the code follows";
 document.querySelectorAll(".vocab-n").forEach(e => { e.textContent = DATA.vocab_size; });
 document.getElementById("n-vectors").textContent = 2 * N;
 const merged = R.filter(r => r.pr).map(r => r.pr);
@@ -297,10 +300,9 @@ function drawHeat() {
 /* ---------- findings + table ---------- */
 // Each heading is a claim, so each is chosen by the numbers it rests on rather than fixed.
 function drawFindings() {
-  const bigStep = Math.max(...R.map(r => r.step));
   const covFloor = Math.min(...R.filter(r => r.coverage != null).map(r => r.coverage)) * 100;
   const codeShare = -byKind.code / gapClosed;
-  const days = DATA.days.filter(d => d.status === "done").length;
+  const days = DATA.days.filter(finished).length;
   const f = [
     [bigStep < 10 ? "The destination held; the path moved" : "The plan changed direction",
      `Drift reached ${fmt(last.drift)}°; the biggest single step was ${fmt(bigStep, 2)}°. ${days} days in, ${Math.round(last.deleted / DATA.origin_lines * 100)}% of the Sep 20 spec's lines have been rewritten.`],
@@ -333,30 +335,39 @@ function setSel(i) {
 const PHASES = ["Make the split safe", "Modularise in place", "Gateway + JWT", "Extract job-service",
   "Extract matching-service", "Extract application-service", "Functions + uploads bucket", "Kubernetes + IaC"];
 const STOPS = [16, 20, 24, 28, 31, 37];
-const STATUS = { done: "Done", active: "In progress", ready: "Ready", provisional: "Provisional" };
+const STATUS = { done: "Done", closed: "Closed, boxes open", active: "In progress", ready: "Ready", provisional: "Provisional" };
+const finished = d => d.status === "done" || d.status === "closed";
 function drawNow() {
   const now = DATA.now, days = DATA.days;
   const cur = days.find(d => d.day === now.current_day);
-  const done = days.filter(d => d.status === "done").length;
-  document.getElementById("eyebrow").textContent =
-    `jobmatch-microservices · Day ${dd(now.current_day)} of ${days.length} · ${N - 1} merged PRs`;
+  const done = days.filter(finished).length;
+  const open = now.open_prs.map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener">#${p.number}</a> ${esc(p.title)}`).join("<br>");
+  const nextBox = `<div class="next"><span class="eyebrow">Next step</span><b>${md(now.next_step)}</b>${open ? `<div>${open}</div>` : ""}</div>
+    <div class="refreshed">refreshed ${esc(now.generated.replace("T", " "))} · main at ${esc(now.head)}${now.last_pr ? ` (#${now.last_pr})` : ""}</div>`;
+  document.getElementById("eyebrow").textContent = cur
+    ? `jobmatch-microservices · Day ${dd(now.current_day)} of ${days.length} · ${N - 1} merged PRs`
+    : `jobmatch-microservices · between days · ${N - 1} merged PRs`;
+  // Between days: the next piece of work has no day spec yet (the platform step), or work has stopped.
+  if (!cur) document.getElementById("today").innerHTML = `
+    <div class="eyebrow">Between days</div>
+    <div class="phase">${done} of ${days.length} days finished</div>${nextBox}`;
+  else {
   const c = cur.criteria;
   const prs = cur.prs.length
     ? cur.prs.map(p => `<span class="chip" style="color:${KVAR[p.kind]}" title="${esc(p.title)}">#${p.number}</span>`).join(" ")
     : "none yet";
-  const open = now.open_prs.map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener">#${p.number}</a> ${esc(p.title)}`).join("<br>");
   document.getElementById("today").innerHTML = `
     <div class="eyebrow">Day ${dd(cur.day)} · ${STATUS[cur.status]}</div>
     <div class="day-title">${md(cur.title)}</div>
-    <div class="phase">Phase ${cur.phase}: ${PHASES[cur.phase] || ""} · ${done} of ${days.length} days done</div>
+    <div class="phase">Phase ${cur.phase}: ${PHASES[cur.phase] || ""} · ${done} of ${days.length} days finished</div>
     <dl class="kv">
       <dt>Tracks</dt><dd><div class="trks">${cur.tracks.map(t => `<span class="trk ${cur.tracks_merged.includes(t) ? "done" : ""}" title="${esc(cur.track_work[t] || "")}">${t}</span>`).join("")}</div></dd>
       <dt>Criteria</dt><dd><span class="num">${c.ticked}/${c.total}</span> ticked · <span class="num">${c.new}</span> new · <span class="num">${c.hold}</span> hold</dd>
       <dt>Estimate</dt><dd><span class="num">${cur.expected_first ?? "–"} → ${cur.expected ?? "–"}</span> PRs, as first written → now</dd>
       <dt>Merged</dt><dd>${prs}</dd>
     </dl>
-    <div class="next"><span class="eyebrow">Next step</span><b>${md(now.next_step)}</b>${open ? `<div>${open}</div>` : ""}</div>
-    <div class="refreshed">refreshed ${esc(now.generated.replace("T", " "))} · main at ${esc(now.head)}${now.last_pr ? ` (#${now.last_pr})` : ""}</div>`;
+    ${nextBox}`;
+  }
   const rows = PHASES.map((name, p) => {
     const ds = days.filter(d => d.phase === p);
     if (!ds.length) return "";
@@ -367,7 +378,7 @@ function drawNow() {
     }).join("")}</div></div>`;
   }).join("");
   document.getElementById("roadmap").innerHTML = rows + `<div class="tile-legend">
-    <span><i class="tile done"></i>Done</span><span><i class="tile active"></i>In progress (bar: tracks merged)</span>
+    <span><i class="tile done"></i>Done</span><span><i class="tile closed"></i>Closed, boxes open</span><span><i class="tile active"></i>In progress (bar: tracks merged)</span>
     <span><i class="tile"></i>Ready</span><span><i class="tile provisional"></i>Provisional</span>
     <span><i class="tile stop"></i>Ends a phase</span></div>`;
   document.querySelectorAll("#roadmap .tile[data-day]").forEach(tile => {
@@ -390,7 +401,7 @@ function drawNow() {
 function drawConclusion() {
   const days = DATA.days, now = DATA.now, { reads, measured } = DATA.conclusion;
   const phases = [...new Set(days.map(d => d.phase))].filter(p => p != null);
-  const closed = Math.max(-1, ...phases.filter(p => days.filter(d => d.phase === p).every(d => d.status === "done")));
+  const closed = Math.max(-1, ...phases.filter(p => days.filter(d => d.phase === p).every(finished)));
   const read = reads[reads.length - 1];
   document.getElementById("conclusion-eyebrow").textContent = closed < 0
     ? "Conclusion · no phase closed yet"
@@ -401,12 +412,12 @@ function drawConclusion() {
     ? read.text.split(/\n\s*\n/).map(p => `<p>${md(p.replace(/\s*\n\s*/g, " "))}</p>`).join("")
     : "");
 
-  const done = days.filter(d => d.status === "done").length;
+  const done = days.filter(finished).length;
   const cur = days.find(d => d.day === now.current_day);
-  let next = "<p>Every day is done.</p>";
+  let next = `<p><b>${md(now.next_step)}</b></p>`;
   if (cur) {
     const ds = days.filter(d => d.phase === cur.phase);
-    const left = ds.filter(d => d.status !== "done").length;
+    const left = ds.filter(d => !finished(d)).length;
     const prov = days.filter(d => d.status === "provisional");
     next = `<p><b>${md(now.next_step)}</b></p>
       <p>Phase ${cur.phase}, ${PHASES[cur.phase] || ""}, ends at Day ${dd(ds[ds.length - 1].day)}: ${left} day${left === 1 ? "" : "s"} left, counting this one.</p>
@@ -414,7 +425,7 @@ function drawConclusion() {
   }
   document.getElementById("facts").innerHTML = `
     <div class="finding"><h3>By the count</h3>
-      <p>${done} of ${days.length} days done, ${closed + 1} of ${phases.length} phases closed. ${N - 1} merges to <code>main</code>:
+      <p>${done} of ${days.length} days finished (${days.filter(d => d.status === "closed").length} with boxes open), ${closed + 1} of ${phases.length} phases closed. ${N - 1} merges to <code>main</code>:
       ${nKind("code")} code tracks, ${nKind("spec")} spec changes, ${nKind("close")} closing PRs and ${nKind("other")} others.</p></div>
     <div class="finding"><h3>What is next</h3>${next}</div>`;
 
