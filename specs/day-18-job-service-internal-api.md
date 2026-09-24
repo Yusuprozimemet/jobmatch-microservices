@@ -47,3 +47,7 @@ cd services/job-service && ./mvnw verify
 ## Notes
 - Reusing the Day 12 JWKS for service tokens avoids a second auth system. The `aud`
   claim is what separates user traffic from service traffic.
+- **Superseded in part by Day 39.** Service tokens are not issued by identity on Day 12's key set:
+  each service signs its own (`aud=jobmatch-internal`, its own `iss`) and publishes a key set,
+  and the monolith's `/internal/**` chain already exists. Track C and its two criteria come out
+  when this day is rewritten; the gateway's refusal of `/internal/**` is Day 39's Track 0.

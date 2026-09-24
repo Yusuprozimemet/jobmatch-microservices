@@ -39,3 +39,7 @@ To be written when the day is reached, each `new` or `hold`, with the spec-audit
 ## Notes
 - The mart fixtures are copied, not moved, when job-service gets its own database (Day 20): 11
   contract classes that stay with the monolith read them.
+- From Day 38 (#123, #124): in compose the gateway can answer 500 for a few hundred milliseconds
+  after its port opens, before Spring Cloud Gateway's proxy has its header filters. A compose
+  healthcheck on the gateway's `/actuator/health/readiness` (port 9090, inside the network) and
+  `depends_on: condition: service_healthy` for the frontend close it.

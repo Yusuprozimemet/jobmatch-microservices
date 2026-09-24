@@ -52,3 +52,5 @@ Uploading a CV fills in the profile skills, instead of the user typing them by h
 ## Notes
 - Canonicalisation is the subtle failure: skills that do not match the mart's form
   produce a profile that silently matches nothing.
+- From Day 39: under "own key, own key set", a function calling identity with a service token
+  needs a key of its own and a published key set that identity trusts.

@@ -50,3 +50,5 @@ Deleting a user removes their data everywhere. This replaces a single
 ## Notes
 - This is a legal obligation, not a feature. Treat a failing consumer as an incident,
   and alert on DLQ depth for this event specifically.
+- From Day 39: see Day 26's Notes on replacing `GET /internal/users/{id}` with a record fed by
+  `user.deleted`.

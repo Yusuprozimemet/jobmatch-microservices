@@ -54,3 +54,5 @@ kubectl -n prod get pods
 ## Notes
 - The function-to-ingress path is the thing most likely to be broken and least likely
   to be noticed, because CV upload is not on the login path.
+- From Day 39: `cv-parse`'s service token is signed by its own key (see Day 30's Notes), and
+  identity must be able to fetch that key set from inside the cluster.

@@ -48,3 +48,5 @@ curl -s localhost:8080/api/jobs | head -c 200        # still 200
 ## Notes
 - Two services now call each other in a cycle: jobs ↔ applications. Confirm neither
   fallback can trigger the other, or a single outage cascades.
+- From Day 39: application-service asks identity `GET /internal/users/{id}` before acting for a
+  user, as matching-service does from Day 21 (the deleted-user rule).
