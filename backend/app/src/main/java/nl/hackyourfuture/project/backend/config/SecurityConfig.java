@@ -89,8 +89,8 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
-                // No session holds a login: every request brings its access token (Day 13). A
-                // failed Google sign-in still creates one, for the exception, until the end of Day 14.
+                // No session holds anything: every request brings its access token (Day 13), and
+                // Google sign-in keeps its state in cookies of its own (Day 14).
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .bearerTokenResolver(accessTokens.cookieResolver())
@@ -116,6 +116,9 @@ public class SecurityConfig {
         // No Google credentials means no Google login - skip setting it up.
         if (clientRegistrations.getIfAvailable() != null) {
             String loginRedirect = environment.getRequiredProperty("app.oauth2.failure-redirect");
+            // By default the failure handler creates a session to hold the exception.
+            SimpleUrlAuthenticationFailureHandler failureHandler = new SimpleUrlAuthenticationFailureHandler(loginRedirect);
+            failureHandler.setAllowSessionCreation(false);
             http.oauth2Login(oauth2 -> oauth2
                     .authorizationEndpoint(endpoint -> endpoint
                             .baseUri(AUTHORIZATION_BASE_URI)
@@ -124,7 +127,7 @@ public class SecurityConfig {
                     // Named explicitly so the email-verified check can't silently disappear.
                     .userInfoEndpoint(userInfo -> userInfo.oidcUserService(oidcUserService.getObject()))
                     .successHandler(oauth2LoginSuccessHandler)
-                    .failureHandler(new SimpleUrlAuthenticationFailureHandler(loginRedirect))
+                    .failureHandler(failureHandler)
             );
             // Logged for debugging - a mismatched redirect URI is the usual sign-in failure.
             log.info("Google sign-in enabled at {}/google, redirect URI {}",

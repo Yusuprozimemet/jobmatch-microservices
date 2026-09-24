@@ -15,15 +15,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Collections;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -215,27 +211,5 @@ public class AuthenticationService {
                             linked ? "linked" : "not linked, another identity is already attached",
                             credentials.id());
                 });
-    }
-
-    // Stores the security context on a fresh session (JSESSIONID). Unused since Day 13, when the
-    // token cookies replaced the session; deleted on Day 16.
-    public void establishSession(String email, HttpServletRequest httpRequest) {
-        // Create Spring Security authentication token
-        var authToken = new UsernamePasswordAuthenticationToken(
-                email,
-                null,
-                Collections.emptyList() // Placeholder for roles/authorities
-        );
-
-        // Set the authentication in the Security Context
-        var securityContext = SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(authToken);
-        SecurityContextHolder.setContext(securityContext);
-
-        // Create an HTTP session and store the security context so the user stays logged in
-        var session = httpRequest.getSession(true);
-        httpRequest.changeSessionId(); //  Change session ID to prevent session fixation
-        session.setAttribute(
-                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
     }
 }

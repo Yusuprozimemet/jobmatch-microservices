@@ -43,7 +43,7 @@ flowchart TD
     VERIFY -->|"yes"| KNOWN{"identity already<br/>linked to an account?"}
     KNOWN -->|"yes"| SESSION
     KNOWN -->|"no, and the email is free"| NEWACC[("new users row,<br/>no credentials")] --> SESSION
-    KNOWN -->|"no, and the email is taken"| PARK["park the identity in the session<br/>/login?error=google_link_required"]
+    KNOWN -->|"no, and the email is taken"| PARK["park the identity in pending_google_links<br/>/login?error=google_link_required"]
     PARK -.->|"next successful password login<br/>claims it"| LOGIN
 
     SESSION --> TERMS{"terms_accepted_at<br/>null?"}
@@ -168,11 +168,12 @@ any account with a matching email, then registering `someone-elses@gmail.com` fi
 their Google identity — and with it, a permanent way in.
 
 So the identity waits instead.
-[`PendingGoogleLink`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/PendingGoogleLink.java)
-stores the email and the provider id in the session — the one session left, until Day 14 moves it
-to the database — no one is signed in, and the
+[`PendingGoogleLinks`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/PendingGoogleLinks.java)
+saves the provider id in `identity.pending_google_links` for the account the email belongs to, for
+ten minutes, and hands the browser a random code in `pending_google_link` (`HttpOnly; SameSite=Lax;
+Path=/api/auth; Max-Age=600`); the table keeps only the code's SHA-256. No one is signed in, and the
 browser goes to `/login?error=google_link_required`. The next successful **password** login for that
-same address claims the parked identity and links it:
+account sends the cookie by itself, claims the parked identity and links it:
 
 ```mermaid
 sequenceDiagram
@@ -185,18 +186,19 @@ sequenceDiagram
     G->>B: callback (verified email)
     B->>DB: findByProvider → none
     B->>DB: getUserByEmail → exists (password account)
-    B->>B: PendingGoogleLink.save(session, email, sub)
+    B->>DB: PendingGoogleLinks.save(userId, sub) → Set-Cookie pending_google_link
     B-->>U: 302 /login?error=google_link_required
     U->>B: POST /api/auth/login (email + password)
     B->>B: password matches → token cookies
-    B->>B: PendingGoogleLink.claim(session, email)
+    B->>DB: PendingGoogleLinks.claim(code, userId) → deletes the cookie
     B->>DB: linkProvider(userId, GOOGLE, sub)
     B-->>U: 200, cookies, Google now linked
 ```
 
-`claim` only hands the provider id over if the session's parked email matches the one that just
-proved itself, and it removes the attributes as it does — so the link can happen once and only for
-the account that earned it. `linkProvider` updates `WHERE oauth_provider_id IS NULL`, so a second
+`claim` is one `UPDATE … RETURNING`: it hands the provider id over only for the account that just
+proved itself, only once, and only within the ten minutes, so the link can happen once and only for
+the account that earned it. A login for another account claims nothing and leaves the link. Saving a
+link deletes the account's earlier ones, and deleting the account deletes its links. `linkProvider` updates `WHERE oauth_provider_id IS NULL`, so a second
 identity cannot displace one already attached; it returns false and the log says so.
 
 A linked account keeps its password. Both doors work from then on.
@@ -380,7 +382,7 @@ All of it reads an environment variable with a local-development fallback; see
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address of the environment. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** — the redirect URIs append to it, and `//` will not match what Google has registered. Production is `https://c55c.hyf.dev`. |
 | `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with. **No key, no start.** Replacing it invalidates every access token; browsers refresh silently, since refresh tokens are not signed |
-| `SESSION_COOKIE_SECURE` | `false` | Since Day 13, only the Google flow's session cookie. Must be `true` on any HTTPS deployment |
+| `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the Google flow's two cookies, `google_auth_request` and `pending_google_link`. Must be `true` on any HTTPS deployment |
 | `GOOGLE_CLIENT_ID` | empty | Set it and Google sign-in exists; leave it and the routes do not |
 | `GOOGLE_CLIENT_SECRET` | empty | |
 | `GOOGLE_REDIRECT_URI` | `${APP_BASE_URL}/api/login/oauth2/code/google` | Must match the Google Cloud Console entry character for character |
@@ -419,9 +421,6 @@ changing it.
   15 minutes. Closing that window needs a denylist.
 - **The token cookies are not `Secure`.** Left out of Day 13 by decision; until they are, nothing
   but the deployment's own HTTPS redirect stops a browser sending them over plain HTTP.
-- **The Google flow still uses a session** for the authorization request and the pending link, in
-  the servlet container's memory, until Day 14. Two backend instances need sticky sessions for
-  Google sign-in until then; nothing else does.
 - **CSRF protection is `SameSite=Lax` and nothing else.** CSRF tokens are disabled and the tokens
   are cookies, so `Lax` — which withholds the cookie from cross-site POSTs — is what stands between
   the API and a cross-site form. That is adequate for the current shape; it stops being adequate the
