@@ -81,5 +81,7 @@ class AuthCookiesIT extends IntegrationTest {
         // Read off the header: HttpCookie works Max-Age out again from Expires when both are there.
         assertThat(header).as("%s's Max-Age", name).containsIgnoringCase("Max-Age=" + maxAge + ";");
         assertThat(header).as("%s is SameSite=Lax", name).containsIgnoringCase("SameSite=Lax");
+        // Off by default, for local HTTP; SecureTokenCookiesIT turns it on.
+        assertThat(cookie.getSecure()).as("%s is not Secure by default: %s", name, header).isFalse();
     }
 }

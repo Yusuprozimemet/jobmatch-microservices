@@ -541,8 +541,8 @@ sign-in sets `access_token` (an RS256 JWT, 15 minutes, `Path=/`) and `refresh_to
 days, `Path=/api/auth`); every later request is authenticated by the access token, verified in the
 backend. `POST /api/auth/refresh` trades the second for a new pair.
 
-Both cookies are `HttpOnly` and `SameSite=Lax`; neither is `Secure` yet (see
-[`auth.md`](auth.md#10-known-limitations)). JavaScript cannot read them, so browser calls have to
+Both cookies are `HttpOnly` and `SameSite=Lax`, and `Secure` when `SESSION_COOKIE_SECURE=true`,
+as it must be on HTTPS ([`auth.md`](auth.md#5-the-tokens)). JavaScript cannot read them, so browser calls have to
 opt in to sending them:
 
 ```js

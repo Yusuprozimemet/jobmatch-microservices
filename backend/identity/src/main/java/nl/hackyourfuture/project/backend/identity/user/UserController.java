@@ -30,6 +30,7 @@ import java.util.Optional;
 public class UserController {
 
     private final UserService userService;
+    private final AuthCookies authCookies;
 
     // Lets the frontend check who is logged in.
     @GetMapping("/me")
@@ -100,9 +101,9 @@ public class UserController {
 
     // Signs the browser out, as logout does. The refresh tokens went with the account (cascade);
     // an access token copied elsewhere lasts its 15 minutes and finds no user.
-    private static void endSession(HttpServletRequest request, HttpServletResponse response) {
+    private void endSession(HttpServletRequest request, HttpServletResponse response) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         new SecurityContextLogoutHandler().logout(request, response, authentication);
-        AuthCookies.clear(response);
+        authCookies.clear(response);
     }
 }
