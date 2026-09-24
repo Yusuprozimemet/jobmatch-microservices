@@ -75,6 +75,17 @@ services:
       jwt-key:
         condition: service_completed_successfully
 
+  # The API gateway (Day 15), in front of the backend. 8081 until Day 16 moves it to 8080 and
+  # takes the backend's published port away; until then both answer.
+  api-gateway:
+    build: ./services/api-gateway
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "8081:8081"
+    depends_on:
+      - backend
+
   frontend:
     build: ./frontend
     environment:
