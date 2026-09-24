@@ -58,8 +58,32 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Service tokens only (Day 39): the bearer header never the cookie. CSRF off because a bearer
+     * token is not sent by a browser on its own (Day 18's POST routes). Ordered ahead of the
+     * application chain because the first matching chain wins.
+     */
     @Bean
     @Order(2)
+    public SecurityFilterChain internalFilterChain(HttpSecurity http, InternalCallers callers) {
+        http
+                .securityMatcher("/internal/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .oauth2ResourceServer(rs -> rs
+                        .authenticationManagerResolver(callers.resolver())
+                        // No bearerTokenResolver: the default reads only the Authorization header,
+                        // so the user's access_token cookie is ignored here as intended.
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+        return http.build();
+    }
+
+    @Bean
+    @Order(3)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             ObjectProvider<ClientRegistrationRepository> clientRegistrations,
