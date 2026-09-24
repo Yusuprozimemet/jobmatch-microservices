@@ -7,13 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 require_cmd docker
 
-print_step "Starting local db, backend, and frontend"
+print_step "Starting local db, backend, api-gateway, and frontend"
 (
   cd "$REPO_ROOT"
-  docker compose up -d db backend frontend
+  docker compose up -d db backend api-gateway frontend
 )
 
 echo
 echo "App stack is up."
 echo "Frontend: http://localhost:3000"
-echo "Backend docs: http://localhost:8080/api/docs"
+echo "Backend docs, through the gateway: http://localhost:8080/api/docs"

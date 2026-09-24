@@ -65,18 +65,20 @@ services:
       JWT_PRIVATE_KEY_FILE: /run/keys/private.pem
     volumes:
       - jwt-keys:/run/keys:ro
-    ports:
-      - "8080:8080"
-      # 9090 is the management port and is deliberately NOT published. Prometheus reaches
-      # it over the compose network; publishing it would put the metrics on the host.
+    # No published port (Day 16): the gateway below is the way in, on 8080. 9090, the management
+    # port, is not published either; Prometheus reaches it over the compose network.
     depends_on:
       db:
         condition: service_healthy
       jwt-key:
         condition: service_completed_successfully
 
-  # The API gateway (Day 15), in front of the backend. 8081 until Day 16 moves it to 8080 and
-  # takes the backend's published port away; until then both answer.
+  # The API gateway (Day 15), the only way in to the backend: published on 8080, where the
+  # backend used to be (Day 16). It listens on 8081 inside the network.
+  #
+  # GATEWAY_TRUSTED_PROXIES is left unset on purpose. The frontend passes a client's own
+  # X-Forwarded-For through, so believing it would let a client pick a new rate-limit bucket per
+  # request; every browser shares the frontend's bucket instead.
   api-gateway:
     build: ./services/api-gateway
     environment:
@@ -85,18 +87,18 @@ services:
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     ports:
-      - "8081:8081"
+      - "8080:8081"
     depends_on:
       - backend
 
   frontend:
     build: ./frontend
     environment:
-      BACKEND_API_URL: http://backend:8080
+      BACKEND_API_URL: http://api-gateway:8081
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      - api-gateway
 
   # The two data jobs. Neither is started by `docker compose up`: they run and
   # exit, it is not a service. A container job you add later shares this

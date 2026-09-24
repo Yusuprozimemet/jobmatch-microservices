@@ -14,6 +14,6 @@ FROM eclipse-temurin:25-jre
 USER 1000
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
-# 8081 until Day 16 moves the gateway to 8080.
+# Compose publishes it on 8080 (Day 16).
 EXPOSE 8081
 CMD ["java", "-jar", "app.jar"]
