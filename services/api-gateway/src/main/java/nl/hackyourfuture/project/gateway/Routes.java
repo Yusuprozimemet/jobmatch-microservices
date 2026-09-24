@@ -2,15 +2,19 @@ package nl.hackyourfuture.project.gateway;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.cloud.gateway.server.mvc.handler.GatewayServerResponse;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.servlet.function.ServerRequest;
 import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.ServerResponse;
 
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.function.Function;
 
@@ -48,12 +52,29 @@ class Routes {
                         .setStatusCode(HttpStatus.TOO_MANY_REQUESTS)))
                 .before(uri(backendUrl))
                 .before(userId())
+                .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build();
         return credentials.and(route("backend")
                 .route(path("/api/**").or(path("/.well-known/jwks.json")), http())
                 .before(uri(backendUrl))
                 .before(userId())
+                .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build());
+    }
+
+    /**
+     * The backend could not be reached, or did not answer in time: 502 or 504, the gateway's own
+     * answers for an upstream that failed, rather than a 500 that says the gateway itself broke.
+     * The gateway's response type, not {@code ServerResponse}'s: the rate limit adds a header on
+     * the way out, and a plain {@code ServerResponse}'s headers are read-only.
+     */
+    static ServerResponse backendFailed(Throwable error, ServerRequest request) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException) {
+                return GatewayServerResponse.status(HttpStatus.GATEWAY_TIMEOUT).build();
+            }
+        }
+        return GatewayServerResponse.status(HttpStatus.BAD_GATEWAY).build();
     }
 
     /**

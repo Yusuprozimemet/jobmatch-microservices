@@ -1,6 +1,12 @@
 spring:
   application:
     name: api-gateway
+  # How long the gateway waits for the backend before answering 504. Above the backend's slowest
+  # route: top-matches waits up to 20 s for the LLM, after 5 s to connect to it.
+  http:
+    clients:
+      connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:5s}
+      read-timeout: ${GATEWAY_READ_TIMEOUT:30s}
 
 # 8081 until Day 16 moves the gateway to 8080 and takes the backend's port away.
 server:
