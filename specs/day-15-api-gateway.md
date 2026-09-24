@@ -92,7 +92,7 @@ minute (92 `authenticatedAs` call sites in `contract/`). Until B lands, `main`'s
 nothing; the backend still does. *Estimate 5; 6 if B splits.*
 
 ## Acceptance criteria
-- [ ] **hold** — The backend keeps validating tokens itself. Direct to the backend, never
+- [x] **hold** — The backend keeps validating tokens itself. Direct to the backend, never
       through the gateway: a tampered `access_token` cookie on `/api/users/me` answers 401
       (`tokens/StaleCookieIT`), and a request carrying only `X-User-Id: <a real user's id>` on
       `/api/users/me` and `/api/profile` answers 401 (`tokens/UserIdHeaderIT`, Track 0). True
@@ -101,36 +101,66 @@ nothing; the backend still does. *Estimate 5; 6 if B splits.*
       `StaleCookieIT.aTamperedCookieIsRefusedNotAFailure` went red (`expected: 401 but was:
       404`), the only one of 295. The second broken on purpose in Track 0's PR with a filter that
       authenticates from `X-User-Id`.
-- [ ] **new** — A client-supplied `X-User-Id` never reaches the backend. Against a recording
+      `tokens/UserIdHeaderIT` (#97): red with that filter, both cases `expected: 401 but was: 200`.
+      It uses `direct()` from #100. Both pass in the direct run on `main` at 855726b. Why direct: through a
+      gateway built to hand stale cookies on unverified, `aTamperedCookieIsRefusedNotAFailure`
+      stayed green while 9 of the class's 10 went red (#100).
+- [x] **new** — A client-supplied `X-User-Id` never reaches the backend. Against a recording
       upstream: a valid cookie for user A plus `X-User-Id: <B's id>` arrives once, with A's id
       alone; a public request with `X-User-Id` arrives with none (a gateway test). Red today:
       there is no gateway. Red again with the strip removed.
-- [ ] **new** — The gateway answers private routes itself. Against a recording upstream, every
+      `SecurityTest.aClientsUserIdIsReplacedByTheTokens` and `…OnAPublicRouteIsDropped` (#99),
+      lower-case header included. Red with the strip removed: the upstream got the token's id and
+      the client's.
+- [x] **new** — The gateway answers private routes itself. Against a recording upstream, every
       `required` row of the table with no cookie, and with a cookie that is expired, signed by
       another key or for another audience, gets 401 and the upstream records no request; every
       public row, with no cookie and with a stale one, reaches the upstream (a gateway test). Red
       today: there is no gateway. Red again with every rule `permitAll`: the backend's own 401
       would satisfy a check made through the whole stack, which is why this one has no backend.
-- [ ] **new** — The 11th login in a minute from one client is `429`. Against a recording
+      `SecurityTest` (#99), with two more stale kinds (another issuer, garbage). Red with every
+      rule `permitAll` (`[PATCH /api/auth/password] expected: 401 but was: 200`), with
+      `/api/auth/**` ahead of the password change, without the audience or issuer check, and with
+      a stale cookie handed on unverified (`[POST /api/auth/login] expected: 200 but was: 401`).
+- [x] **new** — The 11th login in a minute from one client is `429`. Against a recording
       upstream: ten `POST /api/auth/login` from one address reach it, the 11th gets 429 and does
       not; another address still reaches it; a client's own `X-Forwarded-For` does not change
       its bucket; twenty `POST /api/auth/refresh` are not limited (a gateway test). Red today:
       the backend answered eleven wrong-password logins with 401 in the audit. Red again with
       the limit removed.
-- [ ] **new** — One trace spans gateway and backend. Against a recording upstream, a request
+      `RateLimitTest` and `RateLimitBehindProxyTest` (#101). Red with no limit, with
+      `X-Forwarded-For` believed from anyone, with the first hop in place of the last, with
+      refresh limited (`[refresh 1] expected: 200 but was: 429`), and with the header never
+      believed behind the proxy. The four credential routes share a client's bucket (Notes).
+- [x] **new** — One trace spans gateway and backend. Against a recording upstream, a request
       arrives with a `traceparent` whose trace id is the one the gateway logs for it (a gateway
       test); in compose with tracing exported, Tempo shows the backend's server span as the
       gateway span's child (**Verify**). Red today: there is no gateway.
-- [ ] **new** — A preflight from another origin gets no `Access-Control-Allow-Origin` (a gateway
+      `TracingTest` (#102, made to wait for the log line in #103). Red with Boot's own no-op
+      propagator (no `traceparent` sent), with the access log outside the tracing filter, and
+      with no trace id in the log pattern. In compose on `main` at 855726b, with export on: the backend's
+      `http get /api/docs/openapi.yaml` server span has the gateway's `http get` client span as
+      parent, under the caller's `traceparent`.
+- [x] **new** — A preflight from another origin gets no `Access-Control-Allow-Origin` (a gateway
       test). Red today: there is no gateway. Red again with any origin allowed.
-- [ ] **new** — The Day 1–4 suite passes through the gateway: all 190 tests in the 23
+      `CrossOriginTest` (#102): a preflight gets 403 and is not forwarded; an allow-origin set
+      behind the gateway never leaves it; the frontend's own `POST` through its proxy is served.
+      Red with preflights let through, and with `Access-Control-*` not stripped while the
+      upstream sends `Access-Control-Allow-Origin: *`.
+- [x] **new** — The Day 1–4 suite passes through the gateway: all 190 tests in the 23
       `contract/` classes, the 10 in `tokens/StaleCookieIT` and the 2 in `tokens/RefreshIT` (an
       expired access cookie refreshing), with `-Dharness.gateway=true`
       (**Verify**), and the reports show the requests went through it (a harness self-test that
       the client's base URL is the gateway container's). Red today: there is no switch. Red again
       with the gateway refusing a stale cookie on `/api/auth/refresh`.
-- [ ] **new** — Compose runs the gateway on 8081 in front of the backend, and it answers private
+      `support/Gateway` and `GatewayHarnessIT` (#100): 203 tests in 26 reports on `main` at 855726b, the
+      self-test included. Red through a gateway handing stale cookies on unverified (both
+      `RefreshIT`, `expected: 200 but was: 401`, and 9 of 10 `StaleCookieIT`), and, for the
+      self-test, with the switch forced direct.
+- [x] **new** — Compose runs the gateway on 8081 in front of the backend, and it answers private
       routes with the backend stopped (**Verify**). Red today: nothing listens on 8081.
+      on `main` at 855726b: docs 200, `/api/profile` 401, with `X-User-Id` alone 401, and with the backend
+      stopped 401 (#98, #99).
 
 ## Verify
 ```bash
@@ -143,10 +173,12 @@ rm -rf */target/surefire-reports
 ./mvnw clean verify
 ./mvnw -B checkstyle:check
 
-# The Day 1-4 suite, StaleCookieIT and RefreshIT through the gateway (Track D).
+# The Day 1-4 suite, StaleCookieIT, RefreshIT and the harness self-test through the gateway
+# (Track D). The harness starts this image; Testcontainers cannot build it (BuildKit).
+docker build -t jobmatch-api-gateway:harness ../services/api-gateway
 rm -rf */target/surefire-reports
 ./mvnw -B verify -pl app -am -Dharness.gateway=true \
-  -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT' \
+  -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT' \
   -Dsurefire.failIfNoSpecifiedTests=false
 
 # Compose, in a project of its own. 8081 is the gateway; 8080 is still the backend until Day 16.
@@ -209,3 +241,50 @@ compose check uses the API docs as its public route.
   - **Versions:** "the built-in limiter needs Redis" is true of the WebFlux gateway only.
   - Copying the Maven wrapper alone would have been 484 lines, over the gate. *Estimate 3 → 5,*
     for Track 0 and Track D.
+- **Done on Day 15.** Spec change #96, then #97 (Track 0, `X-User-Id` is not a login), #98
+  (Track A, the gateway routing on 8081), #99 (Track B, the token, the rules, `X-User-Id`), #100
+  (Track D, the suite through the gateway), #101 (Track C1, the rate limit), #102 (Track C2,
+  cross-origin and tracing) and #103 (C2's tracing test, which turned `main` red). On `main` at
+  855726b: the gateway's 25 tests, the backend's 298 direct and 203 through the gateway, checkstyle
+  clean on both; all 190 contract tests pass and `contract/` did not change. *Estimated 3 pull
+  requests as first written, 5 after the spec change, took 7.*
+- **Track C split in two under the 400-line gate** (244 and 333 lines), and #103 was a fix, not a
+  planned track. The dashboard named the closing PR as the next step after C1: a split track
+  counts as done at its first half, and the script cannot know a second is coming.
+- **Departures, and choices the spec left open:**
+  - **The four credential routes share one bucket per client:** 10 a minute across login,
+    register and both reset steps, stricter than "the 11th login". The gateway's filter keys on
+    the client alone; a bucket per route would give a guesser 40 tries a minute.
+  - **The rules check two more stale tokens** than the criterion names: another issuer, and
+    garbage.
+  - **Verify's gateway run needed the image built first and the self-test named.** Corrected
+    above. Testcontainers cannot build the image: the Dockerfile's `--platform=$BUILDPLATFORM`
+    needs BuildKit (#100).
+  - **The backend's wrapper builds the gateway** (`backend/mvnw -f services/api-gateway/pom.xml`),
+    the question Track A was left to settle (#98).
+  - **An unreachable backend comes back as 500**, not 502 (#98). Left as it is.
+- **Cross-origin is not Spring's CORS rejection.** Through the Next.js proxy from Day 16 a
+  same-origin request carries the browser's `Origin` with the gateway's host, and Spring refuses
+  it: with its rejection in place the frontend's own login got 403 (#102). The gateway refuses
+  preflights and strips `Access-Control-*` instead.
+- **Spring Boot 4 turns trace propagation off while span export is off.** Its W3C propagator is
+  `@ConditionalOnEnabledTracingExport`; otherwise it installs a no-op. The gateway declares the
+  propagator itself (#102). **The backend has the same gap, not fixed here:** in default
+  compose it ignores the gateway's `traceparent` and logs a trace id of its own, so "the backend
+  already logs it" holds only with export on. A one-bean change; raised with the maintainer.
+- **Mistakes of mine, recorded in their PRs:**
+  - #99: my first report of the breaks attached failures to the wrong test names (a pattern
+    that missed self-closing test cases), and two breaks were invalid at first: one stopped the
+    context loading, the other changed nothing because the test key server answers every path.
+  - #100: the harness first had Testcontainers build the image, and every test errored for 16
+    minutes. Stopping that run left its Maven and surefire JVMs writing into the same reports as
+    the next run, and its first "203 passed" came from both; rerun clean.
+  - #101: one break silently did not apply: Git Bash rewrote `/api/auth/...` in my edit into a
+    Windows path.
+  - #102: a hand-written logger named `log` failed checkstyle; and `TracingTest` read the access
+    log before the line was written, which passed locally and on the pull request and failed on
+    `main`. #103 waits for it, shown by delaying the line 300 ms: the old test failed every time,
+    the new one passed.
+- **For Day 16:** the frontend, Google's redirect URI and the backend's port move to the gateway;
+  `GATEWAY_TRUSTED_PROXIES` must name the frontend, and its rewrite must send the browser's
+  address, or every user shares one rate-limit bucket.
