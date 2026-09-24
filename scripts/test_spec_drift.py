@@ -1,7 +1,8 @@
 """The dashboard's numbers move when they should and only then.
 
-Each test builds a small git repository, one commit per merge, and runs spec-drift.py's
-trajectory over it. Needs git and numpy.
+Each drift test builds a small git repository, one commit per merge, and runs spec-drift.py's
+trajectory over it; the roadmap tests check the run order, the statuses and the next step. Needs
+git and numpy.
 
     python scripts/test_spec_drift.py
 """
@@ -90,6 +91,61 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(rows[1]["drift"], 0.0)
         rows = self.repo.merge({"specs/day-01-x.md": DAY + "gateway routes the login\n"}).rows()
         self.assertGreater(rows[2]["drift"], 0.0)
+
+
+def a_day(n, ticked=1, total=1, kinds=()):
+    return dict(day=n, status="provisional", criteria=dict(ticked=ticked, total=total),
+                prs=[dict(kind=k) for k in kinds], tracks=["A"], tracks_merged=[], track_work={"A": "work"})
+
+
+class RoadmapTest(unittest.TestCase):
+    """Where the dashboard says the work is: the run order plan.md gives, and what counts as done."""
+
+    PLAN = """## Day-by-day specs
+
+Days keep their numbers; they run in this order:
+
+1. The record fix and the platform step (new day specs, numbered from 38).
+2. Phase 3: Days 18, 19, 17, 20.
+3. Phase 4: the profile endpoint out of Day 24 first, then Days 21, 22, 23, the rest of 24.
+4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
+5. Phases 6–7 (Days 29–37): rewritten after the evaluation, or not started.
+"""
+
+    def test_a_spec_change_must_touch_a_spec(self):
+        self.assertEqual(sd.kind("Spec change: every criterion is new or hold", "specs/criterion-kinds",
+                                 ["specs/README.md", "specs/_template.md"]), "other")
+        self.assertEqual(sd.kind("Day 16 spec change: checks", "day-16/spec-x", ["specs/day-16-cutover.md"]), "spec")
+        self.assertEqual(sd.kind("Plan change: seam first", "plan/course", ["plan.md"]), "spec")
+        self.assertEqual(sd.kind("Add spec-drift.py", "tooling/spec-drift-script", []), "other")
+
+    def test_the_run_order_is_the_plans(self):
+        order, stop = sd.run_order(self.PLAN, list(range(1, 38)))
+        self.assertEqual(order[:17], list(range(1, 17)) + [sd.PLATFORM])
+        self.assertEqual(order[17:29], [18, 19, 17, 20, 21, 22, 23, 24, 26, 27, 25, 28])
+        self.assertEqual(order[29:], list(range(29, 38)))
+        self.assertEqual(stop, 28)
+        self.assertEqual(sd.run_order(self.PLAN, list(range(1, 40)))[0][16:18], [38, 39])
+
+    def test_the_repositorys_plan_parses(self):
+        with open(os.path.join(HERE, os.pardir, "plan.md"), encoding="utf-8") as f:
+            order, stop = sd.run_order(f.read(), list(range(1, 38)))
+        self.assertEqual(sorted(d for d in order if d != sd.PLATFORM), list(range(1, 38)))
+        self.assertEqual(stop, 28)
+
+    def test_a_higher_number_does_not_finish_a_day_that_runs_later(self):
+        days = sd.settle([a_day(17), a_day(18, kinds=["code"])], [18, 17])
+        self.assertEqual([d["status"] for d in days], ["provisional", "active"])  # 17 waits for 18
+
+    def test_a_finished_day_with_boxes_open_is_closed_not_done(self):
+        days = sd.settle([a_day(1, ticked=0, total=7), a_day(2), a_day(3, kinds=["code"])], [1, 2, 3])
+        self.assertEqual([d["status"] for d in days], ["closed", "done", "active"])
+
+    def test_the_next_step_is_the_platform_then_the_stop(self):
+        days = sd.settle([a_day(16, kinds=["close"]), a_day(17)], [16, sd.PLATFORM, 17])
+        self.assertIn("platform step", sd.next_step(days, [], [16, sd.PLATFORM, 17], None))
+        days = sd.settle([a_day(28, kinds=["close"]), a_day(29)], [28, 29])
+        self.assertIn("stop and evaluate", sd.next_step(days, [], [28, 29], 28))
 
 
 if __name__ == "__main__":
