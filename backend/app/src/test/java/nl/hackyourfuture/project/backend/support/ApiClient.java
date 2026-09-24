@@ -32,6 +32,7 @@ public final class ApiClient {
 
     private final RestClient http;
     private final Map<String, String> cookieJar = new LinkedHashMap<>();
+    private final Map<String, String> headers = new LinkedHashMap<>();
 
     private ApiClient(RestClient http) {
         this.http = http;
@@ -74,6 +75,15 @@ public final class ApiClient {
         return this;
     }
 
+    /**
+     * Sends this header on every later request, as a client may send anything: one the
+     * application must not trust, for example.
+     */
+    public ApiClient withHeader(String name, String value) {
+        headers.put(name, value);
+        return this;
+    }
+
     /** The cookies this client would send, by name. */
     public Map<String, String> cookies() {
         return Map.copyOf(cookieJar);
@@ -83,6 +93,9 @@ public final class ApiClient {
         RestClient.RequestBodySpec request = http.method(method).uri(path, uriVariables);
         if (!cookieJar.isEmpty()) {
             request = request.header(HttpHeaders.COOKIE, cookieHeader());
+        }
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+            request = request.header(header.getKey(), header.getValue());
         }
         if (body != null) {
             request = request.contentType(MediaType.APPLICATION_JSON).body(body);
