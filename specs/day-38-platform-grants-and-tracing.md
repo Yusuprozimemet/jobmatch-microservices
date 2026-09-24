@@ -84,49 +84,76 @@ Track A is the largest; each migration is one catalogue loop, and it splits by m
 passes the 400-line gate.
 
 ## Acceptance criteria
-- [ ] **new** — No module login reads another module's schema: through the application's own
+- [x] **new** — No module login reads another module's schema: through the application's own
       pools, `identity_user` reading `applications.saved_jobs`, `jobs_user` reading
       `identity.user_credentials`, `applications_user` reading `matching.job_match_scores` and
       `matching_user` reading `identity.users` each fail with `permission denied for schema`
       (`ModuleConnectionsIT`). Red today: `identityMayStillReadThem` passes, counting zero rows;
       in compose, `jobs_user` counts `identity.user_credentials` (0) instead of being refused.
-- [ ] **new** — A table a module creates later is not granted to anyone else: no row in
+      #121: `ModuleConnectionsIT.noModuleCanReadAnothersSchema`, the four reads, each `permission
+      denied for schema`. Red with no migrations (`Expecting code to raise a throwable`, all four),
+      and with the schema `USAGE` loop removed ("for table", not "for schema"). In compose on a fresh
+      volume: `permission denied for schema identity` (#121, and again in the closing run).
+- [x] **new** — A table a module creates later is not granted to anyone else: no row in
       `pg_default_acl` for the module schemas names a grantee other than the schema's owner, and a
       table created through a module's own pool (as `<module>_user`) is not readable by another
       module's login. Red today: `theOthersAreGrantedWhatIdentityCreates` passes on the harness's
       default privileges. (Created through the harness connection, a superuser, the table gets no
       grants today either; that is why the check goes through the module's pool.)
-- [ ] **hold** — Each module still reads and writes its own schema, and `jobs_user` still reads the
+      #121: `ModuleConnectionsIT.noModuleSchemaGrantsWhatIsCreatedLaterToAnyoneElse` (all three
+      schemas) and `norATableAModuleCreatesLater` (`has_table_privilege` false for the other three
+      logins). Red with the default-privilege loop removed: `identity: applications_user,
+      matching_user, jobs_user`, and `[applications_user] expected false but was true`. Holds because
+      the migrations revoke the module's own defaults too, a step past the spec (Notes).
+- [x] **hold** — Each module still reads and writes its own schema, and `jobs_user` still reads the
       mart and cannot write it (`eachModuleLogsInAsItsOwnRoleWithItsOwnSchema`,
       `jobsCannotWriteTheMart`, the full suite with `contract/` unedited). Broken on purpose: the
       catalogue loop without its `grantee <> owner` filter revokes the owner's own rights too, and
       the suite goes red.
-- [ ] **new** — The LLM call is measured and traced: with `StubLlm` answering, after
+      #121: 306 run, 0 failures, `contract/` unedited. Broken as named: without the filter the owner
+      revoked its own rights and the application did not start (`permission denied for table
+      flyway_schema_history`), 293 of 306 errors.
+- [x] **new** — The LLM call is measured and traced: with `StubLlm` answering, after
       `GET /api/jobs/top-matches` the application's `/actuator/prometheus` has
       `http_client_requests_seconds_count` for `uri="/chat/completions"`, and the test tracer
       records a client span for the call. Red today: the static builder records neither (a
       scratch run of the auditor's found 0 lines; built from the injected builder, 1). The
       closing PR ticks Day 05's LLM-span box with this.
-- [ ] **new** — No main code builds a `RestClient` outside Spring: the ArchUnit rule. Red today:
+      #122: `LlmCallObservedIT.theCallIsCountedForPrometheus` and `theCallIsAClientSpan`, the spans
+      kept by a `SpanProcessor` bean. Red with `RestClient.builder()` back: no
+      `http_client_requests` line, and no client span at all. Day 05's box is ticked.
+- [x] **new** — No main code builds a `RestClient` outside Spring: the ArchUnit rule. Red today:
       `MatchScorer:47`.
-- [ ] **hold** — A failing model still falls back to skill overlap:
+      #122: `ModuleBoundariesTest.restClientsComeFromSpring`. Red with the static builder back:
+      `was violated (1 times): Constructor <...MatchScorer.<init>...>`.
+- [x] **hold** — A failing model still falls back to skill overlap:
       `contract/MatchTopMatchesIT.fallsBackToSkillOverlapWhenTheModelFails` and
       `contract/MatchRankingIT` pass unedited. Broken on purpose (in the spec-auditor's scratch
       copy): with `MatchScorer` rethrowing the failure, `MatchRankingIT` had 2 of 8 red and
       `MatchTopMatchesIT` 1 of 8. (`MatchScoreCacheIT` stayed green: it never asserts the first
       response.) The read timeout itself has no test: `StubLlm` fails by status, never by delay,
       and the builder change keeps both timeouts.
-- [ ] **new** — The gateway serves `/actuator/health` (200) and `/actuator/prometheus` on its
+      #122: both classes 8 of 8, unedited, direct and through the gateway. The break is the
+      auditor's; not repeated.
+- [x] **new** — The gateway serves `/actuator/health` (200) and `/actuator/prometheus` on its
       management port without a token, and the latter has `http_server_requests_seconds_count`
       for a routed call (a gateway test); in compose, Prometheus lists the gateway's scrape job
       as up. Red today: the gateway has no actuator, and Prometheus lists only
       `jobmatch-backend`.
-- [ ] **hold** — The public port never serves actuator: with a valid token, `/actuator/health` and
+      #123: `ManagementPortTest`, health 200 and a routed call in `http_server_requests_seconds_count`
+      (tagged `uri="/api/**"`, the route's pattern, not the path); #124 added readiness. Red without
+      the actuator chain: health and prometheus 401. In compose (`--profile obs`): Prometheus lists
+      `jobmatch-backend` and `jobmatch-gateway`, both up (#123, and again in the closing run).
+- [x] **hold** — The public port never serves actuator: with a valid token, `/actuator/health` and
       `/actuator/prometheus` answer 404 and the upstream receives nothing; without one, 401
       (Track 0). Green today (401 and 404). Broken on purpose (the auditor's scratch copy):
       actuator added with no management port answered the valid-token request 200 with the
       Prometheus text, while `SecurityTest` and `RoutesTest` stayed green, which is why this
       check is new.
+      #120: `SecurityTest.theActuatorIsNotServedOnThePublicPortEvenWithAValidCookie`. Seen red in
+      #120 (actuator on the public port: `expected 404 but was 200`) and in #123 (the management port
+      removed: seven `SecurityTest` cases, this one among them, while `ManagementPortTest` stayed
+      green).
 
 ## Verify
 ```bash
@@ -177,3 +204,53 @@ docker compose -p day38check --env-file .env.example --profile obs down -v
     box closes here; the gateway's OTLP metrics push is switched off as the backend's is.
   - `data/`, the DAGs and `scripts/` read no module schema; `fk_saved_jobs_user` and its cascade
     still work with identity's `USAGE` revoked (tried).
+- **Closed on Day 38** at ae63735. Everything was rerun there:
+  - the gateway, 32 tests;
+  - the backend direct, 309 tests, 1 skipped (`GatewayHarnessIT`, opt-in);
+  - through the gateway, 203 tests;
+  - checkstyle clean;
+  - the Verify's compose run.
+
+  `contract/` is unchanged since 30c1d4a, and `support/` changed +13 −8 (the harness's readiness
+  wait and a comment).
+- **Estimated 4 pull requests, took 5:** 0 (#120), A (#121), B (#122), C (#123), and C's fix
+  (#124), which `main` needed after C merged. The spec change (#119) and this closing PR are
+  not counted.
+- **Two departures, both in #121:**
+  - **The harness keeps its grants.** The spec had it stop granting, as the two role sources
+    did. It still grants what every database set up before Day 38 has, so the suite runs the
+    revoking migrations against production's grants. A harness that granted nothing would have
+    passed without the migrations.
+  - **The migrations also revoke the module role's own default privileges.** With the harness
+    keeping them, that is how the `pg_default_acl` criterion holds, and in production it removes
+    the defaults `db-setup.py` registered for the module roles. The inverted Day 12 guard moved
+    to `ModuleConnectionsIT`, where it covers all three schemas.
+- **`main` went red after #123, on a startup race in Spring Cloud Gateway.**
+  - `ProxyExchangeHandlerFunction` sets up its header filters on `ContextRefreshedEvent`, but the
+    public port listens before that. A request in between hits read-only headers
+    (`UnsupportedOperationException`) and gets 500.
+  - Track C's management server starts inside that window and stretched it to about 300 ms. The
+    gateway harness waited only for the port to listen, so `MatchRankingIT`'s first login fell
+    into it. The PR run passed; the run on `main` did not.
+  - #124 enables the health probes and has the harness wait for `/actuator/health/readiness`.
+  - Outside Kubernetes the window is still there: in compose, a request in the gateway's first few
+    hundred milliseconds can get 500. Recorded, not fixed; it is in the library.
+- **For Day 37:** the gateway tags a routed call with the route's pattern, `uri="/api/**"`, not
+  the path. So its `http_server_requests` has one series for all of `/api`. A per-endpoint view
+  at the gateway needs a tag of its own; the backend still has its per-path series.
+- **For Day 34:** the gateway's `/actuator/health/readiness` exists now (#124) and is what the
+  harness waits on.
+- **Left as they were:**
+  - `contract/ObservabilityIT`'s Javadoc still says the LLM span is checked by hand. It is a
+    Day 1–4 test, so it was not edited; `LlmCallObservedIT` is the check now.
+  - On Windows, with its output piped, `db-setup.py` crashes printing its final report
+    (`UnicodeEncodeError` on the emoji), after all its grants are made. `PYTHONIOENCODING=utf-8`
+    avoids it.
+- **JDBC spans are dropped,** as the spec decided; the line is in Day 05's Notes.
+- **My mistakes:**
+  - Track C was checked with the gateway's own build and not with the backend suite through the
+    gateway, which would likely have caught the race before `main` did (#124).
+  - In Track B, the test's span bean was a nested `@TestConfiguration`, which `IntegrationTest`'s
+    explicit configuration class stops Spring from finding. The first run failed on that; the bean
+    is imported explicitly now.
+  - In Track C, the first metric assertion expected the request path in the `uri` tag.
