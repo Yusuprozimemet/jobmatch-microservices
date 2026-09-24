@@ -469,6 +469,27 @@ in `identity.pending_google_links`, its claim code in a cookie the password logi
 - *Estimated 2 pull requests, took 4.* The spec change added a tests-first track; the 400-line
   gate split Track A in two.
 
+**Day 15 — the API gateway.** `services/api-gateway`, a Spring Cloud Gateway on 8081, checks the
+access-token cookie against the backend's key set, applies the backend's rules in its order,
+replaces any `X-User-Id` with the token's user id, rate-limits the credential routes, refuses
+cross-origin calls and carries the trace. The backend still checks every token itself. The whole
+Day 1–4 suite also runs through it, in CI. 298 tests green direct, 203 through the gateway, 25 in
+the gateway.
+
+- **The spec as written would have passed with a gateway that checks nothing.** The spec-auditor
+  put a plain proxy on 8081: every Verify curl and the "401 at the gateway" criterion came out
+  as expected, because the backend answers them itself (#96). The gateway's checks now run
+  against a recording upstream, where passing means nothing arrived.
+- **`contract/` held, unedited, through the gateway:** all 190 tests, with 128 lines added to
+  `support/` for the switch, and never instead of the direct run, which alone shows the backend
+  still checks tokens.
+- **Two framework defaults would have broken what the spec asked for.** Spring Boot 4 turns
+  trace propagation off unless spans are exported, so the correlation id correlated nothing by
+  default; and Spring's own CORS rejection refuses the frontend's login through its proxy. Both
+  were caught by a test before they merged.
+- *Estimated 3 pull requests, took 7.* The spec change added a tests-first track and the suite
+  through the gateway; the gate split the last track; one test that raced turned `main` red.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -506,11 +527,11 @@ the test the plan was built around, now with the database roles in place under i
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again. Day 11 split the database by module: zero again. Day 12 added token issuance: zero again, and 73 lines added to `support/` for a signing key and production's default privileges. Day 13 replaced session auth with tokens: zero again, with `Cookies.AUTH` the one line changed that the contract suite reads, and 131 lines added to `support/` for three helpers only the tests outside `contract/` use. Day 14 took Google sign-in off the session: zero again, and `support/GoogleSignIn` split into its two steps (+16 −3).** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 8 specs that could not be met, 3 spec verify commands that ran no tests, 1 spec check that could not fail, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 2 protected behaviours with no test behind them, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 3 database objects a spec missed (a moved enum, a cascade, a revoke), 1 missing claim that would have made a test flaky, 1 migration that broke two harness tests by construction, 1 setting that did nothing, 2 fixtures unlike production, 1 principal a spec would have changed by accident, 1 frontend regression a spec missed, 1 CI build that re-downloaded the world; Day 14: 1 spec item written for code that never existed, 1 spec change that would have broken a contract test, 1 grep criterion that could not print clean, 1 framework default that made a session, 1 new table without its revoke, 1 protected behaviour with no test behind it, 4 cookie properties no criterion checked) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 13 of 14 days worked; Days 5, 8, 9, 10, 11 and 12 needed two and Days 13 and 14 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 14 on Day 9, Day 14's second on Day 13) |
-| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split five times, the fifth Day 14's Track A) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again. Day 11 split the database by module: zero again. Day 12 added token issuance: zero again, and 73 lines added to `support/` for a signing key and production's default privileges. Day 13 replaced session auth with tokens: zero again, with `Cookies.AUTH` the one line changed that the contract suite reads, and 131 lines added to `support/` for three helpers only the tests outside `contract/` use. Day 14 took Google sign-in off the session: zero again, and `support/GoogleSignIn` split into its two steps (+16 −3). Day 15 put a gateway in front: zero again, and the whole contract suite also runs through it, with 128 lines added to `support/` for the switch.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→7) |
+| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 8 specs that could not be met, 3 spec verify commands that ran no tests, 1 spec check that could not fail, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 2 protected behaviours with no test behind them, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 3 database objects a spec missed (a moved enum, a cascade, a revoke), 1 missing claim that would have made a test flaky, 1 migration that broke two harness tests by construction, 1 setting that did nothing, 2 fixtures unlike production, 1 principal a spec would have changed by accident, 1 frontend regression a spec missed, 1 CI build that re-downloaded the world; Day 14: 1 spec item written for code that never existed, 1 spec change that would have broken a contract test, 1 grep criterion that could not print clean, 1 framework default that made a session, 1 new table without its revoke, 1 protected behaviour with no test behind it, 4 cookie properties no criterion checked; Day 15: 2 checks a pass-through proxy passed, 1 hold a gateway would have silenced, 1 token location no spec named, 3 access rules a spec missed, 1 track that did not exist, 1 rate limit that would have failed the suite, 1 verify that ran no tests, 1 CORS configuration that never existed, 2 framework defaults that broke what the spec asked for) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 14 of 15 days worked; Days 5, 8, 9, 10, 11, 12 and 15 needed two and Days 13 and 14 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 15 on Day 9, Day 14's second on Day 13) |
+| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split six times, the sixth Day 15's Track C) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
 ## Running it
