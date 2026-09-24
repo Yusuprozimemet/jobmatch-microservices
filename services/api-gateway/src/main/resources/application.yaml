@@ -19,7 +19,23 @@ logging:
 
 # Tracing as the backend does it (Day 05): every request sampled, the trace id in every log line,
 # and spans exported only when TRACING_EXPORT_ENABLED is set, to the same Tempo.
+#
+# Actuator on a port of its own, as the backend's (Day 38): compose does not publish it, so
+# Prometheus scrapes it across the compose network and the public port routes no /actuator/**.
 management:
+  server:
+    port: ${MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  otlp:
+    metrics:
+      export:
+        # On by default, pushing to localhost:4318 every minute whether a collector is there or
+        # not. Off unless an endpoint is given, as the backend's.
+        enabled: ${OTEL_METRICS_ENABLED:false}
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
   tracing:
     sampling:
       probability: ${TRACING_PROBABILITY:1.0}

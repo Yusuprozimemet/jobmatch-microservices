@@ -1,5 +1,5 @@
-# Scrapes the backend's management port, which docker-compose does not publish to the
-# host. That is the whole reason the actuator listens on a port of its own: Prometheus
+# Scrapes the backend's and the gateway's management ports, which docker-compose does not
+# publish to the host. That is the whole reason the actuator listens on a port of its own: Prometheus
 # reaches it across the compose network, and nothing on the internet can.
 global:
   scrape_interval: 5s
@@ -10,3 +10,8 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["backend:9090"]
+  # The gateway's own actuator (Day 38), on the same port number inside its container.
+  - job_name: jobmatch-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["api-gateway:9090"]
