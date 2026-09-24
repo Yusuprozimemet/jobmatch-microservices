@@ -70,7 +70,7 @@ change is visible in the diff.
 | Layer | Stack | Migration status |
 | --- | --- | --- |
 | **Backend** | Java 25, Spring Boot 4.1, Spring Security (sessions + Google OAuth2), PostgreSQL, Flyway, Maven | **The subject of the migration** |
-| **Frontend** | Next.js 16, React 19, TypeScript | Unchanged; consumes the gateway from Phase 2 |
+| **Frontend** | Next.js 16, React 19, TypeScript | Changed only where auth did: refresh on a 401 and retry once (#86); reaches the backend through the gateway since Day 16 |
 | **Data** | Python, dbt, Airflow, Databricks, Azure | Unchanged; already owns its own schema |
 | **Matching** | Skill-overlap SQL rescored by an LLM | Extracted in Phase 4 |
 | **Infrastructure** | Docker Compose, GitHub Actions, GHCR | Kubernetes + Terraform/Pulumi in Phase 7 |
@@ -107,14 +107,16 @@ experiment repeatable:
 
 | Gate | Mechanism | What it prevents |
 | --- | --- | --- |
-| Diff size ≤ 400 changed lines | [`pr-checks.yml`](.github/workflows/pr-checks.yml) | The large agent-authored pull request that gets approved instead of reviewed |
-| Pull request uses the template | [`pr-checks.yml`](.github/workflows/pr-checks.yml) | Checks skipped by `gh pr create --body`, the path most AI tooling takes |
+| Diff size ≤ 400 changed lines | [`pr-checks.yml`](.github/workflows/pr-checks.yml), required by branch protection on `main` | The large agent-authored pull request that gets approved instead of reviewed |
+| Pull request uses the template | [`pr-checks.yml`](.github/workflows/pr-checks.yml), required by branch protection on `main` | Checks skipped by `gh pr create --body`, the path most AI tooling takes |
 | Tests, lint and build are green | Per-area CI workflows | Work declared done that does not run |
 | Contract tests assert HTTP only | Day 2–4 acceptance criteria | Tests coupled to internals, which cannot survive the rewrite they exist to protect |
 
 The 400-line limit is the load-bearing one. It forces the agent to sequence its own work, and it
 is the reason a day that was estimated at three pull requests can legitimately take six — which
-is a finding, not a failure.
+is a finding, not a failure. An `Oversized:` reason in the description lets a pull request
+through anyway; that was used on #1, #2 and #3 and never since. Until after Phase 2 the checks
+reported without blocking: `main` had no branch protection.
 
 **Changing a spec is normal.** It happens in a pull request *before* the work, not as a
 retroactive edit afterwards. Days 17–37 are marked `provisional` precisely because they were
@@ -129,17 +131,19 @@ anything that requires a network.
 | Phase | Days | Outcome | Status |
 | --- | --- | --- | --- |
 | **0 — Make the split safe** | 1–5 | Integration tests over the five public API surfaces, asserting the HTTP contract only, so they survive the split unchanged. Actuator, Micrometer, OpenTelemetry. | done |
-| **1 — Modularise in place** | 6–11 | Maven modules that may only call each other through published interfaces; the three cross-module reads replaced by interfaces; migrations split per module. No network yet. | **in progress** |
-| **2 — Gateway + JWT** | 12–16 | Spring Cloud Gateway in front; session auth rewritten to RS256 JWT with JWKS, refresh tokens in the database, Google sign-in without a session. | ready |
+| **1 — Modularise in place** | 6–11 | Maven modules that may only call each other through published interfaces; the three cross-module reads replaced by interfaces; migrations split per module. No network yet. | done |
+| **2 — Gateway + JWT** | 12–16 | Spring Cloud Gateway in front; session auth rewritten to RS256 JWT with JWKS, refresh tokens in the database, Google sign-in without a session. | done (tag `phase-2`) |
 | **3 — Extract job-service** | 17–20 | First independent service: read-only, no user data, own database and image. | provisional |
 | **4 — Extract matching-service** | 21–24 | Isolates the 20-second LLM timeout from job search; match scores move to NoSQL with a native TTL. | provisional |
-| **5 — Extract application-service** | 25–28 | Saved jobs to its own store; message bus with a transactional outbox; `user.deleted` cascade across four databases. | provisional |
+| **5 — Extract application-service** | 25–28 | Message bus with a transactional outbox and the `user.deleted` cascade first, then saved jobs to its own store. Ends at Day 28, where the work stops to be evaluated. | provisional |
 | **6 — Functions + uploads** | 29–31 | CV parsing and mail off the request path; direct-to-blob uploads via short-lived SAS URLs. | provisional |
-| **7 — Kubernetes + IaC** | 32–37 | Terraform, Pulumi add-ons, a Helm library chart, GitOps with Argo CD, external secrets, KEDA. | provisional |
+| **7 — Kubernetes + IaC** | 32–37 | One IaC tool, a Helm library chart, GitOps with Argo CD, external secrets, an HPA. Rewritten after Day 28's evaluation, or not started. | provisional |
 
 Two phases stand on their own as stopping points. **Day 16** leaves a working monolith with a
 real test suite and stateless auth behind a gateway — valuable even if nothing further is built.
-**Day 28** leaves a complete microservice system with no Kubernetes.
+**Day 28** leaves a complete microservice system with no Kubernetes. After Phase 2 the plan was
+corrected (#115): Phases 3–5 now build each seam before extracting, after a platform step, and
+Day 28 is where the work stops to be evaluated.
 
 Phase 1 is where the real work is, and it is fully reversible: if the boundaries do not hold
 while everything is still one process, they will not hold over HTTP.
@@ -176,9 +180,9 @@ Recorded as they happen, including the ones that make the method look worse.
 `IntegrationTest` base class, builders (`aUser()`, `aProfile()`, `aPosting()`), and fixtures for
 the three `analytics` mart tables the pipeline owns and Flyway therefore does not create.
 
-- *Estimated 3 pull requests, took 6.* The harness is ~1,400 lines against a 400-line gate, and
-  the pieces have a compile order. The estimate was mine and it was wrong; the gate exposed it
-  rather than the review missing it.
+- *Estimated 3 pull requests, took 1, over the gate.* The harness is ~1,400 lines, and the pieces
+  have a compile order; it merged whole with an `Oversized:` reason (#1, six commits). The
+  estimate was mine and it was wrong. (Recorded until after Phase 2 as "took 6", counting commits.)
 - The agent sourced the mart column types from `data/sql/job_schema.sql` rather than from the
   dbt model the spec pointed at, correctly noting that the model is Databricks SQL and the sync
   script remaps those types to Postgres on the way in. The spec was wrong; the correction is
@@ -234,7 +238,7 @@ endpoint accepts, the filter options endpoint, job detail, the `savedCount` fiel
   acceptance criterion ticks itself. The same failure mode as Day 2's CI gate — a check that
   passes because it is checking nothing.
 - *Estimated 3 pull requests, took 4.* Track A came to 406 lines against the 400-line gate and
-  was split. The gate has now bitten twice and has still not been overridden.
+  was split. The gate has now bitten twice, with no override since #1–#3.
 
 **Day 4 — saved jobs and matching contract tests.** 53 tests across six classes covering the
 saved-job tracker, the posting details it hydrates, and `/api/jobs/top-matches` with the language
@@ -259,7 +263,7 @@ model replaced by a real HTTP stub. Full suite: 184 tests in ~90 seconds.
   are pinned so Day 9's shared `PostingLookup` has to make a decision rather than satisfy one view
   and quietly break the other.
 - *Estimated 3 pull requests, took 5.* Track C came to 446 lines against the 400-line gate and was
-  split. The gate has now forced a split three times and still has no overrides.
+  split. The gate has now forced a split three times, with no override since #1–#3.
 - Unrelated to the day, and worth recording: the `build` job went red twice on Maven Central
   rate-limiting. The Dockerfile copies the whole source tree before `mvn package`, so every commit
   re-downloads the full dependency tree and the layer cache never hits. The tests were never
@@ -487,7 +491,7 @@ the gateway.
   trace propagation off unless spans are exported, so the correlation id correlated nothing by
   default; and Spring's own CORS rejection refuses the frontend's login through its proxy. Both
   were caught by a test before they merged.
-- *Estimated 3 pull requests, took 7.* The spec change added a tests-first track and the suite
+- *Estimated 3 pull requests, took 9* (7 at the close; #105 and #106 landed after it). The spec change added a tests-first track and the suite
   through the gateway; the gate split the last track; one test that raced turned `main` red.
 
 **Day 16 — cutover.** The gateway is on 8080 and is the only way in: the backend has no published
@@ -551,7 +555,7 @@ breaking the code on purpose. In Phase 2 the ones that mattered most came from *
 system as a stranger would**: a spec-auditor in a fresh context put a pass-through proxy where the
 gateway would be and every Day 15 check passed; on Day 16 it chained real containers and a spoofed
 header chose its own rate-limit bucket. Neither could be seen by reading. The estimates missed in
-both directions: 14 track pull requests planned for the phase, 21 taken.
+both directions: 14 track pull requests planned for the phase, 23 taken.
 
 The measurement moved too. The dashboard said the spec closed as much of the spec-to-code gap as
 the code did. Counting each merge only against the names known by then (#107), that was mostly an
@@ -562,11 +566,11 @@ The spec leads and the code follows, which is what a spec-first process should l
 
 | Question | Evidence it will be judged on |
 | --- | --- |
-| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again. Day 11 split the database by module: zero again. Day 12 added token issuance: zero again, and 73 lines added to `support/` for a signing key and production's default privileges. Day 13 replaced session auth with tokens: zero again, with `Cookies.AUTH` the one line changed that the contract suite reads, and 131 lines added to `support/` for three helpers only the tests outside `contract/` use. Day 14 took Google sign-in off the session: zero again, and `support/GoogleSignIn` split into its two steps (+16 −3). Day 15 put a gateway in front: zero again, and the whole contract suite also runs through it, with 128 lines added to `support/` for the switch. Day 16 took the backend's port away: zero in `contract/` and zero in `support/`.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Day 13 and Days 17–28 are the remaining tests |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→6, 3→3, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→7, 3→2) |
+| Do contract tests written against the monolith survive the split? | Lines changed in `contract/` versus in `support/`. **Day 7 moved ~70 classes into modules: zero lines changed in `contract/`. Day 8 replaced a cross-module join: zero again, and 53 lines added to `support/` for a statement counter. Day 9 removed two more: zero again. Day 10 moved the user lookup to the edge: zero again. Day 11 split the database by module: zero again. Day 12 added token issuance: zero again, and 73 lines added to `support/` for a signing key and production's default privileges. Day 13 replaced session auth with tokens: zero again, with `Cookies.AUTH` the one line changed that the contract suite reads, and 131 lines added to `support/` for three helpers only the tests outside `contract/` use. Day 14 took Google sign-in off the session: zero again, and `support/GoogleSignIn` split into its two steps (+16 −3). Day 15 put a gateway in front: zero again, and the whole contract suite also runs through it, with 128 lines added to `support/` for the switch. Day 16 took the backend's port away: zero in `contract/` and zero in `support/`.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Days 17–28 are the remaining tests, run in the corrected order (#115) |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→1, 3→1, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→9, 3→2; Days 1 and 2 were one oversized pull request each) |
 | Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 8 specs that could not be met, 3 spec verify commands that ran no tests, 1 spec check that could not fail, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 2 protected behaviours with no test behind them, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 3 database objects a spec missed (a moved enum, a cascade, a revoke), 1 missing claim that would have made a test flaky, 1 migration that broke two harness tests by construction, 1 setting that did nothing, 2 fixtures unlike production, 1 principal a spec would have changed by accident, 1 frontend regression a spec missed, 1 CI build that re-downloaded the world; Day 14: 1 spec item written for code that never existed, 1 spec change that would have broken a contract test, 1 grep criterion that could not print clean, 1 framework default that made a session, 1 new table without its revoke, 1 protected behaviour with no test behind it, 4 cookie properties no criterion checked; Day 15: 2 checks a pass-through proxy passed, 1 hold a gateway would have silenced, 1 token location no spec named, 3 access rules a spec missed, 1 track that did not exist, 1 rate limit that would have failed the suite, 1 verify that ran no tests, 1 CORS configuration that never existed, 2 framework defaults that broke what the spec asked for; Day 16: 1 verify that would have deleted the maintainer's database, 1 grep criterion that could never pass, 1 criterion that did not prove its goal, 1 trusted header that would have let any client pick its rate-limit bucket, 1 check by hand that could not run on a fresh volume, 1 deployment item with nothing in the repository, 2 documents wrong since the initial commit; and outside the days, 1 dashboard measure that credited the spec with gap it did not close, #107) |
 | How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 15 of 16 days worked; Days 5, 8, 9, 10, 11, 12 and 15 needed two and Days 13, 14 and 16 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 16 on Day 9, Day 14's second on Day 13, Day 16's second on Day 14) |
-| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 0, with the gate having forced a split six times, the sixth Day 15's Track C) |
+| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 3: #1 at 1,420 changed lines, #2 at 1,075, #3 at 712, all before Day 3; none since, with the gate having forced a split six times, the sixth Day 15's Track C. Recorded as 0 until after Phase 2. The checks did not block a merge until `main` was protected after Phase 2) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
 ## Running it

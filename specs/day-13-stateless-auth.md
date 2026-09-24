@@ -114,7 +114,7 @@ was tried: `STATELESS` with nothing else turned 15 of 55 auth tests red.
 - [x] **new** — Restarting the backend does not sign a user out: the compose check in **Verify**
       prints `200` after the restart. `200`, `200` on `main` at the close and in #87; `200`, `401`
       on 02387dd (#82).
-- [ ] **new** — The frontend calls `POST /api/auth/refresh` on a 401 and retries once:
+- [x] **new** — The frontend calls `POST /api/auth/refresh` on a 401 and retries once:
       `grep -rn "api/auth/refresh" frontend/src` finds it in `api.ts`; `npm run lint` and
       `npm run build` pass; and in a browser, with `access_token` deleted by hand and the page
       reloaded, the user is still signed in and a new `access_token` is set (checked by the
@@ -124,6 +124,10 @@ was tried: `STATELESS` with nothing else turned 15 of 55 auth tests red.
       `/api/auth/`, and the 401 standing when refresh fails; broken on a copy, 3 refreshes and 1.
       **The browser check is not yet reported by the maintainer,** so this box stays open; the
       day is done when it is ticked.
+      **Waived by the maintainer after Phase 2** (the record fix after #115): the browser check
+      was never done. What stands in for it: the grep, lint and build above, the scratch script's
+      three cases, `RefreshIT` (an expired access cookie refreshing, also through the gateway since
+      Day 15) and `StaleCookieIT`. What it does not prove: a real browser's cookie handling.
 - [x] **hold** — A stale auth cookie costs an anonymous route nothing: with an expired access
       token or garbage in `Cookies.AUTH`, `GET /api/jobs` returns 200, login with valid
       credentials 200, and register 201 (`tokens/StaleCookieIT`, Track 0). `StaleCookieIT` (#83),
