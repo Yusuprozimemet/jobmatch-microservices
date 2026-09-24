@@ -12,7 +12,8 @@ anything.
 ## What you are given
 
 A day number. Read `specs/day-NN-*.md`, the rules in `specs/README.md` and `specs/_template.md`,
-the phase this day belongs to in `plan.md`, and the Notes of the day before.
+the phase this day belongs to in `plan.md`, and the Notes of the day before. Then find everything
+earlier days left for this one (check 7).
 
 ## What to check
 
@@ -33,6 +34,18 @@ the phase this day belongs to in `plan.md`, and the Notes of the day before.
 6. **The shape of the day:** does a criterion need a test that must pass before and after the
    change? Then it needs a Track 0 that lands first. Do the tracks depend on each other in an
    order other than the table's? Is the estimate plausible?
+7. **Hand-offs to this day.** Earlier days defer work in their Notes and in test comments, and
+   nothing else carries it forward: Day 13 left the `Secure` cookie flag to Day 16, which never
+   saw it; the Phase 0-1 audit found 8 of 19 such hand-offs dropped, half done or breaking early.
+   Find every one that names this day or this phase, in the finished days' specs and in the code:
+   ```bash
+   grep -rnE "Day 0?NN\b|Phase P\b" specs/day-0*.md specs/day-1*.md ...   # the days before this one
+   grep -rniE "expires on Day|until Day|TODO day-" backend services frontend scripts --include=*.java --include=*.ts --include=*.py --include=*.yaml
+   ```
+   For each, say whether this spec covers it (the criterion or In scope line), or it is missing.
+   A missing one is a finding: the spec takes it, or it is moved to a named later day, or it is
+   dropped, and the spec's Notes say which. Also report a hand-off to an earlier day that did not
+   pick it up, and a test whose stated expiry this day will break early.
 
 ## How to work
 
@@ -55,6 +68,9 @@ Findings
    True:   <what the code shows>
    Evidence: <command and output>
    Fix: <the spec change>
+
+Hand-offs to this day
+- <day-NN:line or file:line>: <what it defers> → covered by <criterion> | MISSING
 
 Suggested track order and Track 0: <if different from the table>
 Not checked, and why: <short list>
