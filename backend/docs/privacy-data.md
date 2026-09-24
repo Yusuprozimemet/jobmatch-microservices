@@ -116,11 +116,15 @@ GDPR Art. 15 — the right to get a copy. On the profile page, *Your data export
 Plus an `exportedAt` timestamp. If any call answers 401 the user is sent to the login page rather
 than handed a partial file.
 
-**Between them those three cover every table that holds anything personal**, which is why `/me`
-returns fields the UI never displays — `createdAt`, `oauthProvider`, `oauthProviderId`,
-`passwordUpdatedAt` all exist for this export. `password_reset_tokens`, `refresh_tokens` and
-`pending_google_links` are excluded deliberately: a live token is a credential, and putting it in a
-downloadable file would be worse than omitting it.
+**Between them those three cover every table that holds anything personal but one**, which is why
+`/me` returns fields the UI never displays — `createdAt`, `oauthProvider`, `oauthProviderId`,
+`passwordUpdatedAt` all exist for this export. `password_reset_tokens` and `refresh_tokens` are
+excluded deliberately: a live token is a credential, and putting it in a downloadable file would be
+worse than omitting it.
+**The one is `pending_google_links`** (Day 14), and leaving it out is a gap, not a decision. Its
+`code_hash` is a credential like the tokens, but its `provider_id` (the Google identity waiting to
+be linked) and its times are not, and the export does not return them. A claimed or expired row
+stays until the account parks another or is deleted ([section 7](#7-retention)).
 `job_match_scores` is excluded because it is not personal data — no row in it identifies anyone.
 
 Two real weaknesses:
