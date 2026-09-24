@@ -7,9 +7,12 @@ main, and each day's status, tracks and criteria. Needs git, the gh CLI and nump
     python scripts/spec-drift.py --build dashboard.html  # docs/dashboard/ as one file, data inlined
 
 Drift: angle between today's spec text (plan.md + specs/*.md, log word counts) and the spec as
-first committed. Gap: angle between spec and code over the code-like names the specs put in
-backticks, counted in the specs and in the code (Markdown, data/, screenshots and this dashboard
-left out: its method text names the very identifiers it counts).
+first committed, each word weighted by how rare it was across the first commit's files, so words
+every file uses ("the", "day") weigh nothing. Gap: angle between spec and code over the code-like
+names the specs put in backticks, counted in the specs and in the code (Markdown, data/,
+screenshots, this dashboard and comment lines left out: a comment naming a thing is not the
+thing). Each merge's gap uses only the names the specs had used by then, so a later spec does
+not move an earlier point.
 """
 import argparse
 import collections
@@ -25,6 +28,9 @@ import numpy as np
 WORD = re.compile(r"[a-z0-9_]{2,}")
 TICK = re.compile(r"`([^`\n]+)`")
 IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{3,}")
+WORDS = re.compile(r"[A-Za-z0-9_]+")
+COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*|--|<!--|#(\s|!|$))")
+COMMENT_TAIL = re.compile(r"/\*.*?\*/|\s(//|--|#)\s.*$")
 CRITERION = re.compile(r"^- \[( |x)\]", re.M)
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
@@ -80,10 +86,25 @@ def angle(x, y):
     return float(np.degrees(np.arccos(np.clip(x @ y / (nx * ny), -1, 1))))
 
 
-def word_angle(a, b):
+def word_angle(a, b, idf):
     keys = sorted(set(a) | set(b))
-    return angle(np.array([math.log1p(a.get(k, 0)) for k in keys]),
-                 np.array([math.log1p(b.get(k, 0)) for k in keys]))
+    w = np.array([idf(k) for k in keys])
+    return angle(w * np.array([math.log1p(a.get(k, 0)) for k in keys]),
+                 w * np.array([math.log1p(b.get(k, 0)) for k in keys]))
+
+
+def rarity(texts):
+    """Inverse document frequency over one snapshot's files: 0 for a word in every file."""
+    df = collections.Counter(w for t in texts.values() for w in set(WORD.findall(t.lower())))
+    n = len(texts)
+    return lambda w: math.log((1 + n) / (1 + df[w]))
+
+
+def code_names(line, index):
+    """The vocabulary names on one line of code, or none if the line is a comment."""
+    if COMMENT_LINE.match(line):
+        return []
+    return [w for w in WORDS.findall(COMMENT_TAIL.sub("", line)) if w in index]
 
 
 def snapshots(prs):
@@ -103,9 +124,16 @@ def trajectory(snaps, blobs):
     for s in snaps:
         names = run("git", "ls-tree", "-r", "--name-only", s["sha"], "--", "plan.md", "specs").split()
         s["texts"] = {n: blobs.read(s["sha"], n) for n in names if n.endswith(".md")}
-    vocab = sorted({tok for s in snaps for t in s["texts"].values() for span in TICK.findall(t)
-                    for tok in IDENT.findall(span) if code_like(tok)})
+    first_seen = {}
+    for i, s in enumerate(snaps):
+        for t in s["texts"].values():
+            for span in TICK.findall(t):
+                for tok in IDENT.findall(span):
+                    if code_like(tok):
+                        first_seen.setdefault(tok, i)
+    vocab = sorted(first_seen)
     index = {v: i for i, v in enumerate(vocab)}
+    born = np.array([first_seen[v] for v in vocab])
     patterns = "\n".join(vocab) + "\n"
 
     def spec_counts(texts):
@@ -118,18 +146,18 @@ def trajectory(snaps, blobs):
         return c
 
     def code_counts(sha):
-        out = subprocess.run(["git", "grep", "-o", "-h", "-w", "-F", "-f", "-", sha, "--", ".",
+        out = subprocess.run(["git", "grep", "-h", "-I", "-w", "-F", "-f", "-", sha, "--", ".",
                               ":(exclude)*.md", ":(exclude)data", ":(exclude)screenshots", ":(exclude)docs/dashboard",
                               ":(exclude)**/package-lock.json"], input=patterns,
                              capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
         c = np.zeros(len(vocab))
-        for tok in out.split():
-            tok = tok.split(":", 1)[-1]
-            if tok in index:
+        for line in out.splitlines():
+            for tok in code_names(line, index):
                 c[index[tok]] += 1
         return c
 
     origin = collections.Counter(w for t in snaps[0]["texts"].values() for w in WORD.findall(t.lower()))
+    idf = rarity(snaps[0]["texts"])
     prev, day, rows, vectors = origin, 0, [], []
     for i, s in enumerate(snaps):
         s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"])
@@ -152,15 +180,16 @@ def trajectory(snaps, blobs):
                                 ":(exclude)docs/dashboard").splitlines():
                 a, d, _ = line.split("\t")
                 churn += 0 if a == "-" else int(a) + int(d)
-        mask = reached > 0
+        mask, known = reached > 0, born <= i
+        spec_v, code_v = np.log1p(spec) * known, np.log1p(code) * known
         rows.append(dict(i=i, sha=s["sha"], date=s["date"], pr=s["pr"], title=s["title"], kind=s["kind"],
-                         day=day if s["pr"] else 0, drift=round(word_angle(words, origin), 2),
-                         step=round(word_angle(words, prev), 2), added=added, deleted=deleted,
-                         gap_full=round(angle(np.log1p(spec), np.log1p(code)), 2),
+                         day=day if s["pr"] else 0, drift=round(word_angle(words, origin, idf), 2),
+                         step=round(word_angle(words, prev, idf), 2), added=added, deleted=deleted,
+                         gap_full=round(angle(spec_v, code_v), 2),
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
                          spec_files=spec_files, code_churn=churn))
         prev = words
-        vectors.append((np.log1p(spec), np.log1p(code)))
+        vectors.append((spec_v, code_v))
     X = np.array([v / (np.linalg.norm(v) or 1) for pair in zip(*vectors) for v in pair])
     X = X - X.mean(0)
     _, S, Vt = np.linalg.svd(X, full_matrices=False)
