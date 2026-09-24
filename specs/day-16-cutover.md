@@ -9,8 +9,11 @@ code is gone.
 ## In scope
 - `docker-compose.yml`: publish `api-gateway` on 8080; **remove the backend's `ports:`**.
   Frontend `BACKEND_API_URL` points at the gateway.
-- Delete the backend's CORS config now that the gateway owns it. (The session code went on
-  Day 14.)
+- No CORS to delete: the backend never had any, and the gateway allows no cross-origin requests
+  (found on Day 15). The session code went on Day 14.
+- The gateway's rate limit trusts `X-Forwarded-For` only from `GATEWAY_TRUSTED_PROXIES` (Day 15):
+  set it to the frontend, and check that the frontend's rewrite sends the browser's address, or
+  every user shares one bucket.
 - Deployment: gateway gets the public ingress, backend goes internal-only.
 - Docs: update `backend/docs/auth.md` and `api.md` for JWT.
 - Two architecture diagrams in `backend/docs/architecture.md`, as Mermaid so they render on
@@ -27,7 +30,7 @@ code is gone.
 | Track | Owner | Work |
 |---|---|---|
 | A | | Compose + deployment wiring, backend port removal |
-| B | | Delete CORS code |
+| B | | None: there was no CORS code to delete (Day 15). Day 16's audit sets the estimate |
 | C | | Docs, README, charts, release tag |
 
 ## Acceptance criteria
