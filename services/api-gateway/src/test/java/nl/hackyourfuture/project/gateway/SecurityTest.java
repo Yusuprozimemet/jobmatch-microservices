@@ -79,6 +79,19 @@ class SecurityTest {
         assertThat(BACKEND.received()).isEmpty();
     }
 
+    // The gateway's own actuator belongs on a management port compose does not publish (Day 38).
+    // Without a token the public port says 401 whether actuator is there or not, so only a valid
+    // token shows it is absent: with actuator on this port, that request was answered 200.
+    @Test
+    void theActuatorIsNotServedOnThePublicPortEvenWithAValidCookie() throws Exception {
+        String cookie = KEYS.valid(UUID.randomUUID());
+        for (String route : new String[] {"GET /actuator/health", "GET /actuator/prometheus"}) {
+            assertThat(send(route, null).statusCode()).as(route + " without a cookie").isEqualTo(401);
+            assertThat(send(route, cookie).statusCode()).as(route + " with a valid cookie").isEqualTo(404);
+        }
+        assertThat(BACKEND.received()).isEmpty();
+    }
+
     @Test
     void aPrivateRouteWithAValidCookieReachesTheBackend() throws Exception {
         send("GET /api/profile", KEYS.valid(UUID.randomUUID()));
