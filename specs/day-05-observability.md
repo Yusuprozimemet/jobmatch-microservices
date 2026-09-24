@@ -74,9 +74,12 @@ Checkable by hand, with the commands in Verify:
   `e0f889221dc82d39b76e66ec85a50162` from a log line returned the five spans of
   `http post /api/auth/forgot-password`.
 - [x] `docker compose up` does not start Grafana; `--profile obs` does.
-- [ ] A slow `top-matches` request shows the LLM call as a distinct span. **Not checked.** The
+- [x] A slow `top-matches` request shows the LLM call as a distinct span. **Not checked.** The
   compose stack has no mart data, so the shortlist is empty and the model is never called. It
   needs a published mart or a seeded database, which is Day 17's ground rather than this day's.
+  Ticked on Day 38 (#122): the call had no span at all, because `MatchScorer` built its client
+  with `RestClient.builder()`. On Spring's builder, `LlmCallObservedIT` finds a client span for
+  `/chat/completions`, with `StubLlm` answering and the real tracer.
 
 ## Verify
 ```bash
@@ -151,3 +154,6 @@ curl -s localhost:8080/actuator/health
   before `mvn package`, so every commit re-downloads the dependency tree and the layer cache
   never hits; that has already turned the `build` job red twice on Maven Central rate limits.
   Fixing it is not this day's job, but this is the day that touches the file.
+- **JDBC spans are dropped** (Day 38), not restored: nothing has needed them since the agent went.
+  Phase 4 may bring them back if it shows a query worth tracing. The first criterion stays
+  unticked.
