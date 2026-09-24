@@ -58,6 +58,8 @@ public abstract class IntegrationTest {
         registry.add("app.datasource.jobs.password", PostgresContainer::rolePassword);
         // The application does not start without a signing key (Day 12), and none is committed.
         registry.add("app.jwt.private-key-file", () -> TestSigningKey.path().toString());
+        // The service key (Day 39) is separate and required like the user key.
+        registry.add("app.service-jwt.private-key-file", () -> TestSigningKey.servicePath().toString());
     }
 
     @BeforeEach

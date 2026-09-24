@@ -131,6 +131,7 @@ All configuration lives in [`application.yaml`](src/main/resources/application.y
 | `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_MATCHING_USER`, `DB_JOBS_USER` | `identity_user`, … | Each module's own login, with its own schema as the search path. `jobs_user` only reads |
 | `DB_IDENTITY_PASSWORD`, `DB_APPLICATIONS_PASSWORD`, `DB_MATCHING_PASSWORD`, `DB_JOBS_PASSWORD` | `password` | Their passwords |
 | `JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the RSA private key (PEM, PKCS#8, 2048 bits or more) tokens are signed with. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../scripts/jwt-key.sh) writes one, and compose sets this itself |
+| `SERVICE_JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the monolith's own key (PEM, PKCS#8, 2048 bits or more) for service tokens (Day 39), separate from the user key. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../scripts/jwt-key.sh) writes one, and compose sets this itself |
 | `SPRING_PROFILES_ACTIVE` | — | Active profile: `dev` or `prod`. None is active unless you set it; the Docker image defaults to `prod` |
 
 [`.env.example`](.env.example) lists the same variables as a starting point — copy it to `.env` (gitignored) and load it as described in [Quick start](#quick-start) step 2.

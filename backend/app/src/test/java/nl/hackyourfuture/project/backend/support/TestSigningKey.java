@@ -20,6 +20,7 @@ import java.util.Base64;
 public final class TestSigningKey {
 
     private static Path file;
+    private static Path serviceFile;
 
     private TestSigningKey() {
     }
@@ -30,6 +31,14 @@ public final class TestSigningKey {
             file = write(pem(rsaKeyPair(2048).getPrivate().getEncoded()));
         }
         return file;
+    }
+
+    /** A 2048-bit RSA private key for service tokens (Day 39), separate from the user key. */
+    public static synchronized Path servicePath() {
+        if (serviceFile == null) {
+            serviceFile = write(pem(rsaKeyPair(2048).getPrivate().getEncoded()));
+        }
+        return serviceFile;
     }
 
     /** A new RSA key pair of the given size, for tests that need a key other than this one. */
