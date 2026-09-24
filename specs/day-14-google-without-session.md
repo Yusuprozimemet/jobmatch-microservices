@@ -70,47 +70,80 @@ off the session: with A alone, the taken branch still sets `JSESSIONID`. B is th
 the 400-line gate; if it splits, the estimate becomes 4.
 
 ## Acceptance criteria
-- [ ] **hold** — All eight `AuthGoogleSignInIT` tests, and all 190 tests in the 23 `contract/`
+- [x] **hold** — All eight `AuthGoogleSignInIT` tests, and all 190 tests in the 23 `contract/`
       classes, pass, and nothing in `contract/` changes: the last command in **Verify** prints
       nothing. Broken on purpose in the spec-auditor's scratch copy of bcb860e:
       `PendingGoogleLink.claim` forced empty turned `theNextPasswordLoginClaimsTheParkedIdentity`
       red (`expected: "http://localhost:3000/" but was: "…/login?error=google_link_required"`), and
       the terms check replaced with `if (false)` turned `createsAnAccountWhenTheEmailIsFree` and
       `sendsALinkedAccountWithoutTermsToTheTermsScreen` red (`but was: "http://localhost:3000/"`).
-- [ ] **hold** — A login for another account does not use up the parked link: park a link for
+      Held through #91–#94: on `main` at 72c0e5f, 8 of 8 and 190 tests in 23 classes pass, and the
+      command prints nothing.
+- [x] **hold** — A login for another account does not use up the parked link: park a link for
       account X, log in as Y (200), log in as X (200), and a Google sign-in afterwards lands on `/`
       (`tokens/GoogleLinkClaimIT`, Track 0). True today: `PendingGoogleLink.claim` leaves the
       attributes on an email mismatch. Broken on purpose in Track 0's PR.
-- [ ] **new** — A pending link claims once: the repository returns the Google subject for the
+      `GoogleLinkClaimIT` (#91). Red with the claim using the link up on any login (`expected:
+      "http://localhost:3000/" but was: "…/login?error=google_link_required"`) while all eight
+      `AuthGoogleSignInIT` tests stayed green. #92 added that the sign-in lands in the owner's
+      account: with `AND user_id = …` dropped, Y's login claimed X's link, the test as first
+      written stayed green, and now fails `expected: "owner@example.test" but was:
+      "other@example.test"`.
+- [x] **new** — A pending link claims once: the repository returns the Google subject for the
       first claim and nothing for the second, and a second password login answers 200 and links
       nothing (`tokens/PendingGoogleLinksIT`). Red today: no table, no repository.
-- [ ] **new** — A link older than 10 minutes claims nothing: with the row aged past `expires_at`
+      `claimsOnceAndOnlyForItsAccount` and `aLoginWithAClaimedCodeLinksNothing` (#92). Red with
+      `claimed_at IS NULL` dropped from the claim: "the second claim" `but was containing value:
+      "google-sub-once"`.
+- [x] **new** — A link older than 10 minutes claims nothing: with the row aged past `expires_at`
       through JDBC, the password login answers 200 and a Google sign-in afterwards still lands on
       `/login?error=google_link_required` (`tokens/PendingGoogleLinksIT`). Red today: no table.
-- [ ] **new** — Saving a link deletes the account's earlier ones, and deleting the account deletes
+      `aLinkOlderThanTenMinutesClaimsNothing` (#92). Red with `expires_at > now()` dropped:
+      `but was: http://localhost:3000/`.
+- [x] **new** — Saving a link deletes the account's earlier ones, and deleting the account deletes
       its links (`tokens/PendingGoogleLinksIT`). Red today: no table. Red again with the cascade
       taken off the foreign key.
-- [ ] **new** — As `applications_user`, `matching_user` and `jobs_user`, `SELECT` on
+      `savingALinkDeletesTheAccountsEarlierOnesAndDeletingTheAccountDeletesItsLinks` (#92). Red
+      with save not deleting ("one per account" `expected: 2L but was: 3L`) and without the
+      cascade (`violates foreign key constraint "fk_pending_google_links_user"`).
+- [x] **new** — As `applications_user`, `matching_user` and `jobs_user`, `SELECT` on
       `identity.pending_google_links` is refused (`tokens/PendingGoogleLinkGrantsIT`, or a case
       added to `RefreshTokenGrantsIT`). Red today: no table. Red again with the migration's revoke
       removed.
-- [ ] **new** — The taken branch's 302 sets `pending_google_link` with `HttpOnly; SameSite=Lax;
+      Three `pending_google_links` cases in `RefreshTokenGrantsIT.noOtherModuleCanReadThem` (#92).
+      Red, all three, with the revoke loop emptied.
+- [x] **new** — The taken branch's 302 sets `pending_google_link` with `HttpOnly; SameSite=Lax;
       Path=/api/auth; Max-Age=600`, and the login that claims it deletes it; with
       `SESSION_COOKIE_SECURE=true` it is `Secure` (`tokens/PendingGoogleLinksIT`). Asserted on the
       `Set-Cookie` headers. Red today: the 302 sets `JSESSIONID`.
-- [ ] **new** — The start response sets `google_auth_request` with `HttpOnly; SameSite=Lax;
+      `PendingGoogleLinksIT.travelsInACookieThatTheClaimingLoginDeletes` and
+      `SecureGoogleCookiesIT.thePendingLinkCookieIsSecure` (#92). Red with `Path=/`, with the
+      cookie not deleted on the claim, and with `.secure(false)`. The 302 still set `JSESSIONID`
+      after #92, from the start step's session; #93 removed it.
+- [x] **new** — The start response sets `google_auth_request` with `HttpOnly; SameSite=Lax;
       Path=/api/login/oauth2/code; Max-Age=300`, its `Set-Cookie` header under 4096 bytes, and
       `Secure` when `SESSION_COOKIE_SECURE=true`; the callback's response deletes it; a callback
       with the cookie tampered (one byte of its signature changed) gets 302 to `/login?error=oauth`,
       not 500 (`tokens/AuthRequestCookieIT`). Red today: the start response sets `JSESSIONID`.
-- [ ] **new** — No `Set-Cookie` names `JSESSIONID` on any step of five Google paths: already
+      `AuthRequestCookieIT` and `SecureGoogleCookiesIT.theAuthorizationRequestCookieIsSecure`
+      (#93); the whole header measured 1,643 bytes with the harness's 2048-bit key. Red with the
+      session repository back (`No Set-Cookie for 'google_auth_request' in [JSESSIONID=…]`), with
+      the signature's result ignored (the tampered cookie signed in: `but was:
+      "http://localhost:3000/accept-terms"`), with `SameSite=Strict`, with the cookie not deleted,
+      and with `.secure(false)`.
+- [x] **new** — No `Set-Cookie` names `JSESSIONID` on any step of five Google paths: already
       linked, new email, email taken plus the password login after it, unverified email, forged
       `state` (`tokens/GoogleNoSessionIT`, driving both steps itself, since `support/GoogleSignIn`
       returns only the callback). Red today: the spec-auditor saw `JSESSIONID` on every start
       response and on the linked, new, taken and forged-state callbacks.
-- [ ] **new** — No backend code touches a session: `grep -rnE "HttpSession|getSession|changeSessionId"
+      `GoogleNoSessionIT` (#94), each path's landing asserted too. Red with the failure handler
+      allowed a session: `aForgedState` and `anUnverifiedEmail`, each on `JSESSIONID=…; Path=/;
+      HttpOnly; SameSite=Lax`; red on all five with #93's repository unwired.
+- [x] **new** — No backend code touches a session: `grep -rnE "HttpSession|getSession|changeSessionId"
       --include=*.java */src/main`, run from `backend/`, prints nothing. Red today: 9 lines in
       `AuthenticationService`, `OAuth2LoginSuccessHandler` and `PendingGoogleLink`.
+      Prints nothing on `main` at 72c0e5f; 4 lines, all in `establishSession`, before #94 deleted
+      it.
 
 ## Verify
 ```bash
@@ -178,3 +211,46 @@ git diff --stat "$BASE" HEAD -- backend/app/src/test/java/nl/hackyourfuture/proj
   - Verify ran 8 tests; it now runs the suite. *Estimate 2 → 3,* for Track 0.
 - **Deployment changes.** None to configure: identity's Flyway applies `V2` on start, and
   `SESSION_COOKIE_SECURE` keeps its meaning for the Google flow's cookies.
+  A Google sign-in in progress when #93 deploys fails once, with `/login?error=oauth`: its
+  request is in the old instance's session. So does one in progress when `JWT_PRIVATE_KEY_FILE` is
+  replaced, from now on. Two backend instances no longer need sticky sessions for Google.
+- **Done on Day 14.** Spec change #90, then #91 (Track 0, the wrong-account hold), #92 (Track B,
+  the pending link in a table and a cookie), #93 (Track A1, the authorization request in a signed
+  cookie) and #94 (Track A2, the failure handler, `establishSession`, the no-`JSESSIONID` test,
+  the grep, the docs). 295 tests green, checkstyle clean; all 190 contract tests pass and
+  `contract/` did not change. *Estimated 2 pull requests as first written, 3 after the spec
+  change, took 4.*
+- **Track A split in two under the 400-line gate:** 481 changed lines together, 317 and 187
+  apart. A1 stood alone (the start stopped setting `JSESSIONID`); A2 needed it, since
+  `GoogleNoSessionIT` could not pass while the failure handler made a session. The spec's Order
+  note expected B to be the track at risk; #92 got under the gate at 399 by trimming instead.
+- **B alone did not clear the taken branch's `JSESSIONID`,** as the Order note implied it would:
+  after #92 the 302 still carried the session `oauth2Login` opened at the start step. Only #93
+  removed it. The criterion's "Red today" was right; which track turns it green was not.
+- **`support/` changed once:** `GoogleSignIn` split into `start` and `callback` (+16 −3, #93), so
+  tests outside `contract/` can read the start response and edit the cookie between the steps.
+  `AuthGoogleSignInIT` keeps its own private copy of the flow.
+- **The docs list missed two files.** `backend/docs/api.md` and `backend/docs/privacy-data.md`
+  also described the Google session, and the privacy doc did not list `pending_google_links` at
+  all; #94 fixed both. Its first wording counted the table among those the data export leaves out
+  deliberately, which is true of `code_hash` and not of `provider_id` and the times; CodeRabbit
+  caught it and the doc now calls it a gap. Adding the table to the export would change
+  `/api/users/me`, a contract, and is not scheduled.
+- **The measurement missed the split.** `scripts/spec-drift.py` read a track's letter only when a
+  hyphen followed it, so `track-a1-…` and `track-a2-…` counted as no track, and the dashboard
+  still named Track A as the next step after #94. The closing PR fixed the pattern; no earlier
+  branch reads differently under it.
+- **Mistakes of mine, recorded in their PRs:**
+  - #91: the hold was broken only by using the link up, never by giving it to the wrong
+    account; with the account filter dropped it stayed green. #92 strengthened it.
+  - #92: `auth.md` kept a link to `PendingGoogleLink.java` after the rename, and the privacy doc
+    was not updated for the new table; both found and fixed in #94.
+  - #93: the first break of the signature check replaced the call with `false`, which left a
+    `catch` unreachable; the build compiled the error into the class and the tests saw 500s that
+    proved nothing. Redone keeping the call and ignoring its result. A test that passed before and
+    after the change and under every break (`theRightStateWithoutTheCookieFailsTheSignIn`) was
+    dropped.
+  - #94: the export wording above.
+- **Not done here:** a Google sign-in in a real browser, which the Notes above advise because
+  `ApiClient` ignores `Path`, `SameSite` and size. No browser in this session; it is the
+  maintainer's, as Day 13's frontend check was.

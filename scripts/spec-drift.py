@@ -197,7 +197,7 @@ def roadmap(snaps, prs, blobs):
                 if re.match(r"^\| *[0-9A-Z] *\|", r)}
         mine = sorted((p for p in merged if p["headRefName"].startswith(f"day-{d:02d}/")), key=lambda p: p["number"])
         done_tracks = sorted({m.group(1).upper() for p in mine
-                              if (m := re.search(r"/track-([0-9a-z])(?:-|$)", p["headRefName"]))})
+                              if (m := re.search(r"/track-([0-9a-z])[0-9]*(?:-|$)", p["headRefName"]))})
         ticked, total = crit.count("- [x]"), len(CRITERION.findall(crit))
         exp = re.search(r"Expected PRs:\*\* *(\d+)", text)
         exp0 = re.search(r"Expected PRs:\*\* *(\d+)", first)
