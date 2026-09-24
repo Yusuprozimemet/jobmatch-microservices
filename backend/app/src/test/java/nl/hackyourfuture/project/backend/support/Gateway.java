@@ -32,6 +32,7 @@ public final class Gateway {
     public static final String IMAGE = System.getProperty("harness.gateway.image", "jobmatch-api-gateway:harness");
 
     private static final int PORT = 8081;
+    private static final int MANAGEMENT_PORT = 9090;
     private static final Map<Integer, GenericContainer<?>> BY_APPLICATION_PORT = new ConcurrentHashMap<>();
 
     private Gateway() {
@@ -54,8 +55,11 @@ public final class Gateway {
                 .withEnv("BACKEND_URL", "http://host.testcontainers.internal:" + applicationPort)
                 // The suite logs in from one address far more than ten times a minute.
                 .withEnv("RATE_LIMIT_AUTH_PER_MINUTE", "1000000")
-                .withExposedPorts(PORT)
-                .waitingFor(Wait.forListeningPort());
+                .withExposedPorts(PORT, MANAGEMENT_PORT)
+                // Ready, not just listening. The gateway's port accepts requests before its proxy
+                // has its header filters, and one arriving in between is answered 500: a login in
+                // MatchRankingIT was, once the management server made that window longer (Day 38).
+                .waitingFor(Wait.forHttp("/actuator/health/readiness").forPort(MANAGEMENT_PORT));
         try {
             gateway.start();
         } catch (RuntimeException e) {

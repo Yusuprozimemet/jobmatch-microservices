@@ -52,6 +52,12 @@ class ManagementPortTest {
         assertThat(health.body()).contains("\"status\":\"UP\"");
     }
 
+    // What the backend's gateway harness waits for, and Day 34's readiness probe.
+    @Test
+    void readinessAnswersOnceStarted() throws Exception {
+        assertThat(get(managementPort, "/actuator/health/readiness").statusCode()).isEqualTo(200);
+    }
+
     @Test
     void aRoutedCallIsCountedForPrometheus() throws Exception {
         assertThat(get(port, "/api/jobs/filters").statusCode()).isEqualTo(200);
