@@ -2,8 +2,10 @@ package nl.hackyourfuture.project.gateway;
 
 import jakarta.servlet.http.Cookie;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -51,7 +53,26 @@ class Security {
         return nimbus;
     }
 
+    /**
+     * Actuator, on the management port only, as in the backend's {@code SecurityConfig}.
+     * {@code EndpointRequest} matches inside the management context alone when that port differs
+     * from the public one, and only the exposed endpoints; everything else, the public port's
+     * {@code /actuator/**} included, falls through to the chain below. Without this one the
+     * chain below would answer the scraper 401 too.
+     */
     @Bean
+    @Order(1)
+    SecurityFilterChain actuatorFilterChain(HttpSecurity http) {
+        http
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable);
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     SecurityFilterChain gatewayFilterChain(HttpSecurity http, JwtDecoder decoder) {
         HttpStatusEntryPoint unauthorized = new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
         http

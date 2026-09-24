@@ -52,6 +52,17 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-opentelemetry</artifactId>
 		</dependency>
+		<!-- Health for the probes (Day 34) and metrics for Prometheus (Day 37), on a management port
+		     compose does not publish (Day 38). The registry is what serves /actuator/prometheus:
+		     the actuator alone does not (Day 05). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
 		<!-- The rate limit: the gateway's Bucket4j filter, with buckets held in memory by Caffeine,
 		     which drops a client's bucket once it has refilled. One replica needs no shared store. -->
 		<dependency>
