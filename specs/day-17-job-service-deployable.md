@@ -62,3 +62,7 @@ docker compose exec job-service curl -s -o /dev/null -w '%{http_code}' http://ba
   Four things: the OTel agent; `SavedJobCounts` having no implementation once `job-service`
   leaves the process (Day 25 was the first day that gave it one); a log grep that returns 0
   whatever happens; and the same criterion written twice.
+- From Day 39: job-service gets a service key of its own (`iss` its own name,
+  `aud=jobmatch-internal`) and publishes its key set; the monolith adds it to its trusted issuers.
+  A map keyed by hyphenated issuer names cannot be set from environment variables, so compose
+  needs another form for that entry.

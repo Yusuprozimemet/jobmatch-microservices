@@ -47,3 +47,6 @@ docker compose up -d --build
 - **End of Phase 5.** The microservice system in the chart now exists.
 - The 30-minute onboarding criterion is not a nicety. Five services is where local
   development quietly stops working, and the team stops testing before pushing.
+- From Day 39: the monolith has two keys, identity's user key and its own service key. The
+  remainder that becomes identity-service takes both; the service issuer's name
+  (`jobmatch-backend` today) is decided here, and every service that trusts it follows.

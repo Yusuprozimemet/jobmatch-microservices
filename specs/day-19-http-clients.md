@@ -65,3 +65,6 @@ docker compose start job-service
   keep answering. From Day 17, job search *is* `job-service`; the counts come from
   `applications`, in the monolith. Stopping `job-service` takes search down with it. The table
   now names what each call depends on; Day 25 already had this right.
+- From Day 39: every internal client attaches the monolith's service token through the `shared`
+  interface, and the monolith already trusts its own issuer in process, so these clients can
+  call its `/internal/**` routes before Day 17 moves them.

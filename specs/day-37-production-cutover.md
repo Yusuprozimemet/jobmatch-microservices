@@ -49,3 +49,6 @@ Real users are served from the cluster, and the team can tell when something is 
 - **End of Phase 7, and of the migration.**
 - The criterion most likely to be skipped is the restore rehearsal. A backup nobody has
   restored is not a backup.
+- From Day 38 (#123): the gateway tags a routed call's `http_server_requests` with the route's
+  pattern, `uri="/api/**"`, not the path, so the gateway has one series for the whole API. A
+  per-route view at the gateway needs a tag of its own; the backend keeps its per-path series.

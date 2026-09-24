@@ -46,3 +46,6 @@ time curl -s localhost:8080/api/jobs > /dev/null      # unaffected
 ## Notes
 - The latency measurement is the acceptance criterion that matters. Take a baseline
   before the split so the comparison is real.
+- From Day 39: matching-service trusts the token's `sub`, so before acting for a user it asks
+  identity `GET /internal/users/{id}` (204 or 404), as `SessionWithoutAUserIT` requires of the
+  monolith. Whether it reads the user from the token or from `X-User-Id` is decided here.

@@ -45,3 +45,6 @@ curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/jobs/top-matches   # 5
 ## Notes
 - **End of Phase 4.** Two services are fully independent, and the highest-latency code
   path is isolated from everything else.
+- Service-token auth is Day 39's (each service's own key; `/internal/**` takes only service
+  tokens), not Day 18's. Before acting for a user, matching-service asks identity
+  `GET /internal/users/{id}` (Day 39's deleted-user rule).

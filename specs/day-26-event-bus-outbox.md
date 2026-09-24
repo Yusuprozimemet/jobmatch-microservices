@@ -50,3 +50,6 @@ docker compose restart identity-outbox-relay   # no events lost
 ## Notes
 - At-least-once, not exactly-once. Every consumer must tolerate seeing an event twice.
   This is the rule that Day 27 depends on.
+- From Day 39: once `user.deleted` flows, a record of deleted ids may replace the
+  `GET /internal/users/{id}` call services make before acting for a user. Decided here or on
+  Day 27, with the call's cost measured.
