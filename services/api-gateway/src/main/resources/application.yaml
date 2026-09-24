@@ -29,6 +29,12 @@ management:
     web:
       exposure:
         include: health,prometheus
+  endpoint:
+    health:
+      # /actuator/health/readiness, UP only once the gateway has started: the public port listens
+      # earlier, and a request in between is answered 500 (Day 38). Day 34's probes use it too.
+      probes:
+        enabled: true
   otlp:
     metrics:
       export:
