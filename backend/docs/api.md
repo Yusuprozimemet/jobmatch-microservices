@@ -1,8 +1,20 @@
 # API reference
 
 Every route lives under `/api`. Requests and responses are JSON. The browser reaches the backend
-through the Next.js proxy ([`frontend/src/proxy.ts`](../../frontend/src/proxy.ts)), so the frontend
-and the API share one origin and there is no CORS configuration anywhere.
+through the Next.js proxy ([`frontend/src/proxy.ts`](../../frontend/src/proxy.ts)) and then the API
+gateway ([`services/api-gateway`](../../services/api-gateway), Day 15), so the frontend and the API
+share one origin. The backend has no published port; the gateway, on 8080, is the only way in
+([`architecture.md`](architecture.md)).
+
+What the gateway adds to every route below:
+
+- **401 before the backend.** It applies the same access rules and verifies the `access_token`
+  itself, so a private route without a valid token never reaches the backend.
+- **`X-User-Id`** is set from the token's `sub` and any the client sent is dropped. The backend
+  does not read it; it is for the services Phase 3 extracts.
+- **429** on the four credential routes (below).
+- **502** when the backend cannot be reached, **504** when it does not answer in 30 seconds.
+- **403** for every cross-origin preflight, and no `Access-Control-*` header on any response.
 
 The generated reference is assembled at runtime from the controllers:
 
@@ -646,6 +658,9 @@ Worth revisiting if the saved list ever grows past what one request should carry
 **No pagination.** `/api/jobs` returns at most 200 rows, newest first, and `top-matches` at most 25.
 Neither takes a page parameter yet.
 
-**No rate limiting.** Nothing throttles login attempts, password resets or the model-backed
-`top-matches`, so no endpoint answers 429 today. The login form is the way in and the model is the
-way to spend money, which makes those two the first to cover.
+**Rate limiting covers credentials only.** The gateway allows ten requests a minute per client,
+shared across `POST /api/auth/login`, `register`, `forgot-password` and `reset-password`, and
+answers the eleventh with 429 (`RATE_LIMIT_AUTH_PER_MINUTE`). A client is the connecting address:
+the frontend passes a client's own `X-Forwarded-For` through, so it is not believed, and locally
+every browser shares the frontend's one bucket. Nothing yet throttles the model-backed
+`top-matches`, which is the way to spend money.

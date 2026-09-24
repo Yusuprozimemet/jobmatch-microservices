@@ -276,6 +276,14 @@ above the broader `permitAll()` lines they carve out of.
 
 CSRF, HTTP Basic and form login are disabled: this is a JSON API behind a same-origin proxy.
 
+**The gateway applies the same table first** (Day 15,
+[`Security.java`](../../services/api-gateway/src/main/java/nl/hackyourfuture/project/gateway/Security.java)).
+It verifies the `access_token` against the key set at `/.well-known/jwks.json`, with the same issuer
+and audience, and answers a private route without a valid token with 401 before the backend sees
+it. A stale cookie reads as none there too, so login, refresh and the public routes still work. The
+backend keeps its own check: it verifies every token again and never reads the `X-User-Id` header
+the gateway adds. Change a rule here and change it in the gateway, or the two disagree.
+
 **The 401 entry point is deliberate.** Without
 `authenticationEntryPoint(new HttpStatusEntryPoint(UNAUTHORIZED))`, `oauth2Login` installs its own
 entry point, which *redirects* an unauthenticated request to Google. A browser `fetch` follows that
@@ -425,8 +433,11 @@ changing it.
   are cookies, so `Lax` — which withholds the cookie from cross-site POSTs — is what stands between
   the API and a cross-site form. That is adequate for the current shape; it stops being adequate the
   day something is served from another origin.
-- **No rate limiting.** Nothing throttles login attempts or password-reset requests, so no endpoint
-  answers 429. The login form is the way in, which makes it the first thing to cover.
+- **One rate-limit bucket locally.** The gateway allows ten login, registration and password-reset
+  requests a minute per client, and answers the rest with 429. A client is the connecting address,
+  and locally that is always the frontend: it passes a client's own `X-Forwarded-For` through, so
+  the header is not believed (`GATEWAY_TRUSTED_PROXIES` is empty). Per-user buckets need a proxy in
+  front that overwrites the header, and the gateway told to trust that proxy.
 - **No email verification on registration.** This is the root of the whole `google_link_required`
   dance: because an address is never proved at sign-up, a Google identity cannot trust it either.
   Verifying at registration would let the link happen on the first sign-in instead.

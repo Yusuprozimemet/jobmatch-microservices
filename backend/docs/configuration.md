@@ -28,7 +28,7 @@ past that one is a list of overrides rather than an edited file.
 | File | Read by | Committed? |
 | --- | --- | --- |
 | [`.env`](../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
-| [`backend/.env`](../.env.example) | Passed **into** the backend container by compose (`env_file`, `required: false`), and loadable by hand for `./mvnw spring-boot:run` | No |
+| [`backend/.env`](../.env.example) | Loaded by hand for `./mvnw spring-boot:run`. **Not** read by compose: the backend service has no `env_file` | No |
 | [`frontend/.env.local`](../../frontend/.env.example) | Next, in local development | No |
 | [`data/.env`](../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
 
@@ -36,10 +36,11 @@ past that one is a list of overrides rather than an edited file.
 yourself — `set -a; source .env; set +a`, an IDE plugin, or `--env-file` — or setting the variables
 in the run configuration.
 
-Compose precedence, which trips people up: values in a service's `environment:` block **win over**
-anything in its `env_file`. So `DB_HOST` is pinned to `db` by the compose file no matter what
-`backend/.env` says, while `LLM_API_KEY`, which compose does not mention, comes through from
-`backend/.env` untouched.
+Under compose, the backend gets exactly what its `environment:` block names and nothing else. It
+does not name `GOOGLE_CLIENT_ID`, `LLM_API_KEY` or the mail settings, so the compose stack runs
+with Google sign-in off (its routes are 404), overlap-only matching and no reset emails — see
+[section 7](#7-what-degrades-without-which-key). Run the backend by hand with `backend/.env` for
+those.
 
 ---
 
@@ -48,30 +49,43 @@ anything in its `env_file`. So `DB_HOST` is pinned to `db` by the compose file n
 ```mermaid
 flowchart LR
     B(["browser :3000"]) --> FE["frontend<br/>Next standalone server"]
-    FE -->|"/api/* rewritten to<br/>BACKEND_API_URL"| BE["backend<br/>Spring Boot :8080"]
-    BE --> DB[("postgres :5432<br/>app + analytics schemas")]
+    FE -->|"/api/* rewritten to<br/>BACKEND_API_URL"| GW["api-gateway<br/>:8080 on the host"]
+    GW --> BE["backend<br/>Spring Boot, no published port"]
+    BE --> DB[("postgres :5432<br/>module + analytics schemas")]
     PIPE["pipeline<br/>profile: data, run-once"] -.->|"publishes marts"| DB
 
     classDef s fill:#e8eef7,stroke:#4a6080
-    class FE,BE s
+    class FE,GW,BE s
 ```
 
 ```bash
 cp .env.example .env
-scripts/dev-up.sh          # docker compose up -d db backend frontend
+scripts/dev-up.sh          # docker compose up -d db backend api-gateway frontend
 ```
 
 | Service | Port | Notes |
 | --- | --- | --- |
 | `db` | 5432 | `postgres:18.4-alpine`, volume `db-data`, `pg_isready` healthcheck |
 | `jwt-key` | — | Runs and exits. Writes the token signing key into the `jwt-keys` volume on the first start, then keeps it until `down -v` |
-| `backend` | 8080 | Built from `./backend`. Waits for the database to be healthy and for `jwt-key` to finish |
-| `frontend` | 3000 | Built from `./frontend`. `depends_on: backend` — start order only, **not** readiness |
+| `backend` | — | Built from `./backend`. Listens on 8080 inside the network only (Day 16). Waits for the database to be healthy and for `jwt-key` to finish |
+| `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. `depends_on: backend` |
+| `frontend` | 3000 | Built from `./frontend`. `depends_on: api-gateway` — start order only, **not** readiness |
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
 
 The browser only ever talks to port 3000. Next rewrites `/api/*` to `BACKEND_API_URL`
-([`proxy.ts`](../../frontend/src/proxy.ts)), which is what keeps the auth cookies on one origin and means
-there is no CORS configuration anywhere in the project.
+([`proxy.ts`](../../frontend/src/proxy.ts)), the gateway, which is what keeps the auth cookies on one
+origin; the gateway refuses every cross-origin preflight. [`architecture.md`](architecture.md) draws
+the path before and after the gateway.
+
+The gateway's settings, all with defaults that suit compose:
+
+| Variable | Default | |
+| --- | --- | --- |
+| `BACKEND_URL` | `http://localhost:8080` — `http://backend:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
+| `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login, register and the two password-reset steps, per client |
+| `GATEWAY_TRUSTED_PROXIES` | empty | A regex of proxy addresses whose `X-Forwarded-For` is believed. Leave it empty behind the frontend, which passes a client's own header through; set it only for a proxy that overwrites it |
+| `GATEWAY_CONNECT_TIMEOUT` / `GATEWAY_READ_TIMEOUT` | `5s` / `30s` | Past them the gateway answers 502 / 504 |
+| `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT` | `false`, local Tempo | As the backend's |
 
 **Nothing checks that the backend is actually up.** There is no actuator, no `/health`, and no
 healthcheck on the backend service — the frontend container starts as soon as the backend container
@@ -159,7 +173,7 @@ One variable.
 
 | Variable | Default | |
 | --- | --- | --- |
-| `BACKEND_API_URL` | `http://localhost:8080` — `http://backend:8080` in the image | Where the proxy and the server components send `/api` traffic |
+| `BACKEND_API_URL` | `http://localhost:8080` — `http://api-gateway:8081` in the image | Where the proxy and the server components send `/api` traffic: the gateway |
 
 It is read at **runtime**, not baked in at build: [`config.ts`](../../frontend/src/lib/config.ts) is
 a plain `process.env` read, and the Dockerfile sets a default that compose overrides. So the same
@@ -254,7 +268,10 @@ What must be set beyond the defaults, in one place:
       Console for that exact host
 - [ ] `MAIL_USERNAME` / `MAIL_PASSWORD`, or accept that password reset does not work
 - [ ] `LLM_API_KEY`, or accept overlap-only matching
-- [ ] `BACKEND_API_URL` on the frontend, pointing at the backend's internal address
+- [ ] `BACKEND_API_URL` on the frontend, pointing at the gateway's internal address, and
+      `BACKEND_URL` on the gateway at the backend's. Only the gateway gets the public ingress
+- [ ] `GATEWAY_TRUSTED_PROXIES`, only if the ingress overwrites `X-Forwarded-For`; otherwise every
+      user shares the ingress's one rate-limit bucket
 - [ ] The pipeline publishing to `analytics`, not `analytics_dev`
 
 Never in a `docker run` command: use `--env-file` with a gitignored file, or the host's secret
@@ -278,10 +295,10 @@ container, use `host.docker.internal`. Under compose, use the service name — `
 does not match what Google has registered, and the failure appears at Google rather than in your
 logs.
 
-**Compose `environment:` beats `env_file:`.** Setting `DB_HOST` in `backend/.env` and wondering why
-it is ignored is the usual version of this.
+**Compose never reads `backend/.env`.** Setting a variable there and wondering why the compose
+backend ignores it is the usual version of this: only the `environment:` block reaches it.
 
-**`backend/.env` and `data/.env` are optional to compose** (`required: false`) on purpose: without
+**`data/.env` is optional to compose** (`required: false`) on purpose: without
 it, older Compose versions read every service's `env_file` while loading the project — even for an
 inactive profile — and `docker compose up -d db` failed on a clean clone before anyone had written
 `data/.env`.

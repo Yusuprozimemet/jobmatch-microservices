@@ -536,13 +536,20 @@ the test the plan was built around, now with the database roles in place under i
 
 ## Running it
 
-The monolith still runs as it always did. Copy the environment file, bring up database, API and
-web app, and open [http://localhost:3000](http://localhost:3000):
+Copy the environment file, bring up the database, the backend, the API gateway and the web app,
+and open [http://localhost:3000](http://localhost:3000):
 
 ```bash
 cp .env.example .env
 scripts/dev-up.sh          # or: docker compose up --build
 ```
+
+The browser talks to the web app on 3000, which sends `/api` to the gateway; the gateway, published
+on [http://localhost:8080](http://localhost:8080/api/docs), is the only way in to the backend, which
+has no published port since Day 16. [`backend/docs/architecture.md`](backend/docs/architecture.md)
+draws it. Compose passes the backend no Google, model or mail keys, so Google sign-in is off
+and matches rank by skill overlap; [`backend/docs/configuration.md`](backend/docs/configuration.md)
+says how to add them.
 
 Run the contract test suite that Phase 0 is building:
 
@@ -550,8 +557,8 @@ Run the contract test suite that Phase 0 is building:
 cd backend && ./mvnw verify
 ```
 
-Job listings come from the data pipeline, so a fresh local database shows an empty job list until
-the pipeline publishes into it — see [`data/README.md`](data/README.md).
+Job listings come from the data pipeline, so on a fresh database volume `/api/jobs` answers 500
+until the pipeline has published its marts — see [`data/README.md`](data/README.md).
 
 ## Repository layout
 
