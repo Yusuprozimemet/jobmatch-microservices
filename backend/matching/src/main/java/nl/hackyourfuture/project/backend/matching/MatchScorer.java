@@ -34,7 +34,10 @@ public class MatchScorer {
     private final String model;
     private final String reasoningEffort;
 
+    // Spring's builder, not RestClient.builder(): only the injected one carries the observation
+    // registry, so the call is timed in http_client_requests and traced as a client span (Day 38).
     public MatchScorer(
+            RestClient.Builder restClientBuilder,
             @Value("${app.llm.api-key:}") String apiKey,
             @Value("${app.llm.base-url}") String baseUrl,
             @Value("${app.llm.model}") String model,
@@ -44,7 +47,7 @@ public class MatchScorer {
         this.apiKey = apiKey;
         this.model = model;
         this.reasoningEffort = reasoningEffort;
-        this.restClient = RestClient.builder()
+        this.restClient = restClientBuilder
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory(timeoutSeconds))
                 .build();
