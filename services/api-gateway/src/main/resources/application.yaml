@@ -8,7 +8,7 @@ spring:
       connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:5s}
       read-timeout: ${GATEWAY_READ_TIMEOUT:30s}
 
-# 8081 until Day 16 moves the gateway to 8080 and takes the backend's port away.
+# 8081 inside its container; compose publishes it on 8080, where the backend was (Day 16).
 server:
   port: 8081
 
@@ -39,6 +39,6 @@ gateway:
   rate-limit:
     # Login, register and the two password-reset steps, per client, per minute (Day 15).
     auth-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:10}
-  # A regex of proxy addresses whose X-Forwarded-For is believed: the frontend, from Day 16.
-  # Empty believes none.
+  # A regex of proxy addresses whose X-Forwarded-For is believed. Empty believes none, as in compose:
+  # the frontend passes a client's own header through (Day 16). Only a proxy that overwrites it.
   trusted-proxies: ${GATEWAY_TRUSTED_PROXIES:}

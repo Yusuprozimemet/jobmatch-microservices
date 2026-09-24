@@ -14,8 +14,8 @@ ENV PORT=3000
 # Next's standalone server binds to $HOSTNAME; without this it can pick up the
 # container/host name instead of listening on all interfaces
 ENV HOSTNAME=0.0.0.0
-# Default BACKEND_API_URL for typical container networking; override at runtime if needed
-ENV BACKEND_API_URL=http://backend:8080
+# The API gateway, the only way in to the backend (Day 16); override at runtime if needed
+ENV BACKEND_API_URL=http://api-gateway:8081
 USER node
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static

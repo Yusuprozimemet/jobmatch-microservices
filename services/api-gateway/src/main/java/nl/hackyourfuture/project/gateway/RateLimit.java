@@ -35,9 +35,10 @@ class RateLimit {
     }
 
     /**
-     * Who the client is: the connecting address, or, when that is a trusted proxy (the frontend,
-     * from Day 16), the address the proxy added last to {@code X-Forwarded-For}. A client's own
-     * {@code X-Forwarded-For} is not believed, or it could pick a new bucket for every request.
+     * Who the client is: the connecting address, or, when that is a trusted proxy (one that
+     * overwrites the header; not the frontend, Day 16), the address it added last to
+     * {@code X-Forwarded-For}. A client's own {@code X-Forwarded-For} is not believed, or it could
+     * pick a new bucket for every request.
      */
     static Function<ServerRequest, String> client(String trustedProxies) {
         Pattern trusted = trustedProxies.isBlank() ? null : Pattern.compile(trustedProxies);
