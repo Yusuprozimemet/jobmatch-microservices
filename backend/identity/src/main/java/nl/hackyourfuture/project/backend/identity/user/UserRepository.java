@@ -208,4 +208,12 @@ public class UserRepository {
             .param("id", id)
             .update() == 1;
         }
+
+    // For service tokens checking if a user still exists (Day 39 deleted-user rule).
+    public boolean existsById(UUID id) {
+        return jdbcClient.sql("SELECT EXISTS (SELECT 1 FROM users WHERE id = :id)")
+                .param("id", id)
+                .query(Boolean.class)
+                .single();
+    }
 }

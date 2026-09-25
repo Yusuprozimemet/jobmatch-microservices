@@ -271,6 +271,7 @@ above the broader `permitAll()` lines they carve out of.
 | `/error`, `/api/docs/**` | public |
 | `/api/oauth2/**`, `/api/login/oauth2/**` | public |
 | `GET /.well-known/jwks.json` | public: the key tokens verify with |
+| `GET /.well-known/service-jwks.json` | public: the key service tokens verify with (Day 39) |
 | `GET /api/jobs/top-matches` | authenticated |
 | `GET /api/jobs`, `/api/jobs/filters`, `/api/jobs/*` | public |
 | everything else | authenticated |
@@ -291,6 +292,38 @@ entry point, which *redirects* an unauthenticated request to Google. A browser `
 cross-origin, gets blocked by CORS, and the caller sees a network error instead of "not logged in".
 With it, an unauthenticated call is a plain `401` with an empty body — no `ProblemDetail`, because
 it never reaches `GlobalExceptionHandler`.
+
+## Service tokens and `/internal/**`
+
+Day 39. `/internal/**` is for services calling each other, and has a filter chain of its own in
+[`SecurityConfig`](../app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java),
+ordered before the application chain. It takes a service token in `Authorization: Bearer` and
+nothing else: the `access_token` cookie is never read there, and a user token in the header fails
+on its key, `iss` and `aud`. Either gets `401`.
+
+A service token is RS256, `aud` = `jobmatch-internal`, and lives at most 5 minutes. Its `iss` picks
+the key set it is verified with from the trusted issuers
+([`InternalCallers`](../app/src/main/java/nl/hackyourfuture/project/backend/config/InternalCallers.java)):
+the monolith's own, `jobmatch-backend`, trusted in process, and whatever
+`app.internal.trusted-issuers` names (issuer → key set URL, empty by default; Day 17 adds
+job-service). An issuer not on the list gets `401`. The monolith signs its own tokens with
+`SERVICE_JWT_PRIVATE_KEY_FILE`
+([`ServiceTokens`](../app/src/main/java/nl/hackyourfuture/project/backend/config/ServiceTokens.java)),
+never the user key, and publishes the public half at `GET /.well-known/service-jwks.json`.
+
+The gateway routes neither `/internal/**` nor the service key set, and the public OpenAPI lists
+neither (`springdoc.paths-to-exclude`).
+
+**The deleted-user rule.** An access token outlives its user by up to 15 minutes (section 8). The
+monolith refuses that user because
+[`CurrentUserIdResolver`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/CurrentUserIdResolver.java)
+looks the user up by the token's email on every request (`SessionWithoutAUserIT`: 404 on saved
+jobs, 422 on matches). A service that trusts `sub` has no `users` table to look in, so before it
+acts for a user it asks identity, with its service token, `GET /internal/users/{id}`: `204` while
+the user exists, `404` once deleted. Every service that trusts `sub` does this. The answer is not
+cached: cached for N seconds, it lets a deleted user in for N seconds, and Phase 4 decides that
+with a measurement. Days 26–27 may replace the call with a record of deleted ids fed by
+`user.deleted`, once the bus exists.
 
 ## Logout
 
@@ -377,7 +410,8 @@ credentials, profile, saved jobs, outstanding reset tokens, refresh tokens.
 rather than on a person — so there is nothing user-identifying left behind after the cascade.
 
 Both cookies are deleted in the same request, as described above. An access token copied elsewhere
-still verifies for up to 15 minutes, and finds no user.
+still verifies for up to 15 minutes, and finds no user. A service that trusts the token's `sub`
+asks identity instead: the deleted-user rule, in section 5.
 
 ---
 

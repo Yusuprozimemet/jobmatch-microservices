@@ -98,6 +98,9 @@ app:
 springdoc:
   api-docs:
     path: /api/docs/openapi.yaml
+  # Internal paths and the service key set are not for the gateway-routed public OpenAPI; it routes
+  # /api/** and /.well-known/jwks.json only.
+  paths-to-exclude: /internal/**,/.well-known/service-jwks.json
 scalar:
   enabled: true
   path: /api/docs
