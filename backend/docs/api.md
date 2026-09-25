@@ -699,4 +699,17 @@ The ranked postings worth scoring for a set of skills.
 | Validations | `skills` is required and cannot be empty. `limit` must be between 1 and 100. |
 | Returns | 200 · 400 when `skills` is empty or missing, or `limit` is outside 1–100 · 401 without a service token |
 
+### POST /internal/saved-counts
+How many users saved each posting.
+
+| Endpoint | `/internal/saved-counts` |
+| --- | --- |
+| Method | POST |
+| Auth | service token only |
+| Request body | `{ "ids": ["string"] }` — list of posting ids |
+| Response body | An object keyed by posting id, each value the count of distinct users who saved it, 0 for nobody |
+| Behaviour | An id nobody saved maps to 0. An empty list answers `{}` without a query. |
+| Validations | At most 500 distinct ids; `ids` is required and cannot contain null. |
+| Returns | 200 · 400 more than 500 distinct ids, no `ids`, or `ids` contains null · 401 without a service token |
+
 `GET /internal/users/{id}` (Day 39) is listed in [auth.md](auth.md#service-tokens-and-internal).
