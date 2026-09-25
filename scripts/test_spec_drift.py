@@ -162,6 +162,53 @@ class EvidenceTest(unittest.TestCase):
             dict(present=2, skippable=0, missing=1)])
 
 
+REMOVALS = """## Acceptance criteria
+- [x] **new** — `grep -rn "OldThing\\|old_table" --include=*.java .`
+      returns nothing. Red today: two.
+
+## Verify
+```bash
+cd backend
+grep -rn "TODO day-01" */src/ || echo "clean"
+grep -rn "kept" app/ | wc -l
+```
+
+## Notes
+- `grep -rn "NotACheck"` returns nothing, but a note is not a check.
+"""
+
+
+class RemovalTest(unittest.TestCase):
+    """A day's greps that must print nothing, run at every merge from the day's end."""
+
+    def test_the_checks_are_the_criteria_and_verify_greps_that_expect_nothing(self):
+        self.assertEqual(sd.removal_checks(REMOVALS), ['grep -rn "OldThing\\|old_table" --include=*.java .',
+                                                       'grep -rn "TODO day-01" */src/'])
+
+    def test_a_basic_regex_alternation_is_an_alternation_and_a_bare_bar_is_literal(self):
+        rx, paths, include = sd.grep_rule('grep -rn "OldThing\\|old_table" --include=*.java .')
+        self.assertEqual((bool(rx.search("old_table")), paths, include), (True, ["."], "*.java"))
+        self.assertFalse(sd.grep_rule('grep -rn "a|b" x/')[0].search("a"))
+        self.assertTrue(sd.grep_rule('grep -rnE "a|b" x/')[0].search("a"))
+        self.assertIsNone(sd.grep_rule('grep -rn "x" a/ | grep -v b'))
+
+    def test_a_check_counts_lines_in_its_scope_from_the_day_it_ended(self):
+        repo = Repo().merge({"backend/app/A.java": "OldThing a;\nold_table b;\n", "backend/app/B.txt": "OldThing\n",
+                             "other/C.java": "OldThing c;\n", "backend/app/src/D.java": "",
+                             "backend/pom.txt": "TODO day-01\n"})
+        repo.merge({"backend/app/A.java": "class A {}\n"})
+        repo.merge({"backend/app/A.java": "class A { OldThing back; }\n", "backend/app/src/D.java": "// TODO day-01\n"})
+        def run(ended_at):
+            days = [dict(day=1, ended_at=ended_at, removal_checks=sd.removal_checks(REMOVALS))]
+            return [(c["base"], c["hits"]) for c in repo.inside(lambda blobs: sd.removal_history(days, repo.snaps, blobs))]
+        try:
+            # B.txt is not *.java, other/ is not under backend/, and pom.txt is not under */src/.
+            self.assertEqual(run(0), [("backend", [2, 0, 1]), ("backend", [0, 0, 1])])
+            self.assertEqual(run(1), [("backend", [0, 1]), ("backend", [0, 1])])
+        finally:
+            repo.close()
+
+
 def a_day(n, ticked=1, total=1, kinds=()):
     return dict(day=n, status="provisional", criteria=dict(ticked=ticked, total=total),
                 prs=[dict(kind=k) for k in kinds], tracks=["A"], tracks_merged=[], track_work={"A": "work"})

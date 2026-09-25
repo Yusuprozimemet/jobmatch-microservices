@@ -17,10 +17,13 @@ not move an earlier point.
 import argparse
 import collections
 import datetime
+import fnmatch
 import json
 import math
 import os
+import posixpath
 import re
+import shlex
 import subprocess
 
 import numpy as np
@@ -38,6 +41,10 @@ CITED_PR = re.compile(r"(?<![\w&])#(\d+)\b")
 EVIDENCE_TEST = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Test|IT|Tests))(?:\.([a-z][A-Za-z0-9_]*))?\b")
 SEEN_RED = re.compile(r"\bRed (?:with|as|without|when|on)\b|went red|turned\b[^.]{0,30}\bred\b|but was")
 SKIPPABLE = re.compile(r"@Disabled\b|@(?:Enabled|Disabled)If")
+# A removal check: a grep a criterion says prints nothing ("`grep ...` returns nothing", "gives 0"),
+# or a Verify line that echoes when it does (`grep ... || echo "clean"`).
+GREP_SAYS_NOTHING = re.compile(r"`(grep [^`]+)`[^.]{0,40}?\b(?:returns|prints|finds|gives) (?:nothing|0)\b")
+GREP_OR_ECHO = re.compile(r"^(grep\s.+?)\s*\|\|\s*echo\b", re.M)
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
@@ -360,7 +367,7 @@ def roadmap(snaps, prs, blobs):
                          track_prs=sum(kind(p["title"], p["headRefName"]) == "code" for p in mine),
                          prs=[dict(number=p["number"], kind=kind(p["title"], p["headRefName"]), title=p["title"]) for p in mine],
                          criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**")),
-                         evidence=criteria(crit)))
+                         evidence=criteria(crit), removal_checks=removal_checks(text)))
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])
     return evidence(settle(days, order), snaps, blobs), order, stop
 
@@ -391,6 +398,72 @@ def evidence_history(rows, days, snaps, blobs):
         names = {t for d in days if d.get("ended_at", len(snaps)) <= i for c in d["evidence"] for t in c["tests"]}
         states = list(test_state(names, s["sha"], blobs).values())
         r["evidence"] = {k: states.count(k) for k in ("present", "skippable", "missing")} if names else None
+
+
+def removal_checks(text):
+    """The greps a day's criteria and Verify say print nothing, each once. Notes and Goal can quote
+    a grep without it being a check (Day 08's "TODO day-08"), so they are not read."""
+    crit = re.sub(r"\s+", " ", section(text, "Acceptance criteria"))
+    verify = "\n".join(re.findall(r"^```bash\n(.*?)^```", section(text, "Verify"), re.M | re.S))
+    return list(dict.fromkeys(c.strip() for c in GREP_SAYS_NOTHING.findall(crit) + GREP_OR_ECHO.findall(verify)))
+
+
+def grep_rule(cmd):
+    """A grep as (regex, paths, include glob), or None for one this does not run (a pipe)."""
+    try:
+        args = shlex.split(cmd)[1:]
+    except ValueError:
+        return None
+    if "|" in args:
+        return None
+    flags = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
+    include = next((a.split("=", 1)[1] for a in args if a.startswith("--include=")), None)
+    words = [a for a in args if not a.startswith("-")]
+    if not words:
+        return None
+    pattern = words[0]
+    if "E" not in flags:  # basic regex: \| \( \+ ... are the operators, | ( + ... are literal
+        pattern = re.sub(r"\\([|(){}+?])|([|(){}+?])", lambda m: m.group(1) or "\\" + m.group(2), pattern)
+    return re.compile(pattern, re.I if "i" in flags else 0), words[1:] or ["."], include
+
+
+def in_scope(path, scope):
+    """Whether a tree path is the file, or under the directory, a shell path names; * stays in one level."""
+    want = [p for p in scope.split("/") if p not in ("", ".")]
+    have = path.split("/")
+    return len(have) >= len(want) and all(fnmatch.fnmatchcase(h, w) for h, w in zip(have, want))
+
+
+def removal_history(days, snaps, blobs):
+    """Each finished day's removal checks, run at every merge from the day's end: the lines each
+    finds. Paths are read from backend/, where most Verify blocks cd, or from the root when more of
+    them exist there (Day 16 names backend/docs/). Blobs are counted once, by id."""
+    checks = [dict(day=d["day"], cmd=cmd, since=d["ended_at"], rule=grep_rule(cmd), hits=[])
+              for d in days if "ended_at" in d for cmd in d["removal_checks"]]
+    checks = [c for c in checks if c["rule"]]
+    seen = {}
+    for i, s in enumerate(snaps):
+        live = [c for c in checks if c["since"] <= i]
+        if not live:
+            continue
+        tree = [(meta.split()[2], path) for meta, path in (line.split("\t", 1) for line in
+                run("git", "ls-tree", "-r", s["sha"]).splitlines()) if meta.split()[1] == "blob"]
+        for c in live:
+            rx, paths, include = c["rule"]
+            if "base" not in c:
+                c["base"] = max(("backend", ""), key=lambda b: sum(
+                    any(in_scope(f, posixpath.normpath(posixpath.join(b, p))) for _, f in tree) for p in paths))
+            scopes = [posixpath.normpath(posixpath.join(c["base"], p)) for p in paths]
+            n = 0
+            for oid, path in tree:
+                if (any(in_scope(path, sc) for sc in scopes)
+                        and (include is None or fnmatch.fnmatchcase(posixpath.basename(path), include))):
+                    if (c["cmd"], oid) not in seen:
+                        text = blobs.read(s["sha"], path)
+                        seen[c["cmd"], oid] = 0 if "\0" in text else sum(bool(rx.search(x)) for x in text.splitlines())
+                    n += seen[c["cmd"], oid]
+            c["hits"].append(n)
+    return [dict(day=c["day"], cmd=c["cmd"], base=c["base"] or ".", since=c["since"], hits=c["hits"]) for c in checks]
 
 
 def conclusion(readme):
@@ -465,6 +538,7 @@ def main():
                next_step=next_step(days, open_prs, order, stop), stop_after=stop,
                open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
     data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
+                           removals=removal_history(days, snaps, blobs),
                            vocab_size=vocab, pca_var=pca,
                            conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md"))),
                       separators=(",", ":"))

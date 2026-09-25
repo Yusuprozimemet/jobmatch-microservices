@@ -419,6 +419,11 @@ function drawEvidence() {
     .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> is ${s} · ${md(c.claim)}…</li>`)));
   document.getElementById("evidence-gaps").innerHTML = `<h3>Named tests not running on main</h3>` +
     (gaps.length ? `<ul>${gaps.join("")}</ul>` : `<p>None: every test a finished day names is on <code>main</code>, and none can be skipped.</p>`);
+  const strip = c => `<svg class="strip" viewBox="0 0 ${N} 1" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="${c.hits.filter(n => n).length} of ${c.hits.length} merges found lines">` +
+    c.hits.map((n, k) => `<rect x="${c.since + k}" y="0" width="1" height="1" fill="var(--${n ? "code" : "close"})"><title>${prLabel(R[c.since + k])}: ${n} line${n === 1 ? "" : "s"}</title></rect>`).join("") + "</svg>";
+  document.getElementById("removals").innerHTML = `<thead><tr><th>Day</th><th>Check</th><th>From</th><th class="r">On main</th><th>Every merge since</th></tr></thead><tbody>` +
+    (DATA.removals || []).map(c => { const now = c.hits[c.hits.length - 1];
+      return `<tr><td class="num">${dd(c.day)}</td><td class="t"><code>${esc(c.cmd)}</code></td><td class="num">${esc(c.base)}</td><td class="r${now ? " none" : ""}">${now ? now + " lines" : "nothing"}</td><td style="width:32%">${strip(c)}</td></tr>`; }).join("") + "</tbody>";
 }
 
 /* ---------- conclusion ---------- */
