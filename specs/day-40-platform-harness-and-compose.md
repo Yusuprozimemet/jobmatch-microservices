@@ -138,7 +138,7 @@ and may land any time after 0. Track B is about 300–350 lines by the auditor's
 (the gateway half and CI).
 
 ## Acceptance criteria
-- [ ] **hold** — With no job-service URL set, the gateway sends every job path to the backend,
+- [x] **hold** — With no job-service URL set, the gateway sends every job path to the backend,
       path and query unchanged: `GET /api/jobs?city=Amsterdam&page=2`, `/api/jobs/filters` and
       `/api/jobs/seed-0001`, and `/api/jobs/top-matches` with a valid `access_token` cookie
       (`TestKeys`, with `gateway.jwks-url` set as `SecurityTest` does: without a token the gateway
@@ -146,7 +146,10 @@ and may land any time after 0. Track B is about 300–350 lines by the auditor's
       today: `/api/**` is one route. Broken on purpose in Track A's PR, since the property only
       exists from there: the job-service URL's default pointed at an address nothing listens on.
       The three job paths answer 502, and `top-matches` still passes.
-- [ ] **new** — With `gateway.job-service-url` pointed at a second upstream:
+      #141: `RoutesTest.everyJobPathReachesTheBackendUnchanged`, green before Track A and after.
+      #144: red with the default at `http://127.0.0.1:1` ("expected: 200 but was: 502"), and 10
+      other gateway tests in 5 classes that send `/api/jobs` with it.
+- [x] **new** — With `gateway.job-service-url` pointed at a second upstream:
       - `GET /api/jobs?city=Amsterdam&page=2`, `/api/jobs/filters` and `/api/jobs/seed-0001`
         reach it and not the backend, with a verified token's `X-User-Id` and without the one
         the client sent;
@@ -158,13 +161,23 @@ and may land any time after 0. Track B is about 300–350 lines by the auditor's
       purpose in Track A's PR, each alone:
       - the `top-matches` exclusion removed, so `top-matches` (with a token) reaches job-service;
       - the job route composed after `/api/**`, so every job path reaches the backend.
-- [ ] **new** — In compose, the gateway is `healthy` only once `/actuator/health/readiness`
+
+      #144: `JobRouteTest.everyJobPathReachesJobServiceWithTheVerifiedUserId` (each request also
+      sends a client `X-User-Id`, which does not arrive) and
+      `topMatchesSavedJobsAndTheKeySetStayOnTheBackend`; `UnreachableJobServiceTest` (502, the
+      key set still 200). Red without the exclusion: `top-matches` missing from the backend's
+      requests. Red with the route after `/api/**`: job-service received `[]`, and the 502 test
+      got 200.
+- [x] **new** — In compose, the gateway is `healthy` only once `/actuator/health/readiness`
       answers `UP`, and the frontend starts after that. `docker compose ps api-gateway` shows
       `(healthy)`, and `up --wait` returns once it does. Red today: the service has no
       healthcheck, so `docker inspect -f '{{.State.Health}}'` prints `<nil>`, and `ps` shows
       `Up` alone. Broken on purpose in Track A's PR: the check pointed at port 9091, and
       `up --wait` fails with "container … api-gateway … is unhealthy".
-- [ ] **new** — The harness sends a service's paths where its entry says, in both runs.
+      #144: the Verify's compose run, `api-gateway (healthy)` after 5 checks, the frontend
+      started after it. Red with the check on 9091: `up --wait` failed after 41 s, "container
+      day40check-api-gateway-1 is unhealthy". Closing run: `(healthy)`, `up --wait` 56 s.
+- [x] **new** — The harness sends a service's paths where its entry says, in both runs.
       With job-service's paths pointed at a recording stub in the test JVM (`ServiceRoutingIT`):
       - `anonymous().get("/api/jobs")`, and `authenticatedAs(user).get("/api/jobs/seed-0001")`,
         reach the stub; the second carries the user's cookie (direct) or the user's
@@ -178,20 +191,35 @@ and may land any time after 0. Track B is about 300–350 lines by the auditor's
       in Track B's PR, twice, each alone:
       - the clients ignoring the table, so the direct half goes red;
       - `Gateway` not passing `JOB_SERVICE_URL`, so the gateway half goes red.
-- [ ] **hold** — The Day 1–4 suite passes, **unedited**, in both runs, with job paths sent
+
+      #145: `support/ServiceRoutingIT` (3), with job-service's paths pointed at a recording stub
+      through `IntegrationTest#serviceUrls()`; CI's gateway run names it. Red with the clients
+      ignoring the table (direct) and with `Gateway` not passing `JOB_SERVICE_URL` (gateway):
+      2 of 3 each time, the monolith's postings where the stub's answer was expected.
+- [x] **hold** — The Day 1–4 suite passes, **unedited**, in both runs, with job paths sent
       through the table to their default, the monolith. At every track, the `contract/` diff
       against 54e1b10, leaving out the one approved move, prints nothing (the Verify's
       `git diff`). Green today. Broken on purpose in Track B's PR: job-service's default URL
       pointed at a port nothing listens on turns the classes that call a job path red
       (`JobSearchIT`, `JobDetailIT`, `JobFiltersIT`, `JobSavedCountIT` among them), and the
       failures are counted and recorded.
-- [ ] **new** — No `contract/` class reads the monolith's own port or its `/api/jobs` metric:
+      #145: green in both runs with the table in place (direct 337, through the gateway 206).
+      Red with job-service's default at `http://localhost:1`: 48 errors in 7 of the `contract/`
+      run's 23 classes, all `ResourceAccessException`: `JobSearchIT` 21, `JobDetailIT` 6,
+      `JobFiltersIT` 6, `JobSavedCountIT` 6, `JobRoutesIT` 4, `SavedJobHydrationIT` 3,
+      `ObservabilityIT` 2 (then still in `contract/`). The `git diff` printed nothing at every
+      track and at the closing run.
+- [x] **new** — No `contract/` class reads the monolith's own port or its `/api/jobs` metric:
       the Verify's `grep` finds nothing. `observability/ObservabilityIT` runs its 8 tests, and
       `git log --follow` shows its history. Its metric test asserts that the
       `uri="/.well-known/jwks.json"` count rises across its own request. CI's gateway run names
       it, because `contract.*IT` no longer matches it. Red today: the grep finds
       `ObservabilityIT.java`. Broken on purpose in Track C's PR: the request before the second
       metric read removed, so the metric test goes red **in the full run**, not only alone.
+      #146: moved with `git mv` (`git log --follow` reaches Day 05); 8 tests, direct and through
+      the gateway; the `grep` prints nothing. Red in the full direct run with that request
+      removed: "Expecting actual: 0.0 to be greater than: 0.0". That run did not show the
+      existence case: nothing had recorded the series before the test in that class order.
 
 ## Verify
 ```bash
@@ -259,3 +287,35 @@ docker compose -p day40check --env-file .env.example down -v
 - From Day 38 (#123, #124): in compose the gateway can answer 500 for a few hundred milliseconds
   after its port opens, before Spring Cloud Gateway's proxy has its header filters. Track A's
   healthcheck makes the frontend and `up --wait` wait it out.
+- **Closed on Day 40**, rerun on `main` at 3ccca5a: gateway 37 tests; backend direct 337, 1
+  skipped (`GatewayHarnessIT`, by design); through the gateway 206; checkstyle clean; the
+  `contract/` diff and the `grep` print nothing. Compose, the Verify as written
+  (`-p day40check`): `api-gateway (healthy)`, `up --wait` 56 s.
+- *Estimated 3 pull requests in the outline, 4 once written in full; took 4* (#141, #144, #145,
+  #146). Track B came to 255 lines, under the gate, so it did not split into B1 and B2.
+- **Every track was written by the implementer agent on Haiku** from a brief; the review, the
+  checks, the breaks, the commits and the pull requests stayed with the main session. Review
+  changed something in all four: two comments in Track 0 that described Track A as landed; in
+  Track A, a test whose comment said the client's `X-User-Id` is dropped while no request sent
+  one; in Track B, a second `RestClient` built where `at()` could delegate, narrating comments,
+  qualified names; in Track C, one Javadoc line.
+- **Departure: `up --wait` returns before the backend is ready.** The gateway's healthcheck is
+  what compose waits on, and the backend has none (out of scope above). In the closing run the
+  first `/.well-known/jwks.json` through the gateway, right after `up --wait`, answered 502, and
+  200 two seconds later. The frontend waits for the gateway, not for what is behind it. No day
+  owns a backend healthcheck yet; Day 34's probes are the nearest.
+- **My mistakes.**
+  - In Track A I undid two breaks with `git checkout -- <file>`, which restores `main`'s file, not
+    the branch's: it dropped the new `job-service-url` property, then the whole route change, and
+    the first run of the next break went red for that reason (34 errors in contexts that could not
+    resolve the property). Both files were restored from the reviewed diff, the suite rerun, and
+    the break redone; every break since is undone from a copy and diffed back to it (#144).
+  - The closing run's first backend and gateway runs went red, 320 and 206 errors: Docker Desktop
+    had stopped, so no Testcontainers container could start. I read the reports as the code's
+    before the first error line said "Could not find a valid Docker environment". Rerun with
+    Docker up: the counts above.
+  - Before the closing compose run I printed the count of running containers (8) and went on
+    rather than stopping on it. They were the test run's own, being removed; the maintainer's
+    project was not running and its volume is untouched. Check first, then start.
+- Not part of the day, merged during it: #142 and #143 put the workflow and architecture
+  drawings in the README, split in two by the 400-line gate.

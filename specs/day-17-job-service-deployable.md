@@ -87,6 +87,14 @@ docker compose exec job-service curl -s -o /dev/null -w '%{http_code}' http://ba
   the context. Day 17 breaks it: the harness picks the monolith's port before the context starts
   (a free port as `server.port`), or the clients and the issuer list resolve the URL per request.
 
+  What Day 40 built, for the items above (#145): the table is `support/Services` and its entry's
+  default is `Services.url`; a class points a service elsewhere with
+  `IntegrationTest#serviceUrls()`; `Gateway` keeps one gateway per application port and route
+  table. `Gateway.insideContainer` takes only a `localhost` or `127.0.0.1` URL, which it reaches
+  through `host.testcontainers.internal`. A job-service container is not on the host, so its
+  entry needs a URL the gateway container can reach: a network the two share, or the host's
+  mapped port.
+
   `ObservabilityIT` left `contract/` on Day 40, so job-service asserts its own `uri="/api/jobs"`
   on its own management port. Neither query-count test expires today: job-service still uses the
   test database, and asks the monolith for saved counts (`StatementCounter` counts per database).
