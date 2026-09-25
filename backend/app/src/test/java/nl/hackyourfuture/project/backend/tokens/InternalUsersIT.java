@@ -79,8 +79,8 @@ class InternalUsersIT extends IntegrationTest {
         String openapi = client.get("/api/docs/openapi.yaml").body();
 
         assertThat(openapi)
-                .as("OpenAPI should not list /internal/users")
-                .doesNotContain("/internal/users");
+                .as("OpenAPI should list no /internal/ path")
+                .doesNotContain("/internal/");
         assertThat(openapi)
                 .as("OpenAPI should not list service-jwks")
                 .doesNotContain("service-jwks");
