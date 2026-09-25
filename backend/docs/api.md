@@ -43,6 +43,7 @@ deliberately not here.
 - [10. Error responses](#10-error-responses)
 - [11. Email](#11-email)
 - [12. Not in the API](#12-not-in-the-api)
+- [13. Internal routes](#13-internal-routes)
 
 ---
 
@@ -664,3 +665,25 @@ answers the eleventh with 429 (`RATE_LIMIT_AUTH_PER_MINUTE`). A client is the co
 the frontend passes a client's own `X-Forwarded-For` through, so it is not believed, and locally
 every browser shares the frontend's one bucket. Nothing yet throttles the model-backed
 `top-matches`, which is the way to spend money.
+
+---
+
+# 13. Internal routes
+
+Service-to-service routes, service tokens only, not routed by the gateway, not in the public
+OpenAPI. The `/internal/**` chain and the tokens it trusts are in [auth.md](auth.md#service-tokens-and-internal).
+
+### POST /internal/postings/batch
+Batch lookup of posting details by id.
+
+| Endpoint | `/internal/postings/batch` |
+| --- | --- |
+| Method | POST |
+| Auth | service token only |
+| Request body | `{ "ids": ["string"] }` — list of posting ids |
+| Response body | An object keyed by posting id, each value a `PostingSummary`: `{ title, companyName, location, workMode, isRemote, skills, employmentType, postedDate, source, category, freshnessClass, ageDays }` |
+| Behaviour | An id the mart does not have is absent from the response. Duplicates count once. An empty list answers `{}` without a query. |
+| Validations | At most 500 distinct ids; `ids` is required and cannot contain null. |
+| Returns | 200 · 400 more than 500 distinct ids, no `ids`, or `ids` contains null · 401 without a service token |
+
+`GET /internal/users/{id}` (Day 39) is listed in [auth.md](auth.md#service-tokens-and-internal).
