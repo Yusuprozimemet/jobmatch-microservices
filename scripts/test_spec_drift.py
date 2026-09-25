@@ -90,6 +90,21 @@ class SpecDriftTest(unittest.TestCase):
         self.repo.merge({"specs/day-01-x.md": DAY + "It calls `BazClient`.\n"})
         self.assertEqual(self.repo.rows()[1]["gap_full"], before)
 
+    def test_a_day_that_runs_later_is_not_reached_by_a_higher_number(self):
+        self.repo.merge({"specs/day-17-x.md": "Day 17 adds `LaterThing`.\n",
+                         "specs/day-38-x.md": "Day 38 adds `PlatformThing`.\n"})
+        self.repo.merge({"src/P.java": "class PlatformThing { FooService foo; }\n"})
+        self.repo.snaps[-1]["branch"] = "day-38/track-a-x"
+        by_number = self.repo.rows()[-1]["coverage"]
+        rows, files = self.repo.inside(lambda blobs: sd.trajectory([dict(s) for s in self.repo.snaps], blobs,
+                                                                   [1, 38, 17])[:2])
+        self.assertEqual((by_number, rows[-1]["coverage"]), (0.667, 1.0))  # LaterThing is Day 17's
+        self.assertEqual(files, ["plan.md", "specs/day-01-x.md", "specs/day-38-x.md", "specs/day-17-x.md"])
+        self.repo.merge({"src/L.java": "class LaterThing {}\n"})
+        self.repo.snaps[-1]["branch"] = "day-17/track-a-y"
+        rows = self.repo.inside(lambda blobs: sd.trajectory([dict(s) for s in self.repo.snaps], blobs, [1, 38, 17])[0])
+        self.assertEqual(rows[-1]["day"], 17)  # after 38 in the run order, though lower in number
+
     def test_drift_ignores_words_every_file_uses_and_sees_new_ones(self):
         rows = self.repo.merge({"specs/day-01-x.md": DAY + "the " * 200 + "\n"}).rows()
         self.assertEqual(rows[1]["drift"], 0.0)
