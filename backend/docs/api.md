@@ -686,4 +686,17 @@ Batch lookup of posting details by id.
 | Validations | At most 500 distinct ids; `ids` is required and cannot contain null. |
 | Returns | 200 · 400 more than 500 distinct ids, no `ids`, or `ids` contains null · 401 without a service token |
 
+### POST /internal/postings/shortlist
+The ranked postings worth scoring for a set of skills.
+
+| Endpoint | `/internal/postings/shortlist` |
+| --- | --- |
+| Method | POST |
+| Auth | service token only |
+| Request body | `{ "city": "string?", "skills": ["string"], "limit": 1-100 }` |
+| Response body | An array of `ShortlistedPosting`: `[ { postingId, title, company, location, category, postedDate, jobSkills, matchedSkills, jobSkillCount, matchedCount } ]` |
+| Behaviour | Ranked by most matched skills first, then by newest post (null dates last), then by posting id. One result per title and company (case ignored). Only postings in the given city (or all if city is omitted or blank). At most `limit` results. |
+| Validations | `skills` is required and cannot be empty. `limit` must be between 1 and 100. |
+| Returns | 200 · 400 when `skills` is empty or missing, or `limit` is outside 1–100 · 401 without a service token |
+
 `GET /internal/users/{id}` (Day 39) is listed in [auth.md](auth.md#service-tokens-and-internal).
