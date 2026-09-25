@@ -182,7 +182,7 @@ function dayStarts() {
   return out;
 }
 const steps = (lo, hi, n) => Array.from({ length: n + 1 }, (_, i) => +(lo + (hi - lo) * i / n).toFixed(1));
-function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip }) {
+function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digits = 1 }) {
   box.innerHTML = "";
   const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": label }, box);
   const ly = v => LP.t + (1 - (v - yMin) / (yMax - yMin)) * (H - LP.t - LP.b);
@@ -210,7 +210,7 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip }) {
     const v = s.get(R[sel]);
     if (v != null) el("circle", { cx: lx(sel), cy: ly(v), r: 5, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }, svg);
     const end = pts[pts.length - 1];
-    el("text", { x: lx(end[0]) + 10, y: ly(end[1]) + 4, class: "lbl" }, svg).textContent = `${s.name} ${fmt(end[1])}${unit}`;
+    el("text", { x: lx(end[0]) + 10, y: ly(end[1]) + 4, class: "lbl" }, svg).textContent = `${s.name} ${fmt(end[1], digits)}${unit}`;
   });
   const hit = el("rect", { x: LP.l - 6, y: 0, width: LW - LP.l - LP.r + 12, height: H, class: "hit" }, svg);
   const idxAt = ev => {
@@ -239,7 +239,16 @@ function drawLines() {
     label: "Share of reached-day spec names present in code",
     series: [{ name: "in code", color: "var(--code)", get: r => r.coverage == null ? null : +(r.coverage * 100).toFixed(2) }],
   });
+  lineChart(document.getElementById("evidence-history"), {
+    H: 190, yMin: 0, yMax: evMax, ticks: steps(0, evMax, 4), unit: "", strip: false, digits: 0,
+    label: "Tests named by finished days, present on each merge and not running",
+    series: [
+      { name: "present", color: "var(--close)", get: r => r.evidence && r.evidence.present },
+      { name: "not running", color: "var(--code)", get: r => r.evidence && r.evidence.skippable + r.evidence.missing },
+    ],
+  });
 }
+const evMax = Math.max(4, Math.ceil(Math.max(0, ...R.map(r => r.evidence ? r.evidence.present : 0)) / 20) * 20);
 
 /* ---------- heatmap ---------- */
 function drawHeat() {
