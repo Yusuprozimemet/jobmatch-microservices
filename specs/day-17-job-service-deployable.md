@@ -75,17 +75,16 @@ docker compose exec job-service curl -s -o /dev/null -w '%{http_code}' http://ba
     never pulled, a failure that prints the build command, on the same test Postgres;
   - points the entry at it, and passes `JOB_SERVICE_URL` to the harness's gateway;
   - points the monolith's `PostingLookup`/`PostingShortlist` clients (Day 19) at the container's
-    mapped port;
+    mapped port, by setting `app.internal.jobs-url`;
   - lets the container reach the monolith, for `/internal/saved-counts` and the user key set,
     through `host.testcontainers.internal` (`Testcontainers.exposeHostPorts` first);
   - has CI build job-service's image before the plain `./mvnw verify`, which until today needs no
     image (`backend-ci-cd.yaml` builds the gateway's only after it).
 
-  The two middle items are a cycle at startup. The monolith's port is random and known only once
-  its context has started, while a client that reads its base URL when its bean is made needs the
-  container first. The gateway escapes it only because `Gateway.baseUrl` starts it lazily, after
-  the context. Day 17 breaks it: the harness picks the monolith's port before the context starts
-  (a free port as `server.port`), or the clients and the issuer list resolve the URL per request.
+  The two middle items were a cycle at startup: the monolith's port is random and known only once
+  its context has started. Day 19 broke it for the clients, which resolve their base URL on the
+  first call, not when the bean is made (`app.internal.jobs-url`, empty meaning this process).
+  The issuer list, which must name the container's key set, still needs the same treatment.
 
   What Day 40 built, for the items above (#145): the table is `support/Services` and its entry's
   default is `Services.url`; a class points a service elsewhere with
