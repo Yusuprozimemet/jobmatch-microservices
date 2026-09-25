@@ -40,6 +40,11 @@
       <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
     </div>
     <div id="evidence-history"></div>
+    <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Removal checks</h2>
+      <p>The greps a finished day's criteria or Verify say must print nothing, run over the tree at every merge from the day's end, from <code>backend/</code> or the root, wherever their paths are. CI runs none of them. Each cell is one merge: green printed nothing, orange found lines.</p>
+    </div>
+    <div class="scroll-x"><table id="removals"></table></div>
   </section>
 
   <div class="stats" id="stats"></div>
