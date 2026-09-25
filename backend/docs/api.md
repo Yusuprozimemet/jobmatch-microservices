@@ -501,7 +501,7 @@ saved state — are in [`saving-tracking.md`](saving-tracking.md).
 | Method | GET |
 | Auth | signed in |
 | Response body | An array of `{ postingId, jobState, title, companyName, location, workMode, isRemote, skills, employmentType, postedDate, source, category, freshnessClass, ageDays }` |
-| Behaviour | A `LEFT JOIN` onto the mart, on purpose. There is no foreign key across the schema boundary, so a posting the next publish drops leaves a row whose job fields are all null while `postingId` and `jobState` stand. Render or skip that case deliberately — an inner join would silently delete rows from the user's own list. `location` here is the mart's raw location text, not the resolved city list that `/api/jobs` builds. |
+| Behaviour | Saved rows come from `saved_jobs`; their posting details come from jobs' internal batch route (Day 19; §13), in chunks of 500. A posting the mart no longer has keeps `postingId` and `jobState` with every job field null. While postings cannot be reached — connection or timeout, 5xx, open breaker — every row comes back that way, and the list is not newest first, still 200. `location` here is the mart's raw location text, not the resolved city list that `/api/jobs` builds. |
 | Returns | 200 · 401 not signed in |
 
 ### PATCH /api/saved-jobs/{postingId}
