@@ -148,6 +148,20 @@ class EvidenceTest(unittest.TestCase):
         self.assertEqual(set(self.state()[0]["tests"].values()), {"missing"})
 
 
+    def test_the_history_starts_when_the_day_ends_and_shows_the_merge_a_test_left(self):
+        self.repo.merge({"src/FooIT.java": "class FooIT { void refuses() {} }\n"})
+        days = [dict(day=1, status="done", prs=[dict(number=1)], evidence=sd.criteria(CRITERIA))]
+        rows = [{} for _ in self.repo.snaps]
+
+        def history(blobs):
+            sd.evidence_history(rows, sd.evidence(days, self.repo.snaps, blobs), self.repo.snaps, blobs)
+        self.repo.inside(history)
+        self.assertEqual([r["evidence"] for r in rows], [
+            None,
+            dict(present=3, skippable=0, missing=0),
+            dict(present=2, skippable=0, missing=1)])
+
+
 def a_day(n, ticked=1, total=1, kinds=()):
     return dict(day=n, status="provisional", criteria=dict(ticked=ticked, total=total),
                 prs=[dict(kind=k) for k in kinds], tracks=["A"], tracks_merged=[], track_work={"A": "work"})

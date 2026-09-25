@@ -369,18 +369,28 @@ def evidence(days, snaps, blobs):
     """Where each finished day's named tests stand on main. A name counts as evidence if it was in
     the tree when the day's last PR merged: a claim can offer a choice (Day 14: one IT "or a case
     added to" another), and a day can rewrite a test it names (Day 11), and neither is a loss."""
-    sha_of = {s["pr"]: s["sha"] for s in snaps if s["pr"]}
+    at = {s["pr"]: i for i, s in enumerate(snaps) if s["pr"]}
     named = {t for d in days for c in d["evidence"] for t in c["tests"]}
     now = test_state(named, snaps[-1]["sha"], blobs)
     for d in days:
-        ended = [sha_of[p["number"]] for p in d["prs"] if p["number"] in sha_of]
+        ended = sorted(at[p["number"]] for p in d["prs"] if p["number"] in at)
         if d["status"] not in FINISHED or not ended:
             d["evidence"] = [dict(c, tests={}) for c in d["evidence"]]
             continue
-        then = test_state({t for c in d["evidence"] for t in c["tests"]}, ended[-1], blobs)
+        d["ended_at"] = ended[-1]
+        then = test_state({t for c in d["evidence"] for t in c["tests"]}, snaps[ended[-1]]["sha"], blobs)
         for c in d["evidence"]:
             c["tests"] = {t: now[t] for t in c["tests"] if then[t] != "missing"}
     return days
+
+
+def evidence_history(rows, days, snaps, blobs):
+    """At each merge, where the tests of the days finished by then stand: the check that a hold's
+    test has not left the tree or been switched off, merge by merge, as CI cannot see it."""
+    for i, (r, s) in enumerate(zip(rows, snaps)):
+        names = {t for d in days if d.get("ended_at", len(snaps)) <= i for c in d["evidence"] for t in c["tests"]}
+        states = list(test_state(names, s["sha"], blobs).values())
+        r["evidence"] = {k: states.count(k) for k in ("present", "skippable", "missing")} if names else None
 
 
 def conclusion(readme):
@@ -448,6 +458,7 @@ def main():
     snaps = snapshots(prs)
     rows, files, vocab, pca, lines = trajectory(snaps, blobs)
     days, order, stop = roadmap(snaps, prs, blobs)
+    evidence_history(rows, days, snaps, blobs)
     now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
                head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
                current_day=next((d["day"] for d in days if d["status"] == "active"), None),
