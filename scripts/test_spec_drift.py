@@ -209,6 +209,45 @@ class RemovalTest(unittest.TestCase):
             repo.close()
 
 
+class HandOffTest(unittest.TestCase):
+    """What finished days leave to days not yet run, and whether the receiving spec took it."""
+
+    def test_an_excerpt_ends_at_a_word_and_outside_a_code_span(self):
+        self.assertEqual(sd.excerpt("alpha  beta\n gamma", 40), "alpha beta gamma")
+        self.assertEqual(sd.excerpt("alpha beta gamma", 12), "alpha beta…")
+        self.assertEqual(sd.excerpt("see `foo bar baz` now", 12), "see…")
+
+    def test_the_days_a_sentence_names(self):
+        self.assertEqual(sd.days_named("Day 17 adds it; Days 18-19 and Days 19, 21 and 24 build theirs"),
+                         {17, 18, 19, 21, 24})
+        self.assertEqual(sd.days_named("Days 26–28, or Day 30"), {26, 27, 28, 30})
+
+    def test_a_hand_off_is_picked_up_by_the_spec_that_names_its_day_or_its_file(self):
+        repo = Repo().merge({
+            "specs/day-01-a.md": "## Notes\n- For Day 03: the key.\n- Day 02's findings for Day 04 are there.\n"
+                                 "- Day 05 has nothing from this day.\n",
+            "specs/day-02-b.md": "# Day 02\n",
+            "specs/day-03-c.md": "# Day 03\n\nFrom Day 01: the key.\n",
+            "specs/day-04-d.md": "# Day 04\n\nFrom Day 02.\n",
+            "specs/day-05-e.md": "# Day 05\n\nIt reads `Foo`.\n",
+            "src/Foo.java": "// Day 05 moves this.\nclass Foo {} // Day 05\n",
+            "src/Bar.java": "/* Day 04 deletes this. */\n",
+        })
+        days = [dict(day=n, file=f"specs/day-0{n}-{c}.md", status="done" if n < 3 else "ready")
+                for n, c in zip(range(1, 6), "abcde")]
+        try:
+            found = repo.inside(lambda blobs: sd.hand_offs(days, [1, 2, 3, 4, 5], repo.snaps[-1]["sha"], blobs))
+        finally:
+            repo.close()
+        self.assertEqual([(h["to"], h["source"], h["picked"]) for h in found], [
+            (3, "Day 01 Notes", True),          # in run order, open ones first within a day
+            (4, "src/Bar.java:1", False),       # Day 04 never names Bar
+            (4, "Day 01 Notes", True),          # points to Day 02, which Day 04 names
+            (5, "Day 01 Notes", False),
+            (5, "src/Foo.java:1", True)])       # the code line after it is not a comment
+        self.assertEqual(found[4]["text"], "Day 05 moves this.")
+
+
 def a_day(n, ticked=1, total=1, kinds=()):
     return dict(day=n, status="provisional", criteria=dict(ticked=ticked, total=total),
                 prs=[dict(kind=k) for k in kinds], tracks=["A"], tracks_merged=[], track_work={"A": "work"})

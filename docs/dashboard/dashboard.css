@@ -152,3 +152,8 @@ tr.sel td { background: var(--surface-2); }
 .read .stale, .facts .stale { color: var(--code); font-size: 13.5px; }
 .facts { display: grid; gap: 18px; align-content: start; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.hand-offs { display: grid; gap: 6px; }
+.hand-offs summary { cursor: pointer; font-size: 14px; }
+.hand-offs .none { color: var(--code); font-weight: 600; }
+.hand-offs ul { margin: 6px 0 10px; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 4px; }
+.hand-offs li.picked { color: var(--muted); }

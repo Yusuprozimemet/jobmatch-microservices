@@ -416,7 +416,7 @@ function drawEvidence() {
       return `<tr><td class="num">${dd(d.day)}</td>${cell(ev.filter(c => c.prs.length).length, ev.length)}${cell(ev.filter(c => Object.keys(c.tests).length).length, ev.length)}${cell(ev.filter(c => c.red).length, ev.length)}<td class="r${off ? " none" : ""}">${states.length ? `${states.length - off}/${states.length} present` : "–"}</td><td class="t">${md(d.title)}</td></tr>`;
     }).join("") + "</tbody>";
   const gaps = days.flatMap(d => d.evidence.flatMap(c => Object.entries(c.tests).filter(([, s]) => s !== "present")
-    .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> is ${s} · ${md(c.claim)}…</li>`)));
+    .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> is ${s} · ${md(c.claim)}</li>`)));
   document.getElementById("evidence-gaps").innerHTML = `<h3>Named tests not running on main</h3>` +
     (gaps.length ? `<ul>${gaps.join("")}</ul>` : `<p>None: every test a finished day names is on <code>main</code>, and none can be skipped.</p>`);
   const strip = c => `<svg class="strip" viewBox="0 0 ${N} 1" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="${c.hits.filter(n => n).length} of ${c.hits.length} merges found lines">` +
@@ -424,6 +424,22 @@ function drawEvidence() {
   document.getElementById("removals").innerHTML = `<thead><tr><th>Day</th><th>Check</th><th>From</th><th class="r">On main</th><th>Every merge since</th></tr></thead><tbody>` +
     (DATA.removals || []).map(c => { const now = c.hits[c.hits.length - 1];
       return `<tr><td class="num">${dd(c.day)}</td><td class="t"><code>${esc(c.cmd)}</code></td><td class="num">${esc(c.base)}</td><td class="r${now ? " none" : ""}">${now ? now + " lines" : "nothing"}</td><td style="width:32%">${strip(c)}</td></tr>`; }).join("") + "</tbody>";
+}
+
+/* ---------- hand-offs ---------- */
+// The script sorts them by the receiving day's place in the run order, open ones first.
+function drawHandOffs() {
+  const groups = [];
+  for (const h of DATA.hand_offs || []) {
+    if (!groups.length || groups[groups.length - 1].to !== h.to) groups.push({ to: h.to, items: [] });
+    groups[groups.length - 1].items.push(h);
+  }
+  const source = s => s.startsWith("Day ") ? esc(s) : `<code title="${esc(s)}">${esc(s.split("/").pop())}</code>`;
+  document.getElementById("hand-offs").innerHTML = groups.length ? groups.map((g, k) => {
+    const open = g.items.filter(h => !h.picked), d = DATA.days.find(x => x.day === g.to);
+    return `<details${k === 0 ? " open" : ""}><summary><b>Day ${dd(g.to)}</b> ${d ? md(d.title) : ""} · <span class="${open.length ? "none" : ""}">${open.length} open</span> of ${g.items.length}</summary>
+      <ul>${g.items.map(h => `<li class="${h.picked ? "picked" : ""}">${source(h.source)}: ${md(h.text)}${h.picked ? " <em>(picked up)</em>" : ""}</li>`).join("")}</ul></details>`;
+  }).join("") : "<p>No finished day names a day not yet run.</p>";
 }
 
 /* ---------- conclusion ---------- */
@@ -466,7 +482,7 @@ function drawConclusion() {
     : `<tbody><tr><td class="t">The README has no measurement table.</td></tr></tbody>`;
 }
 
-drawNow(); drawEvidence(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
+drawNow(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
 }
 
 function start() {
