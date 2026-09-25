@@ -16,11 +16,11 @@ the database and is still called in-process by nothing — the gateway routes to
   `/api/jobs/top-matches` still goes to the monolith.
 - Micrometer tracing with `spring-boot-starter-opentelemetry`, actuator, JWT validation —
   same setup as every other service. Not the OTel Java agent; Day 05 removed it.
-- **`SavedJobCounts` needs an implementation on its first day out.** The only one is
-  `applications`' in-process `ApplicationsDirectory`, which stays in the monolith. So the
-  monolith exposes the counts (`POST /internal/saved-counts`) and `job-service` calls it —
-  today, not on Day 25 where the endpoint was first written. The alternative, `job-service`
-  reading `saved_jobs` again because the database is still shared, undoes Day 08.
+- **`SavedJobCounts` needs an implementation on its first day out.** The only in-process one is
+  `applications`' `ApplicationsDirectory`, which stays in the monolith. The monolith has served
+  the counts at `POST /internal/saved-counts` since Day 18, and Day 19's client calls it; today
+  that client only changes URL. The alternative, `job-service` reading `saved_jobs` again
+  because the database is still shared, undoes Day 08.
 - Database unchanged: both containers still connect to the same Postgres.
 
 ## Out of scope
@@ -98,3 +98,7 @@ docker compose exec job-service curl -s -o /dev/null -w '%{http_code}' http://ba
   `ObservabilityIT` left `contract/` on Day 40, so job-service asserts its own `uri="/api/jobs"`
   on its own management port. Neither query-count test expires today: job-service still uses the
   test database, and asks the monolith for saved counts (`StatementCounter` counts per database).
+- From Day 18: two decisions no Phase 3 day owned are this day's, to make or drop in its spec change.
+  Day 03's search filters advertise options the query ignores (`experienceLevels`,
+  `employmentTypes`; `JobSearchIT.java:184-186`, "Phase 3 decides"). And `MartSkills` sits in
+  `shared` with an expiry (Day 06) though only `jobs` uses it: part of today's `shared` decision.

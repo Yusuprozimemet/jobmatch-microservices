@@ -10,8 +10,9 @@ circuit breaker, and the system still behaves the same.
 ## In scope
 - HTTP implementations of `PostingLookup` and `PostingShortlist` (Day 09), used by the
   monolith to call `job-service`, using `RestClient`. `SavedJobCounts` goes the other way —
-  `job-service` calling the monolith — and has been HTTP since Day 17; it gets the same
-  resilience treatment here.
+  `jobs` calling `applications`, still both in the monolith until Day 17 moves `jobs` out — at
+  the `POST /internal/saved-counts` Day 18 serves; its client is built here with the others and
+  gets the same resilience treatment.
 - Resilience4j on every internal call: connect and read timeouts, bounded retry on
   idempotent GETs only, circuit breaker, and a **declared fallback**:
 
@@ -68,3 +69,7 @@ docker compose start job-service
 - From Day 39: every internal client attaches the monolith's service token through the `shared`
   interface, and the monolith already trusts its own issuer in process, so these clients can
   call its `/internal/**` routes before Day 17 moves them.
+- From Day 18: the batch and saved-counts routes refuse more than 500 distinct ids with a 400,
+  so the `PostingLookup` client splits a longer list into chunks of 500 (saved jobs sends a
+  user's whole list in one call). All three internal routes are POST, so "bounded retry on
+  idempotent GETs only" applies to none of them: say so, or decide which POSTs are safe to retry.
