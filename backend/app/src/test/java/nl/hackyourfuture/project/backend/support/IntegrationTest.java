@@ -70,6 +70,14 @@ public abstract class IntegrationTest {
         TestDatabase.reset();
     }
 
+    /**
+     * Where this class sends a service's paths instead of that service's default, by service name
+     * ({@link Services}). Empty: every path goes where the rest of the run sends it.
+     */
+    protected Map<String, String> serviceUrls() {
+        return Map.of();
+    }
+
     /** Direct database access, for setting up state a builder does not cover and for assertions. */
     protected JdbcClient jdbc() {
         return TestDatabase.jdbc();
@@ -89,10 +97,16 @@ public abstract class IntegrationTest {
 
     /**
      * A client with no cookies - what a logged-out visitor gets. Through the gateway when the run
-     * asks for it ({@link Gateway}).
+     * asks for it ({@link Gateway}), which routes each request to the service that owns its path;
+     * directly, the harness's clients route.
      */
     protected ApiClient anonymous() {
-        return ApiClient.at(Gateway.baseUrl(port));
+        if (Gateway.ON) {
+            return ApiClient.at(Gateway.baseUrl(port, serviceUrls()));
+        } else {
+            return ApiClient.routed("http://localhost:" + port,
+                    path -> Services.baseUrlFor(path, port, serviceUrls()));
+        }
     }
 
     /** A client that always talks to the application itself, gateway or not. */

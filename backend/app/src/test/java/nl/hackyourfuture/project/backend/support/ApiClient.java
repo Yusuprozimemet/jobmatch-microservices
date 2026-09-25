@@ -6,10 +6,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.http.HttpClient;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * An HTTP client for the running application, with a cookie jar.
@@ -22,6 +24,10 @@ import java.util.Map;
  * test asserts on it rather than catching an exception. It does not follow redirects either:
  * the Google sign-in flow answers with a 302 whose {@code Location} <em>is</em> the contract,
  * and following it would leave the test chasing the frontend, which is not running.
+ *
+ * <p>A routed client sends each request to the service that owns its path. The cookie jar
+ * belongs to the client, not the host, so a login made on the monolith is sent to the other
+ * service too.
  */
 public final class ApiClient {
 
@@ -32,12 +38,14 @@ public final class ApiClient {
 
     private final String baseUrl;
     private final RestClient http;
+    private final Function<String, String> route;
     private final Map<String, String> cookieJar = new LinkedHashMap<>();
     private final Map<String, String> headers = new LinkedHashMap<>();
 
-    private ApiClient(String baseUrl, RestClient http) {
+    private ApiClient(String baseUrl, RestClient http, Function<String, String> route) {
         this.baseUrl = baseUrl;
         this.http = http;
+        this.route = route;
     }
 
     /** Where this client's requests go. */
@@ -51,11 +59,19 @@ public final class ApiClient {
 
     /** A client for this base URL: the application's own, or the gateway's in front of it. */
     public static ApiClient at(String baseUrl) {
+        return routed(baseUrl, path -> baseUrl);
+    }
+
+    /**
+     * A client that sends each request to the base URL this function gives for its path, the
+     * variables expanded and the query left out; {@code baseUrl} for the rest.
+     */
+    public static ApiClient routed(String baseUrl, Function<String, String> baseUrlForPath) {
         return new ApiClient(baseUrl, RestClient.builder()
                 .baseUrl(baseUrl)
                 .requestFactory(REQUEST_FACTORY)
                 .defaultStatusHandler(status -> true, (request, response) -> { })
-                .build());
+                .build(), baseUrlForPath);
     }
 
     public ApiResponse get(String path, Object... uriVariables) {
@@ -102,7 +118,12 @@ public final class ApiClient {
     }
 
     private ApiResponse exchange(HttpMethod method, String path, Object body, Object... uriVariables) {
-        RestClient.RequestBodySpec request = http.method(method).uri(path, uriVariables);
+        String target = route.apply(UriComponentsBuilder.fromUriString(path).buildAndExpand(uriVariables).getPath());
+        // An absolute URI is sent as it is, whatever the client's base URL.
+        RestClient.RequestBodySpec request = target.equals(baseUrl)
+                ? http.method(method).uri(path, uriVariables)
+                : http.method(method).uri(target + path, uriVariables);
+
         if (!cookieJar.isEmpty()) {
             request = request.header(HttpHeaders.COOKIE, cookieHeader());
         }
