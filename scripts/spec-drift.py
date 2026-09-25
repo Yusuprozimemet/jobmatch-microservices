@@ -45,6 +45,8 @@ SKIPPABLE = re.compile(r"@Disabled\b|@(?:Enabled|Disabled)If")
 # or a Verify line that echoes when it does (`grep ... || echo "clean"`).
 GREP_SAYS_NOTHING = re.compile(r"`(grep [^`]+)`[^.]{0,40}?\b(?:returns|prints|finds|gives) (?:nothing|0)\b")
 GREP_OR_ECHO = re.compile(r"^(grep\s.+?)\s*\|\|\s*echo\b", re.M)
+# "Day 17", "Days 18-19", "Days 19, 21 and 24": the days a sentence names.
+DAY_REF = re.compile(r"\bDays? (\d+)((?:\s*(?:[–-]|,|and|or)\s*\d+)*)")
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
@@ -299,6 +301,17 @@ def merged_tracks(branches, tracks):
     return sorted(merged)
 
 
+def excerpt(text, n):
+    """text on one line, cut at a word within n characters and never inside a code span."""
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= n:
+        return text
+    cut = text[:n].rsplit(" ", 1)[0]
+    if cut.count("`") % 2:
+        cut = cut[:cut.rindex("`")].rstrip()
+    return cut + "…"
+
+
 def criteria(section_text):
     """Each criterion under "Acceptance criteria": its kind, whether it is ticked, and the PRs,
     tests and seen-red breaks written into it."""
@@ -307,9 +320,7 @@ def criteria(section_text):
         if not block.startswith("- ["):
             continue
         tag = re.search(r"\*\*(new|hold)\*\*", block)
-        claim = re.sub(r"\s+", " ", re.sub(r"^- \[[ x]\]\s*(\*\*\w+\*\*\s*—\s*)?", "", block)).strip()[:140]
-        if claim.count("`") % 2:  # cut inside a code span: end before it
-            claim = claim[:claim.rindex("`")].rstrip()
+        claim = excerpt(re.sub(r"^- \[[ x]\]\s*(\*\*\w+\*\*\s*—\s*)?", "", block), 140)
         out.append(dict(ticked=block.startswith("- [x]"), kind=tag.group(1) if tag else None,
                         claim=claim, prs=sorted({int(n) for n in CITED_PR.findall(block)}),
                         tests=sorted({c + ("." + m if m else "") for c, m in EVIDENCE_TEST.findall(block)}),
@@ -466,6 +477,46 @@ def removal_history(days, snaps, blobs):
     return [dict(day=c["day"], cmd=c["cmd"], base=c["base"] or ".", since=c["since"], hits=c["hits"]) for c in checks]
 
 
+def days_named(text):
+    out = set()
+    for m in DAY_REF.finditer(text):
+        nums = [int(m.group(1))] + [int(n) for n in re.findall(r"\d+", m.group(2))]
+        out.add(nums[0])
+        for sep, a, b in zip(re.findall(r"[–-]|,|and|or", m.group(2)), nums, nums[1:]):
+            out.update(range(a, b + 1) if sep in "–-" else {b})
+    return out
+
+
+def hand_offs(days, order, sha, blobs):
+    """What finished days hand to days not yet run, and whether the receiving spec picked it up.
+    A Notes item is picked up when the receiving spec names its day, or a finished day the item
+    names (Day 39 points to Day 38's findings); a code comment, when the spec names its file."""
+    finished = {d["day"] for d in days if d["status"] in FINISHED}
+    text = {d["day"]: blobs.read(sha, d["file"]) for d in days}
+    ahead = {d: i for i, d in enumerate(order) if d in text and d not in finished}
+    out = []
+    for d in days:
+        if d["day"] not in finished:
+            continue
+        for item in re.split(r"\n(?=\s*- )", section(text[d["day"]], "Notes")):
+            named = days_named(item)
+            for t in named & set(ahead):
+                picked = bool(({d["day"]} | named & finished) & days_named(text[t]))
+                out.append(dict(to=t, source=f"Day {d['day']:02d} Notes", picked=picked, text=item))
+    listed = run("git", "grep", "-n", "-I", "-E", r"\bDays? [0-9]+\b", sha, "--", ".", ":(exclude)*.md",
+                 ":(exclude)docs/dashboard", ":(exclude)data")
+    for line in listed.splitlines():
+        path, number, code = line.split(":", 3)[1:]
+        stem = os.path.basename(path)
+        stem = os.path.splitext(stem)[0] if stem.endswith((".java", ".sql", ".ts", ".py")) else stem
+        if COMMENT_LINE.match(code):
+            for t in days_named(code) & set(ahead):
+                out.append(dict(to=t, source=f"{path}:{number}", picked=stem in text[t], text=code))
+    for h in out:
+        h["text"] = excerpt(re.sub(r"^\s*(- |//|/\*+|\*|--|#|<!--)\s*", "", h["text"]), 160)
+    return sorted(out, key=lambda h: (ahead[h["to"]], h["picked"], h["source"]))
+
+
 def conclusion(readme):
     """What the README says at the head of main: its phase reads, and its measurement table."""
     reads = [dict(phase=int(m.group(1)), text=m.group(0).strip()) for m in PHASE_READ.finditer(readme)]
@@ -539,6 +590,7 @@ def main():
                open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
     data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
                            removals=removal_history(days, snaps, blobs),
+                           hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
                            vocab_size=vocab, pca_var=pca,
                            conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md"))),
                       separators=(",", ":"))
