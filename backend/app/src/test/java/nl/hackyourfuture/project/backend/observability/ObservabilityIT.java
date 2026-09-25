@@ -1,4 +1,4 @@
-package nl.hackyourfuture.project.backend.contract;
+package nl.hackyourfuture.project.backend.observability;
 
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
@@ -17,11 +17,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * application port every {@code /actuator/**} path falls through to
  * {@code anyRequest().authenticated()} and answers 401.
  *
- * <p>Day 05's other three criteria — a trace spanning the controller and its JDBC calls,
- * correlated log lines, and the LLM call as its own span — need a collector and a browser.
- * They are checked by hand, and the commands are in the day's spec. Everything that can be a
- * gate is here, so removing the actuator dependency later fails the build rather than a
- * dashboard nobody opens.
+ * <p>The LLM call's span and metric are checked by {@code LlmCallObservedIT}, and JDBC spans
+ * were dropped, both on Day 38. Correlated log lines need the agent and a collector, and
+ * are checked by hand ({@code ObservabilityLoggingIT} pins the application's half). Everything
+ * that can be a gate is here, so removing the actuator dependency later fails the build rather
+ * than a dashboard nobody opens.
+ *
+ * <p>This tests one deployable's actuator, not the API, so it lives beside the monolith's own
+ * tests rather than in {@code contract/} (Day 40): the requests it sends go to a path the
+ * monolith keeps, {@code /.well-known/jwks.json}, not a job path, which another service will
+ * serve.
  */
 class ObservabilityIT extends IntegrationTest {
 
@@ -47,15 +52,15 @@ class ObservabilityIT extends IntegrationTest {
 
     @Test
     void exposesRequestTimingsForPrometheusToScrape() {
+        double before = requestCount("/.well-known/jwks.json");
+
         // A request to measure, on the application port.
-        assertThat(anonymous().get("/api/jobs").status()).isEqualTo(200);
+        assertThat(anonymous().get("/.well-known/jwks.json").status()).isEqualTo(200);
 
         ApiResponse metrics = management().get("/actuator/prometheus");
-
         assertThat(metrics.status()).isEqualTo(200);
-        assertThat(metrics.body())
-                .contains("http_server_requests_seconds")
-                .contains("uri=\"/api/jobs\"");
+        assertThat(metrics.body()).contains("http_server_requests_seconds");
+        assertThat(requestCount(metrics.body(), "/.well-known/jwks.json")).isGreaterThan(before);
     }
 
     @Test
@@ -114,8 +119,21 @@ class ObservabilityIT extends IntegrationTest {
      */
     @Test
     void servesTrafficWithNoCollectorConfigured() {
-        assertThat(anonymous().get("/api/jobs").status()).isEqualTo(200);
+        assertThat(anonymous().get("/.well-known/jwks.json").status()).isEqualTo(200);
         assertThat(management().get("/actuator/health").at("/status").asString()).isEqualTo("UP");
+    }
+
+    private double requestCount(String uri) {
+        return requestCount(management().get("/actuator/prometheus").body(), uri);
+    }
+
+    private static double requestCount(String prometheus, String uri) {
+        // Summed across status and outcome labels.
+        return prometheus.lines()
+                .filter(line -> line.startsWith("http_server_requests_seconds_count{")
+                        && line.contains("uri=\"" + uri + "\""))
+                .mapToDouble(line -> Double.parseDouble(line.substring(line.lastIndexOf(' ') + 1)))
+                .sum();
     }
 
     private ApiClient management() {
