@@ -79,7 +79,7 @@ Track 0 lands first. A, B and C are independent; B adds its method to A's contro
 merged, or makes it.
 
 ## Acceptance criteria
-- [ ] **hold** — The gateway routes none of the three: `POST /internal/postings/batch`,
+- [x] **hold** — The gateway routes none of the three: `POST /internal/postings/batch`,
       `POST /internal/postings/shortlist` and `POST /internal/saved-counts` through the gateway
       answer 401 without a cookie and 404 with a valid one, and the upstream receives nothing;
       the existing `GET /internal/users/…` and service key set cases unchanged. Track 0 adds the
@@ -89,7 +89,10 @@ merged, or makes it.
       Track 0's PR: a route for `/internal/postings/**` in `Routes.java`, which the existing
       `GET /internal/users/…` case does not catch (the auditor's scratch: 200, one request
       received, the existing test green).
-- [ ] **hold** — The shortlist's order, in process: `postings/ShortlistOrderIT` calls
+      #149: the three routes added; 15 gateway security tests green. Red as named: `[POST
+      /internal/postings/batch with a valid cookie] expected: 404 but was: 200`. In compose at the
+      close (`-p day18check`): 401 on all three without a login, 404 on all three logged in.
+- [x] **hold** — The shortlist's order, in process: `postings/ShortlistOrderIT` calls
       `PostingShortlist.shortlist` on a fixed fixture and asserts an explicit list of ids. The
       fixture makes each rule decide at least one place: more matched skills first; then
       `posted_date DESC NULLS LAST`, with a null date (set by an `UPDATE`: `PostingBuilder`
@@ -102,31 +105,49 @@ merged, or makes it.
       of the final `ORDER BY`'s three keys reversed, and the repost `PARTITION BY` without
       `lower(...)`. (The spec-auditor's scratch copy of the SQL: all four red on a fixture of
       this shape; the repost break stayed green when the losing row ranked below the cut.)
-- [ ] **hold** — The public OpenAPI lists no `/internal/` path. Track 0 widens
+      #149: `ShortlistOrderIT` on `support/ShortlistFixture` (11 postings, 8 expected). Red, each
+      alone: matched count `ASC` (the one-match postings first), date `ASC` (`order-c` before
+      `order-r1`), `posting_id DESC` (`expected "order-e1" but was "order-e2"`), and the
+      `PARTITION BY` without `lower()` (`order-r2` appeared).
+- [x] **hold** — The public OpenAPI lists no `/internal/` path. Track 0 widens
       `tokens/InternalUsersIT.theOpenApiListsNoInternalPath` from `/internal/users` to
       `/internal/`. Green today. Broken on purpose in Track 0's PR: `paths-to-exclude` cut to the
       service key set. Through Tracks A–C it covers the new routes as well.
-- [ ] **new** — Posting details by id: with a service token, from the monolith's own minter and
+      #149. Red as named: the document listed `/internal/users/{id}`. Green after #150–#152 with
+      all three routes present; through the gateway in compose, 0 lines with `/internal/`.
+- [x] **new** — Posting details by id: with a service token, from the monolith's own minter and
       from `TestServiceCaller`, `POST /internal/postings/batch` with two ids in the mart, one not,
       and one repeated answers 200 with exactly the two present ids as keys, each value equal to
       `PostingLookup.byIds` in process for the same ids. `{"ids": []}` answers `{}` and
       `StatementCounter.statementsMentioning("fct_postings")` is 0. Red today: 404 with a service
       token (the route does not exist).
-- [ ] **new** — The batch cap: 501 distinct ids answer 400 and no statement mentions
+      #150: `internal/PostingBatchIT`, `answersWhatTheLookupAnswersInProcessWithTheMonolithsOwnToken`
+      (compared as JSON with the in-process answer), `answersAListedCallerToo` and
+      `anEmptyListIsAnEmptyObjectWithoutAQuery`.
+- [x] **new** — The batch cap: 501 distinct ids answer 400 and no statement mentions
       `fct_postings`; 500 distinct ids, sent with duplicates, answer 200. A body without `ids`
       answers 400. Red today: 404.
-- [ ] **new** — The shortlist over HTTP: with a service token, `POST /internal/postings/shortlist`
+      #150: `moreThan500DistinctIdsIs400BeforeAnyQuery`, `duplicatesDoNotCountTowardTheCap`,
+      `aBodyWithoutIdsIs400`. Red with the cap skipped: `expected: 400 but was: 200`.
+- [x] **new** — The shortlist over HTTP: with a service token, `POST /internal/postings/shortlist`
       on Track 0's fixture answers Track 0's expected ids in the same order, each entry with the
       fields of `ShortlistedPosting`. `skills` empty or missing, and `limit` 0 or 101, answer
       400. Red today: 404.
-- [ ] **new** — Saved counts: with a service token, `POST /internal/saved-counts` with an id
+      #151: `internal/PostingShortlistIT`, the fixture's ids in order, and the whole body equal to
+      the in-process answer. Red with `posting_id DESC` in the SQL: the order test and
+      `ShortlistOrderIT` red, the equality green (both sides run the same SQL, which is why the
+      order is asserted). Red with the empty-skills check removed (`expected: 400 but was: 500`)
+      and with the limit bounds removed (0 and 101: `expected: 400 but was: 200`).
+- [x] **new** — Saved counts: with a service token, `POST /internal/saved-counts` with an id
       saved by two users, one saved by one user, and one nobody saved, the last also sent twice,
       answers one entry per distinct id (2, 1, 0), equal to `SavedJobCounts.countsFor` in
       process. (A user cannot save a posting twice: `saved_jobs`' primary key is
       `(user_id, posting_id)`.)
       `{"ids": []}` answers `{}`, and 501 distinct ids answer 400, both with no statement
       mentioning `saved_jobs`. Red today: 404.
-- [ ] **hold** — The `/internal/**` chain guards the new routes: on each of the three, no token,
+      #152: `internal/SavedCountsIT`, 9 tests. Red with the cap skipped: `expected: 400 but was:
+      200`.
+- [x] **hold** — The `/internal/**` chain guards the new routes: on each of the three, no token,
       a user's `access_token` cookie, and a user token in the `Authorization` header each answer
       401. Green today (Day 39's chain; `InternalRoutesIT` pins it on an unmapped path). Broken
       on purpose in each track's PR, each alone: the chain's `securityMatcher` narrowed to
@@ -134,7 +155,13 @@ merged, or makes it.
       cookie case red); and `permitAll()` in place of `authenticated()` (the no-token case red).
       The user token in the header is refused by the key set itself, which no setting turns off,
       as Day 39 recorded.
-- [ ] **hold** — Nothing else moves: `JobsDirectory.java`, `ApplicationsDirectory.java` and
+      #150, #151, #152: `noTokenIs401`, `theUsersCookieIs401`, `aUserTokenInTheHeaderIs401` in
+      each route's IT. Both breaks run in all three PRs, each alone. The narrowed matcher turned the
+      cookie case red (`expected: 401 but was: 200`) **and** every service-token case (401: the
+      application chain takes no bearer token). `permitAll()` turned two red, not one: no token
+      **and** the cookie (`expected: 401 but was: 200`), as Day 39 found. A header user token
+      stayed 401 under both.
+- [x] **hold** — Nothing else moves: `JobsDirectory.java`, `ApplicationsDirectory.java` and
       `contract/` have no diff between this spec change's merge and the close; the Day 1–4 suite
       passes, direct and through the gateway; the backend and the gateway are green with no
       checkstyle violation. Green today (the spec-auditor's baseline on c641439: 337 tests, 0
@@ -142,6 +169,10 @@ merged, or makes it.
       all modules). The diff check broken on purpose in the spec-change PR: a blank line added to
       `JobsDirectory.java` and committed on a scratch branch, and `git diff <base> HEAD --stat`
       printed `1 file changed, 1 insertion(+)`; without it, nothing.
+      At the close, on `main` at 1ec858a: `git diff f5287c3 HEAD` over the three paths printed
+      nothing; backend direct 366 tests, 0 failures, 1 skipped (`GatewayHarnessIT`); through the
+      gateway, CI's class list, 206, 0 failures; the gateway 37; checkstyle 0 violations in all
+      seven modules and the gateway.
 
 ## Verify
 ```bash
@@ -191,3 +222,26 @@ docker compose -p day18check --env-file .env.example down -v; rm -f jar
   "bounded retry on idempotent GETs only" applies to none of them.
 - **For Day 17**, from today: the saved-counts route it built in the draft is served from Day 18.
   Day 03's ignored filters and `MartSkills`' place in `shared` are its to decide or drop.
+- **Closed on Day 18.** Estimated 3 in the provisional draft, 4 once rewritten (Track 0, A, B, C);
+  took 4, plus the spec change (#148) and this close.
+- **Every track was written by the implementer agent on Haiku** from a brief; review changed
+  something in all four. Track 0: the fixture's comments repeated the builder calls instead of
+  naming the rule each posting decides. Track A: test names with underscores, Markdown backticks
+  in Javadoc, and the id set built before the null check. Track B: a garbled class Javadoc, and a
+  `city` normalisation the interface already does. Track C: four repeated inserts, now a helper.
+  Its Track 0 report said 9 postings where the fixture has 11; the code was right.
+- **Departures from the criteria as written.** The chain `hold` said each break turns one case
+  red; each turned more (see the criterion). And the saved-counts break "count every save, not
+  every user" was not run: `saved_jobs`' key makes the two the same, so no test could see it.
+- **Documented in `api.md` §13**, as the spec chose; Day 39 had documented its route in
+  `auth.md`, so §13 points there for the chain and for `GET /internal/users/{id}`.
+- **The new ITs run direct only**, not in CI's gateway run: the gateway routes no `/internal/**`,
+  which Track 0's gateway test is the check for. The gateway run is 206, as on Day 40.
+- **Compose at the close:** `up --wait` in 62 s; the first call through the gateway answered 401
+  at once, not the 502 Day 40 saw, which says nothing about the missing backend healthcheck.
+- **My mistakes, all caught before a track:** in the first rewrite I proved the diff break on the
+  working tree, which the Verify's `git diff <base> HEAD` never reads; I wrote a saved-counts
+  fixture with a user saving a posting twice, which `saved_jobs`' primary key refuses; a
+  shortlist fixture that would have let the repost break pass unseen; a chain `hold` with two
+  cases no break could turn red; and a Verify gateway run missing four of CI's classes. The
+  spec-auditor's second read found all five (#148).
