@@ -1,0 +1,288 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 970" width="1400" height="970">
+<defs><style><![CDATA[
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&display=swap');
+text{font-family:'Architects Daughter','Segoe Print','Comic Sans MS',cursive;}
+.bg{fill:#141414}
+.s{stroke:#e8e6e1;stroke-width:1.8;fill:none;stroke-linejoin:round}
+.f{fill:#1c1c1c}
+.hd{fill:#222}
+.t{fill:#f2f0ea}
+.st{fill:#b9b6ae}
+.lb{fill:#d6d3cb}
+.ar{stroke:#e8e6e1;stroke-width:1.8;fill:none}
+.ar.dn{stroke:#7fb4ff}
+.dash{stroke:#b9b6ae;stroke-width:1.6;fill:none;stroke-dasharray:6 6}
+.vpc{fill:none;stroke:#b9b6ae;stroke-width:1.8;stroke-dasharray:3 7;stroke-linecap:round}
+.grp{fill:none;stroke:#6d6a64;stroke-width:1.4}
+.lam{fill:#f0a43a}
+.ro{fill:#7fd19b}
+.stp{fill:#e8745f}
+.upc{fill:#141414;stroke:#f2f0ea;stroke-width:1.6}
+.upn{fill:#f2f0ea}
+.dnc{fill:#141414;stroke:#7fb4ff;stroke-width:1.6}
+.dnn{fill:#7fb4ff}
+]]></style>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="context-stroke" stroke-width="1.6"/></marker>
+<filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="2.2"/></filter>
+</defs>
+<rect class="bg" x="0" y="0" width="1400" height="970"/>
+
+<g filter="url(#rough)">
+<!-- legend -->
+<circle class="upc" cx="420" cy="66" r="12"/>
+<circle class="dnc" cx="610" cy="66" r="12"/>
+<line class="dash" x1="850" y1="66" x2="895" y2="66"/>
+
+<!-- maintainer and GitHub -->
+<rect class="s hd" x="150" y="100" width="205" height="40" rx="8"/>
+<g class="s f"><circle cx="65" cy="300" r="16"/><path d="M35,350 q0,-32 30,-32 q30,0 30,32 z"/></g>
+<rect class="s f" x="155" y="170" width="195" height="66" rx="8"/>
+<rect class="s f" x="155" y="285" width="195" height="72" rx="8"/>
+<rect class="s" x="158" y="418" width="200" height="100" rx="6"/>
+<rect class="s" x="154" y="414" width="200" height="100" rx="6"/>
+<rect class="s f" x="150" y="410" width="200" height="100" rx="6"/>
+<rect class="s f" x="30" y="420" width="95" height="84" rx="6"/>
+<path class="s f" d="M170,575 v44 a85,9 0 0 0 170,0 v-44"/>
+<ellipse class="s f" cx="255" cy="575" rx="85" ry="9"/>
+
+<!-- main session -->
+<rect class="vpc" x="400" y="100" width="330" height="580" rx="18"/>
+<rect class="s hd" x="425" y="140" width="280" height="40" rx="8"/>
+<rect class="s" x="453" y="208" width="240" height="173" rx="6"/>
+<rect class="s" x="449" y="204" width="240" height="173" rx="6"/>
+<rect class="s f" x="445" y="200" width="240" height="173" rx="6"/>
+<rect class="s" x="453" y="408" width="240" height="65" rx="6"/>
+<rect class="s" x="449" y="404" width="240" height="65" rx="6"/>
+<rect class="s f" x="445" y="400" width="240" height="65" rx="6"/>
+<rect class="s" x="453" y="500" width="240" height="80" rx="6"/>
+<rect class="s" x="449" y="496" width="240" height="80" rx="6"/>
+<rect class="s f" x="445" y="492" width="240" height="80" rx="6"/>
+<rect class="s" x="453" y="610" width="240" height="60" rx="6"/>
+<rect class="s" x="449" y="606" width="240" height="60" rx="6"/>
+<rect class="s f" x="445" y="602" width="240" height="60" rx="6"/>
+
+<!-- subagents -->
+<rect class="grp" x="750" y="100" width="260" height="580" rx="14"/>
+<rect class="s hd" x="765" y="140" width="230" height="40" rx="8"/>
+<rect class="s f" x="780" y="195" width="200" height="83" rx="14"/>
+<rect class="s f" x="780" y="290" width="200" height="83" rx="14"/>
+<rect class="s f" x="780" y="400" width="200" height="160" rx="14"/>
+
+<!-- the repository -->
+<rect class="s hd" x="1045" y="100" width="330" height="40" rx="8"/>
+<rect class="grp" x="1035" y="150" width="345" height="530" rx="14"/>
+<path class="s f" d="M1060,195 v48 a80,9 0 0 0 160,0 v-48"/>
+<ellipse class="s f" cx="1140" cy="195" rx="80" ry="9"/>
+<path class="s f" d="M1060,295 v48 a80,9 0 0 0 160,0 v-48"/>
+<ellipse class="s f" cx="1140" cy="295" rx="80" ry="9"/>
+<path class="s f" d="M1060,395 v48 a80,9 0 0 0 160,0 v-48"/>
+<ellipse class="s f" cx="1140" cy="395" rx="80" ry="9"/>
+<path class="ar" d="M1140,257 V282" marker-start="url(#ah)" marker-end="url(#ah)"/>
+<path class="ar" d="M1140,357 V382" marker-start="url(#ah)" marker-end="url(#ah)"/>
+<path class="s" d="M1240,190 q12,0 12,12 V306 q0,14 14,14 q-14,0 -14,14 V440 q0,12 -12,12"/>
+<rect class="s f" x="1060" y="490" width="300" height="62" rx="6"/>
+<rect class="s f" x="1060" y="580" width="215" height="74" rx="6"/>
+<g transform="translate(1292,582)"><circle cx="35" cy="35" r="32" class="s f"/><path d="M13,45 A24,24 0 1 1 57,45" fill="none" stroke="#f0a43a" stroke-width="4" stroke-linecap="round"/><path d="M35,40 L50,22" stroke="#f2f0ea" stroke-width="2.5" stroke-linecap="round"/><circle cx="35" cy="40" r="4" fill="#f0a43a"/></g>
+
+<!-- a day, in order: 1..6 -->
+<path class="ar" d="M78,284 C95,232 120,205 151,203" marker-end="url(#ah)"/>
+<path class="ar" d="M100,335 H151" marker-end="url(#ah)"/>
+<path class="ar" d="M352,200 C400,200 405,225 441,225" marker-end="url(#ah)"/>
+<circle class="upc" cx="390" cy="186" r="12"/>
+<path class="ar" d="M689,250 H776" marker-end="url(#ah)"/>
+<circle class="upc" cx="733" cy="238" r="12"/>
+<path class="ar" d="M689,310 H776" marker-end="url(#ah)"/>
+<circle class="upc" cx="733" cy="298" r="12"/>
+<path class="ar" d="M441,345 C400,345 400,450 362,450" marker-end="url(#ah)"/>
+<circle class="upc" cx="413" cy="400" r="12"/>
+<path class="ar" d="M252,406 V361" marker-end="url(#ah)"/>
+<circle class="upc" cx="274" cy="383" r="12"/>
+<path class="ar" d="M352,318 C400,318 405,290 441,290" marker-end="url(#ah)"/>
+<circle class="upc" cx="382" cy="333" r="12"/>
+<path class="ar" d="M255,514 V566" marker-end="url(#ah)"/>
+<path class="ar" d="M147,462 H129" marker-start="url(#ah)" marker-end="url(#ah)"/>
+
+<!-- one track: A..D -->
+<path class="ar dn" d="M689,432 H776" marker-end="url(#ah)"/>
+<circle class="dnc" cx="733" cy="420" r="12"/>
+<path class="ar dn" d="M982,470 C1020,470 1030,438 1056,438" marker-end="url(#ah)"/>
+<circle class="dnc" cx="1010" cy="486" r="12"/>
+<path class="ar dn" d="M778,535 H693" marker-end="url(#ah)"/>
+<circle class="dnc" cx="733" cy="523" r="12"/>
+<path class="ar dn" d="M565,583 V598" marker-end="url(#ah)"/>
+<path class="ar dn" d="M441,632 C400,632 400,490 362,490" marker-end="url(#ah)"/>
+<circle class="dnc" cx="413" cy="565" r="12"/>
+
+<!-- reads and findings, read-only -->
+<path class="dash" d="M778,210 H693" marker-end="url(#ah)"/>
+<path class="dash" d="M778,350 H693" marker-end="url(#ah)"/>
+<path class="dash" d="M982,232 C1020,232 1025,222 1056,222" marker-end="url(#ah)"/>
+<path class="dash" d="M982,322 H1056" marker-end="url(#ah)"/>
+<path class="dash" d="M982,345 C1020,350 1025,418 1056,418" marker-end="url(#ah)"/>
+
+<!-- merge republishes the dashboard -->
+<path class="dash" d="M255,632 V690 H1167 V660" marker-end="url(#ah)"/>
+<circle class="upc" cx="330" cy="690" r="12"/>
+
+<!-- bottom cards -->
+<rect class="s f" x="30" y="715" width="350" height="220" rx="12"/>
+<rect class="s f" x="400" y="715" width="340" height="220" rx="12"/>
+<path class="ar" d="M530,794 C510,804 500,812 494,822" marker-end="url(#ah)"/>
+<path class="ar" d="M610,794 C630,804 640,812 648,822" marker-end="url(#ah)"/>
+<rect class="s f" x="760" y="715" width="255" height="220" rx="12"/>
+<rect class="s f" x="1035" y="715" width="345" height="220" rx="12"/>
+<polygon points="1329.3,744.1 1350.7,744.1 1365.9,759.3 1365.9,780.7 1350.7,795.9 1329.3,795.9 1314.1,780.7 1314.1,759.3" fill="#1c1c1c" stroke="#e8745f" stroke-width="2.2" stroke-linejoin="round"/>
+</g>
+
+<!-- title and legend -->
+<text class="t" x="700" y="38" font-size="28" text-anchor="middle">How Claude and its agents run a day, spec first</text>
+<text class="upn" x="420" y="71" font-size="14" text-anchor="middle">1</text>
+<text class="lb" x="438" y="71" font-size="15">a day, in order</text>
+<text class="dnn" x="610" y="71" font-size="14" text-anchor="middle">A</text>
+<text class="lb" x="628" y="71" font-size="15">one track: brief, code, PR</text>
+<text class="lb" x="905" y="71" font-size="15">reads the repo, reports back (read-only)</text>
+
+<!-- maintainer text -->
+<text class="t" x="252" y="127" font-size="19" text-anchor="middle">Maintainer + GitHub</text>
+<text class="t" x="65" y="375" font-size="18" text-anchor="middle">Maintainer</text>
+<text class="t" x="252" y="198" font-size="18" text-anchor="middle">'start Day N'</text>
+<text class="st" x="252" y="219" font-size="13" text-anchor="middle">one day spec at a time</text>
+<text class="t" x="252" y="314" font-size="18" text-anchor="middle">Reviews, merges</text>
+<text class="st" x="252" y="336" font-size="13" text-anchor="middle">then says 'merged'</text>
+<text class="upn" x="274" y="388" font-size="14" text-anchor="middle">4</text>
+<text class="lb" x="292" y="388" font-size="12">reviews</text>
+<text class="t" x="250" y="433" font-size="18" text-anchor="middle">Pull requests</text>
+<text class="st" x="250" y="453" font-size="13" text-anchor="middle">spec-change first,</text>
+<text class="st" x="250" y="472" font-size="13" text-anchor="middle">one per track, closing last</text>
+<text class="st" x="250" y="491" font-size="13" text-anchor="middle">each from fresh main</text>
+<text class="t" x="77" y="444" font-size="16" text-anchor="middle">CI</text>
+<text class="st" x="77" y="463" font-size="12" text-anchor="middle">tests,</text>
+<text class="st" x="77" y="479" font-size="12" text-anchor="middle">checkstyle,</text>
+<text class="st" x="77" y="495" font-size="12" text-anchor="middle">&lt; 400 lines</text>
+<text class="lb" x="267" y="545" font-size="12">merge</text>
+<text class="t" x="255" y="600" font-size="16" text-anchor="middle">main</text>
+<text class="st" x="255" y="618" font-size="12" text-anchor="middle">protected: CI must pass</text>
+<text class="upn" x="390" y="191" font-size="14" text-anchor="middle">1</text>
+<text class="upn" x="382" y="338" font-size="14" text-anchor="middle">5</text>
+<text class="upn" x="413" y="405" font-size="14" text-anchor="middle">3</text>
+<text class="dnn" x="413" y="570" font-size="14" text-anchor="middle">D</text>
+
+<!-- main session text -->
+<text class="st" x="418" y="125" font-size="15">Claude Code, in this repository</text>
+<text class="t" x="565" y="167" font-size="19" text-anchor="middle">Main session (Opus)</text>
+<text class="t" x="565" y="226" font-size="18" text-anchor="middle">Plan the next step</text>
+<text class="st" x="565" y="250" font-size="13" text-anchor="middle">on 'start Day N':</text>
+<text class="st" x="565" y="269" font-size="13" text-anchor="middle">run the auditors, then fix</text>
+<text class="st" x="565" y="288" font-size="13" text-anchor="middle">the spec in its own PR</text>
+<text class="st" x="565" y="314" font-size="13" text-anchor="middle">on 'merged': the next track,</text>
+<text class="st" x="565" y="333" font-size="13" text-anchor="middle">or the closing PR last</text>
+<text class="lb" x="565" y="358" font-size="12" text-anchor="middle">specs and audits stay here</text>
+<text class="t" x="565" y="425" font-size="18" text-anchor="middle">Brief each track</text>
+<text class="st" x="565" y="446" font-size="13" text-anchor="middle">files, changes, tests</text>
+<text class="t" x="565" y="515" font-size="18" text-anchor="middle">Review and break</text>
+<text class="st" x="565" y="536" font-size="13" text-anchor="middle">reads the diff, runs every check</text>
+<text class="st" x="565" y="555" font-size="13" text-anchor="middle">breaks it on purpose, reverts</text>
+<text class="t" x="565" y="625" font-size="18" text-anchor="middle">Commit, open the PR</text>
+<text class="st" x="565" y="646" font-size="13" text-anchor="middle">mistakes recorded in it</text>
+<text class="upn" x="733" y="243" font-size="14" text-anchor="middle">2</text>
+<text class="upn" x="733" y="303" font-size="14" text-anchor="middle">2</text>
+<text class="lb" x="735" y="203" font-size="11" text-anchor="middle">findings</text>
+<text class="lb" x="735" y="366" font-size="11" text-anchor="middle">findings</text>
+<text class="dnn" x="733" y="425" font-size="14" text-anchor="middle">A</text>
+<text class="lb" x="733" y="450" font-size="11" text-anchor="middle">brief</text>
+<text class="dnn" x="733" y="528" font-size="14" text-anchor="middle">C</text>
+<text class="lb" x="733" y="553" font-size="11" text-anchor="middle">diff, test run</text>
+<text class="lb" x="575" y="594" font-size="11">green</text>
+
+<!-- subagent text -->
+<text class="st" x="768" y="125" font-size="15">spawned by the session</text>
+<text class="t" x="880" y="167" font-size="19" text-anchor="middle">Subagents</text>
+<text class="t" x="880" y="218" font-size="17" text-anchor="middle">plan-auditor</text>
+<text class="st" x="880" y="238" font-size="12" text-anchor="middle">plan ↔ specs ↔ code,</text>
+<text class="st" x="880" y="255" font-size="12" text-anchor="middle">first and last day of a phase</text>
+<text class="ro" x="880" y="271" font-size="12" text-anchor="middle">read-only: reports</text>
+<text class="t" x="880" y="313" font-size="17" text-anchor="middle">spec-auditor</text>
+<text class="st" x="880" y="333" font-size="12" text-anchor="middle">every day: runs each check,</text>
+<text class="st" x="880" y="350" font-size="12" text-anchor="middle">tries to break each hold</text>
+<text class="ro" x="880" y="366" font-size="12" text-anchor="middle">read-only: reports</text>
+<text class="t" x="880" y="425" font-size="17" text-anchor="middle">implementer</text>
+<text class="lam" x="880" y="446" font-size="15" text-anchor="middle">on Haiku</text>
+<text class="st" x="880" y="470" font-size="12" text-anchor="middle">writes code and tests</text>
+<text class="st" x="880" y="488" font-size="12" text-anchor="middle">from the brief</text>
+<text class="st" x="880" y="506" font-size="12" text-anchor="middle">runs the targeted tests</text>
+<text class="lb" x="880" y="535" font-size="12" text-anchor="middle">never commits or pushes</text>
+<text class="lb" x="880" y="600" font-size="12" text-anchor="middle">each starts cold, with its own brief:</text>
+<text class="lb" x="880" y="618" font-size="12" text-anchor="middle">the session that writes the code</text>
+<text class="lb" x="880" y="636" font-size="12" text-anchor="middle">is not the only one checking it</text>
+<text class="st" x="880" y="660" font-size="11" text-anchor="middle">.claude/agents/</text>
+
+<!-- repository text -->
+<text class="t" x="1210" y="127" font-size="19" text-anchor="middle">The repository</text>
+<text class="t" x="1140" y="220" font-size="16" text-anchor="middle">plan.md</text>
+<text class="st" x="1140" y="238" font-size="12" text-anchor="middle">the goal; changes rarely</text>
+<text class="t" x="1140" y="320" font-size="16" text-anchor="middle">specs/day-NN.md</text>
+<text class="st" x="1140" y="338" font-size="12" text-anchor="middle">the steps: new / hold</text>
+<text class="t" x="1140" y="420" font-size="16" text-anchor="middle">backend/</text>
+<text class="st" x="1140" y="438" font-size="12" text-anchor="middle">the code: where steps land</text>
+<text class="t" x="1320" y="306" font-size="15" text-anchor="middle">three layers</text>
+<text class="t" x="1320" y="325" font-size="15" text-anchor="middle">that must</text>
+<text class="t" x="1320" y="344" font-size="15" text-anchor="middle">agree</text>
+<text class="lb" x="1022" y="214" font-size="11" text-anchor="middle">reads</text>
+<text class="dnn" x="1010" y="491" font-size="14" text-anchor="middle">B</text>
+<text class="lb" x="1022" y="514" font-size="11" text-anchor="middle">edits</text>
+<text class="t" x="1210" y="514" font-size="15" text-anchor="middle">CLAUDE.md + .claude/agents/</text>
+<text class="st" x="1210" y="536" font-size="12" text-anchor="middle">the working order and each agent's brief</text>
+<text class="t" x="1167" y="606" font-size="16" text-anchor="middle">Dashboard</text>
+<text class="st" x="1167" y="625" font-size="12" text-anchor="middle">spec-drift.py → GitHub Pages</text>
+<text class="st" x="1167" y="642" font-size="12" text-anchor="middle">current day, next step</text>
+<text class="upn" x="330" y="695" font-size="14" text-anchor="middle">6</text>
+<text class="lb" x="760" y="705" font-size="13" text-anchor="middle">every merge republishes the dashboard; the session then runs spec-drift.py for the next step</text>
+
+<!-- card: a day, in order -->
+<text class="t" x="50" y="745" font-size="16">A day, in order</text>
+<text class="st" x="50" y="772" font-size="13">1  'start Day N', from the maintainer</text>
+<text class="st" x="50" y="792" font-size="13">2  audit: plan-auditor on a phase's first</text>
+<text class="st" x="68" y="810" font-size="13">day, spec-auditor every day</text>
+<text class="st" x="50" y="830" font-size="13">3  a spec-change PR fixes what they found</text>
+<text class="st" x="50" y="850" font-size="13">4  the maintainer reviews every PR</text>
+<text class="st" x="50" y="870" font-size="13">5  'merged': next track (A–D), closing last</text>
+<text class="st" x="50" y="890" font-size="13">6  the merge republishes the dashboard</text>
+<text class="lb" x="50" y="918" font-size="12">a phase's last day: plan-auditor, then stop</text>
+
+<!-- card: before every push -->
+<text class="t" x="570" y="743" font-size="15" text-anchor="middle">Main session: before every push</text>
+<text class="st" x="570" y="768" font-size="13" text-anchor="middle">A test passes before and after the change.</text>
+<text class="st" x="570" y="786" font-size="13" text-anchor="middle">Has it ever been seen to fail?</text>
+<text class="t" x="490" y="840" font-size="15" text-anchor="middle">no</text>
+<text class="t" x="652" y="840" font-size="15" text-anchor="middle">yes</text>
+<text class="st" x="415" y="864" font-size="13">1. break the code on purpose</text>
+<text class="st" x="415" y="884" font-size="13">2. run it, note what it said</text>
+<text class="st" x="415" y="904" font-size="13">3. revert; never merge it</text>
+<text class="t" x="660" y="866" font-size="15" text-anchor="middle">commit</text>
+<text class="st" x="660" y="884" font-size="12" text-anchor="middle">then the PR</text>
+<text class="lb" x="570" y="926" font-size="12" text-anchor="middle">verify + checkstyle; read reports, not exit codes</text>
+
+<!-- card: who may do what -->
+<text class="t" x="780" y="745" font-size="16">Who may do what</text>
+<text class="t" x="780" y="772" font-size="14">Maintainer</text>
+<text class="st" x="780" y="790" font-size="13">merges, starts a phase</text>
+<text class="t" x="780" y="815" font-size="14">Main session</text>
+<text class="st" x="780" y="833" font-size="13">specs, briefs, review, PRs</text>
+<text class="t" x="780" y="858" font-size="14">Auditors</text>
+<text class="st" x="780" y="876" font-size="13">read and report, never edit</text>
+<text class="t" x="780" y="901" font-size="14">Implementer</text>
+<text class="st" x="780" y="919" font-size="13">edits code, never commits</text>
+
+<!-- card: stop and ask -->
+<text class="t" x="1055" y="745" font-size="16">Stop and ask, do not patch</text>
+<text class="st" x="1055" y="772" font-size="13">a Day 1–4 contract test needs an edit</text>
+<text class="st" x="1055" y="792" font-size="13">an applied migration needs an edit</text>
+<text class="st" x="1055" y="812" font-size="13">a criterion cannot be met as written</text>
+<text class="lb" x="1055" y="836" font-size="12">record the departure; never deviate silently</text>
+<text class="st" x="1055" y="870" font-size="13">after every PR: stop, wait for 'merged'</text>
+<text class="st" x="1055" y="890" font-size="13">after a phase ends, nothing starts</text>
+<text class="st" x="1055" y="910" font-size="13">until the maintainer says so</text>
+<text class="stp" x="1340" y="775" font-size="13" text-anchor="middle">STOP</text>
+
+<text class="st" x="700" y="958" font-size="12" text-anchor="middle">From CLAUDE.md and docs/workflow.md. The auditors' findings are advice; what becomes a PR is the maintainer's call.</text>
+</svg>

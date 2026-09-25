@@ -6,8 +6,9 @@ by an AI agent, when the work is governed by written specifications instead of c
 This repository takes [JobMatch](docs/original-readme.md) — a deployed, six-person
 HackYourFuture final project — and rebuilds it as a set of independently deployable services.
 Every change is driven by a numbered day specification with acceptance criteria written *before*
-any code exists. The implementer is [Claude Opus 5](https://www.anthropic.com/claude) running at
-high reasoning effort; the architecture, the specifications and every merge decision are mine.
+any code exists. The work is done by [Claude](https://www.anthropic.com/claude): Opus 5.5 runs
+each day, and since Day 39 an implementer agent on Haiku writes each track's code. The
+architecture, the specifications and every merge decision are mine.
 
 > **Status:** in progress. The [migration dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/) shows the current day
 > and the next step; it is rebuilt from the repository after every merge. This is an open lab
@@ -97,10 +98,21 @@ acceptance criteria, and a `Verify` command anyone can run. Work happens on a br
 description and ticked there.
 
 **Division of labour.** I write the plan and the specs, review every diff, and decide what
-merges. Opus 5 implements against the spec — and, where a spec turns out to be wrong, says so in
-writing rather than working around it. The agent's authority ends at the spec boundary: work
+merges. Claude Opus 5.5 does the rest: it runs the auditors, writes the spec changes and each
+track's brief, reviews the code, runs the checks, commits and opens the pull requests. The code
+itself is written by an implementer agent on Claude Haiku (before Day 39, by Opus). Where a spec
+turns out to be wrong, the agent says so in writing rather than working around it. The agent's authority ends at the spec boundary: work
 found outside it is added to that day's *Notes* and raised, not absorbed into the current pull
 request.
+
+![How Claude and its agents run a day, spec first](docs/agent-workflow.png)
+
+**How to read it.** I start a day and merge the result. Claude's main session plans the step,
+but first asks two read-only auditors whether the spec still matches the plan and the code. A
+smaller model, the implementer, writes the code from a short brief; the main session checks it,
+breaks it on purpose to prove the tests can fail, and opens a pull request. Each merge updates
+the dashboard. White numbers are the order of a day, blue letters are one track, dashed lines
+are reading and reporting back.
 
 **What is enforced by machine rather than by good intentions.** This is the part that makes the
 experiment repeatable:
@@ -705,5 +717,6 @@ until the pipeline has published its marts — see [`data/README.md`](data/READM
 JobMatch was built by Hamed Razizadeh, Monerh Al Sqyan, Yusup Rozimemet, Halyna Romanyshyn,
 Baraah Alshiaani and Mohamad Bader Almsaddi alzin as a HackYourFuture final project; the full
 team listing is in the [original README](docs/original-readme.md#team). This migration
-repository is my own work — the plan, the specifications and the reviews are mine, the
-implementation is Claude Opus 5's under those specifications, and commits state which.
+repository is my own work — the plan, the specifications and the reviews are mine; the
+implementation is Claude's under those specifications (Opus 5.5 running the work, Haiku writing
+the code since Day 39), and commits state which.

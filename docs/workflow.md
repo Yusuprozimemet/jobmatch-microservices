@@ -11,9 +11,10 @@ in [`specs/`](../specs/) are the steps. The code is where the steps land.
 ```mermaid
 flowchart LR
     M["Maintainer<br/>decides and merges"]
-    S["Main session<br/>implementer: writes specs,<br/>code and PRs"]
+    S["Main session (Opus 5.5)<br/>specs, briefs, review,<br/>commits and PRs"]
     PA["plan-auditor<br/>big picture:<br/>plan ↔ specs ↔ code"]
     SA["spec-auditor<br/>one day:<br/>spec ↔ code"]
+    I["implementer (Haiku)<br/>code and tests<br/>from a brief"]
     CI["CI on GitHub<br/>tests, checkstyle,<br/>400-line gate"]
     D["Dashboard<br/>scripts/spec-drift.py"]
 
@@ -22,6 +23,8 @@ flowchart LR
     S -- "calls" --> SA
     PA -- "findings, read-only" --> S
     SA -- "findings, read-only" --> S
+    S -- "brief" --> I
+    I -- "diff, never commits" --> S
     S -- "PR" --> CI
     CI -- "green or red" --> M
     S -- "after each merge" --> D
@@ -30,6 +33,10 @@ flowchart LR
 
 The two auditors ([`.claude/agents/`](../.claude/agents/)) only read and report. They never edit
 files or open PRs, which is what keeps them independent from the session that writes the code.
+The implementer writes each track's code from a brief and never commits; the main session reviews
+its diff, runs the checks, breaks the code on purpose, and opens the PR.
+
+![How Claude and its agents run a day, spec first](agent-workflow.png)
 
 ## What triggers what
 
