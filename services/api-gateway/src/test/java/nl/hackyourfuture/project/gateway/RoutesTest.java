@@ -13,6 +13,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RoutesTest {
 
     private static final RecordingUpstream BACKEND = new RecordingUpstream();
+    private static final TestKeys KEYS = new TestKeys();
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
     @LocalServerPort
@@ -29,11 +31,13 @@ class RoutesTest {
     @DynamicPropertySource
     static void backend(DynamicPropertyRegistry registry) {
         registry.add("gateway.backend-url", BACKEND::url);
+        registry.add("gateway.jwks-url", KEYS::jwksUrl);
     }
 
     @AfterAll
     static void stop() {
         BACKEND.close();
+        KEYS.close();
     }
 
     @BeforeEach
@@ -83,6 +87,28 @@ class RoutesTest {
         }
 
         assertThat(BACKEND.received()).isEmpty();
+    }
+
+    // With no job-service URL set, every job path reaches the backend, and that holds once job paths
+    // have a route of their own until Day 17 sets one. top-matches is matching's, and needs a token.
+    @Test
+    void everyJobPathReachesTheBackendUnchanged() throws Exception {
+        assertThat(send(HttpRequest.newBuilder(at("/api/jobs?city=Amsterdam&page=2")).GET()).statusCode()).isEqualTo(200);
+        assertThat(send(HttpRequest.newBuilder(at("/api/jobs/filters")).GET()).statusCode()).isEqualTo(200);
+        assertThat(send(HttpRequest.newBuilder(at("/api/jobs/seed-0001")).GET()).statusCode()).isEqualTo(200);
+
+        String cookie = KEYS.valid(UUID.randomUUID());
+        assertThat(send(HttpRequest.newBuilder(at("/api/jobs/top-matches"))
+                .header("Cookie", "access_token=" + cookie)
+                .GET()).statusCode()).isEqualTo(200);
+
+        assertThat(BACKEND.received()).extracting(RecordingUpstream.Received::pathAndQuery)
+                .containsExactly(
+                        "/api/jobs?city=Amsterdam&page=2",
+                        "/api/jobs/filters",
+                        "/api/jobs/seed-0001",
+                        "/api/jobs/top-matches"
+                );
     }
 
     private URI at(String pathAndQuery) {
