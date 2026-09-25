@@ -10,6 +10,7 @@ import nl.hackyourfuture.project.backend.support.TestUser;
 import nl.hackyourfuture.project.backend.identity.token.AccessTokens;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -28,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SavedCountsIT extends IntegrationTest {
 
-    @Autowired
-    private SavedJobCounts savedJobCounts;
+    @Autowired @Qualifier("applicationsDirectory")
+    private SavedJobCounts savedJobCounts; // The in-process implementation, not the @Primary HTTP client.
 
     @Autowired
     private AccessTokens accessTokens;

@@ -12,6 +12,7 @@ import nl.hackyourfuture.project.backend.identity.token.AccessTokens;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -31,8 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PostingShortlistIT extends IntegrationTest {
 
-    @Autowired
-    private PostingShortlist postingShortlist;
+    @Autowired @Qualifier("jobsDirectory")
+    private PostingShortlist postingShortlist; // The in-process implementation, not the @Primary HTTP client.
 
     @Autowired
     private AccessTokens accessTokens;
