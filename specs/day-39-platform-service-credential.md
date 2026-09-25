@@ -85,13 +85,19 @@ a service that trusts a token's `sub` can refuse a deleted user.
 Track 0 lands first, then A1, A2, B and C in that order: each needs the one before.
 
 ## Acceptance criteria
-- [ ] **new** — The monolith publishes a service key set: `GET /.well-known/service-jwks.json`
+- [x] **new** — The monolith publishes a service key set: `GET /.well-known/service-jwks.json`
       without a token answers 200 with one RSA key whose `kid` is the RFC 7638 thumbprint, and a
       token from the minter verifies against it with `iss=jobmatch-backend`,
       `aud=jobmatch-internal` and `exp - iat` ≤ 300 s. The application does not start without
       `SERVICE_JWT_PRIVATE_KEY_FILE`, and says which variable to set. Red today: the path
       answers 401 without a token and 404 with a user cookie; the variable is read by nothing.
-- [ ] **new** — `/internal/**` lets a trusted service token through and nothing else. On an
+      #130: `ServiceSigningKeyStartupTest`, `refusesToStartWithNoKeyConfigured` ("…is not set")
+      and `refusesToStartWithAFileThatIsNotAKey`. Red with a key generated when none is set: the
+      application started. #131: `ServiceJwksIT.isPublicAndServesOneRsaSigningKey` (the `kid`
+      against `computeThumbprint()`) and `aMintedTokenVerifiesAgainstIt`. Red with the `permitAll`
+      line removed (`expected: 200 but was: 401`), and with the lifetime at 10 minutes
+      (`600000L` ≤ `300000L`). In compose, inside the network: 200 and one RSA key (closing run).
+- [x] **new** — `/internal/**` lets a trusted service token through and nothing else. On an
       unmapped `/internal/**` path (Track B has no route yet):
       - a valid token from the monolith's minter, and one from a test caller named in the
         configured list, pass security: 404, not 401;
@@ -99,7 +105,10 @@ Track 0 lands first, then A1, A2, B and C in that order: each needs the one befo
 
       Red today: a valid user cookie reaches the application chain and gets 404; there is no
       service token to pass. The refusals that already hold today are the next criterion.
-- [ ] **hold** — `/internal/**` refuses every other token, each 401, on the same unmapped path as
+      #132: `tokens/InternalRoutesIT`, `theMonolithsOwnTokenPassesSecurity`,
+      `aListedCallersTokenPassesSecurity` (404) and `aUsersCookieIsNotEnough` (401). Red without
+      the chain, as on `main` before it: both tokens 401, the cookie 404.
+- [x] **hold** — `/internal/**` refuses every other token, each 401, on the same unmapped path as
       the criterion above:
       - no token;
       - a user token in the header;
@@ -117,24 +126,40 @@ Track 0 lands first, then A1, A2, B and C in that order: each needs the one befo
         on its decoder (unknown issuer).
 
       A user token and another key are refused by the key set itself, which no setting turns off.
-- [ ] **new** — Identity answers whether a user exists: with a trusted caller's token,
+      #132: `InternalRoutesIT`, the six refusals, each 401. Broken as named, each alone: the
+      `aud`, timestamp and issuer breaks each turned only their own case red. `permitAll()` turned
+      two red, not one: no token **and** the user's cookie (404), since a permitted chain lets a
+      request with no bearer token through. A departure from "each … alone", recorded in Notes.
+- [x] **new** — Identity answers whether a user exists: with a trusted caller's token,
       `GET /internal/users/{id}` answers 204 for a user, 404 once the `users` row is deleted, and
       404 for an id never seen; without a token, or with the user's own cookie, 401. And
       `/api/docs/openapi.yaml` lists neither `/internal/users/{id}` nor
       `/.well-known/service-jwks.json`. Red today: the route does not exist (401 without a cookie,
       404 with one). The OpenAPI clause passes today because there is nothing to list; it is seen
       red in Track C's PR with `springdoc.paths-to-exclude` removed.
-- [ ] **hold** — The gateway routes nothing under `/internal/**` and not the service key set:
+      #133: `tokens/InternalUsersIT`, 7 tests. Red with the existence query always true
+      (`aDeletedUserIs404`, `anIdNeverSeenIs404`: `expected: 404 but was: 204`). Red with no
+      `paths-to-exclude` (body contains `/internal/users`), and with only `/internal/**` excluded
+      (body contains `service-jwks`). That second red is also `main` from #131 to #133: the
+      OpenAPI clause did **not** pass before Track C, as this criterion said (Notes). Through the
+      gateway in compose, the public OpenAPI lists neither (closing run).
+- [x] **hold** — The gateway routes nothing under `/internal/**` and not the service key set:
       with a valid user token, `GET /internal/users/<id>` and
       `GET /.well-known/service-jwks.json` through the gateway answer 404 and the upstream
       receives nothing; without one, 401 (Track 0). Green today. Broken on purpose in Track 0's
       PR: a route for `/internal/**` added to `Routes.java`.
-- [ ] **hold** — A deleted user is still refused by the monolith: `contract/SessionWithoutAUserIT`
+      #128: the gateway's
+      `SecurityTest.internalRoutesAndTheServiceKeySetAreNotRoutedEvenWithAValidCookie`. Red as
+      named: `expected: 404 but was: 200`, the other 18 gateway security and route tests green.
+      In compose (closing run), logged in through the gateway: 404 and 404; without a login, 401.
+- [x] **hold** — A deleted user is still refused by the monolith: `contract/SessionWithoutAUserIT`
       and `queries/CurrentUserQueriesIT` (one statement per request) pass, `contract/` unedited.
       Broken on purpose (the spec-auditor, repeated in Track C's PR): `CurrentUserIdResolver`
       reading `sub` from the cookie instead of the lookup. `savedJobsSayTheUserIsNotFound` went
       red (`expected: 404 but was: 200`), 1 of 3, and `CurrentUserQueriesIT` 2 of 2
       (`expected: 1L but was: 0L`).
+      #133: both pass, `contract/` unedited since Day 38's close (`git diff 1af1b6d HEAD` prints
+      nothing). The break repeated there gave the same three reds.
 
 ## Verify
 ```bash
@@ -218,3 +243,37 @@ docker compose -p day39check --env-file .env.example down -v; rm -f jar
   - Days 30 and 35: a function calling back with a service token needs a key and key set of its
     own under this design.
 - Day 38's findings for Days 37 and 40 are in those days' Notes.
+- **Closed on Day 39** at 7235339. Rerun there:
+  - the gateway, 33 tests;
+  - the backend direct, 334 tests, 1 skipped (`GatewayHarnessIT`, opt-in);
+  - through the gateway, 203 tests;
+  - checkstyle clean in both;
+  - the Verify's compose run: 200 and one RSA key inside the network; logged in through the
+    gateway, 404 and 404; without a login, 401; the public OpenAPI names no internal path.
+
+  `contract/` is unchanged since Day 38's close (1af1b6d). `support/` gained 136 lines: the
+  stand-in service `TestServiceCaller` with a key set of its own (122), the harness's service key
+  (9) and passing both (5).
+- **Estimated 3 pull requests in the outline and 5 once written in full; took 5:** 0 (#128), A1
+  (#130), A2 (#131), B (#132), C (#133). The spec change (#127), the dashboard change that let it
+  read the numbered tracks A1 and A2 (#129), and this closing PR are not counted.
+- **Every track was written by the implementer agent on Haiku,** from a brief, the first day
+  that was so. Review changed something in four of the five: three Javadocs and a test comment
+  (#130), one Javadoc that said the caller verifies its own token (#131), an import (#132), and
+  in #133 a doc section in the wrong place, a link into the wrong module, a deletion test that
+  never saw the user exist, and an import. Every break was run in the main session.
+- **Two departures:**
+  - **`permitAll()` turned two cases red, not one** (#132). The hold criterion says each break
+    turns its own case red alone; with the chain permitting everything, the user's cookie also
+    gets through (404), since the chain never reads it. The real chain refuses both.
+  - **The OpenAPI clause did not pass before Track C.** The criterion said there was nothing to
+    list until then. #131 added the key-set controller, and springdoc lists every controller, so
+    from #131 until #133 the public OpenAPI, which the gateway routes, named
+    `/.well-known/service-jwks.json`. Nothing served it through the gateway (Track 0's test). #133
+    saw that half red with only `/internal/**` excluded.
+- **My mistakes:**
+  - I knew in #131 that Track C would hide the key set from the OpenAPI, and wrote that in its
+    PR, without seeing that until then the public document listed it. The spec's "passes today"
+    went stale in the PR I wrote.
+  - #131 left the service key set out of `auth.md`'s filter-chain table; #133 added it.
+  - Splitting Track A into A1 and A2 broke the dashboard, which read only lettered tracks (#129).
