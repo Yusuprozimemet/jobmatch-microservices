@@ -26,8 +26,9 @@ import static org.springframework.web.servlet.function.RequestPredicates.POST;
 import static org.springframework.web.servlet.function.RequestPredicates.path;
 
 /**
- * Where requests go. There is one backend until Phase 3: the API and the key tokens are verified
- * with, and the credential routes, rate limited, ahead of the rest. Nothing else is routed, the
+ * Where requests go. Job search (JobController's paths) has an upstream of its own,
+ * {@code gateway.job-service-url}, which is the backend until it is set. Everything else is the
+ * backend's. The credential routes are rate limited ahead of the rest. Nothing else is routed, the
  * backend's actuator included; a path outside these is the gateway's own answer: 401 without a
  * token, 404 with one.
  */
@@ -39,6 +40,7 @@ class Routes {
 
     @Bean
     RouterFunction<ServerResponse> backend(@Value("${gateway.backend-url}") String backendUrl,
+                                           @Value("${gateway.job-service-url}") String jobServiceUrl,
                                            @Value("${gateway.rate-limit.auth-per-minute}") long perMinute,
                                            @Value("${gateway.trusted-proxies}") String trustedProxies) {
         // Where a password is guessed or an account made; not refresh, logout or the password change.
@@ -54,7 +56,16 @@ class Routes {
                 .before(userId())
                 .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build();
-        return credentials.and(route("backend")
+        // Job search paths: /api/jobs, /api/jobs/filters, /api/jobs/{postingId} excluding top-matches,
+        // which is matching's and stays on the backend route. Ahead of /api/**, which would take them.
+        RouterFunction<ServerResponse> jobs = route("job-service")
+                .route(path("/api/jobs").or(path("/api/jobs/filters"))
+                        .or(path("/api/jobs/{postingId}").and(path("/api/jobs/top-matches").negate())), http())
+                .before(uri(jobServiceUrl))
+                .before(userId())
+                .onError(ResourceAccessException.class, Routes::backendFailed)
+                .build();
+        return credentials.and(jobs).and(route("backend")
                 .route(path("/api/**").or(path("/.well-known/jwks.json")), http())
                 .before(uri(backendUrl))
                 .before(userId())
@@ -63,7 +74,7 @@ class Routes {
     }
 
     /**
-     * The backend could not be reached, or did not answer in time: 502 or 504, the gateway's own
+     * The upstream could not be reached, or did not answer in time: 502 or 504, the gateway's own
      * answers for an upstream that failed, rather than a 500 that says the gateway itself broke.
      * The gateway's response type, not {@code ServerResponse}'s: the rate limit adds a header on
      * the way out, and a plain {@code ServerResponse}'s headers are read-only.
