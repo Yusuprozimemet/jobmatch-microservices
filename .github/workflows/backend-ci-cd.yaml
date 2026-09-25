@@ -60,7 +60,7 @@ jobs:
         working-directory: ./backend
         run: >-
           ./mvnw -B verify -pl app -am -Dharness.gateway=true
-          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT'
+          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
   build:
