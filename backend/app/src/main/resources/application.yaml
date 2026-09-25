@@ -80,6 +80,11 @@ app:
     # First Google sign-in lands here instead of home, since Google skips our terms screen.
     terms-required-redirect: ${OAUTH2_TERMS_REDIRECT:${app.base-url}/accept-terms}
 
+  # Where the internal clients send their calls (Day 19): empty is this process. Day 17 points
+  # jobs-url at job-service.
+  internal:
+    jobs-url: ${INTERNAL_JOBS_URL:}
+    applications-url: ${INTERNAL_APPLICATIONS_URL:}
 
   llm:
     api-key: ${LLM_API_KEY:}
@@ -169,3 +174,29 @@ management:
         # means "retry forever against nothing", not "off". Off unless an endpoint is given.
         enabled: ${OTEL_METRICS_ENABLED:false}
         url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+# The internal clients' breakers (Day 19), one per client. Both exception lists are named: without
+# them a 4xx counts as a failure, and with record-exceptions alone as a success that dilutes the
+# rate. A 4xx is a bug on the caller's side, not an outage.
+resilience4j:
+  circuitbreaker:
+    configs:
+      internal:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        record-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+    instances:
+      postingLookup:
+        base-config: internal
+      postingShortlist:
+        base-config: internal
+      savedJobCounts:
+        base-config: internal

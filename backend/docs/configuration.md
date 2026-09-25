@@ -119,6 +119,8 @@ module's Flyway migrates its own schema as its own login.
 | Variable | Default | |
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** |
+| `INTERNAL_JOBS_URL` | empty | Where saved jobs and top matches send their internal calls for postings (`/internal/postings/**`, Day 19). Empty means this process, `http://localhost:<the server's port>`, read on the first call. Day 17 sets it to job-service |
+| `INTERNAL_APPLICATIONS_URL` | empty | Where job search sends its internal call for saved counts (`/internal/saved-counts`). Empty means this process. Day 17 sets it, in job-service, to the monolith |
 | `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the two token cookies and the Google flow's two, `google_auth_request` and `pending_google_link`. Must be `true` on HTTPS |
 | `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with: a PEM, PKCS#8 file of at least 2048 bits. **Required**, in every profile; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/private.pem` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | The monolith's key for service tokens (Day 39): a PEM, PKCS#8 file of at least 2048 bits. **Required**, separate from the user key; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/service.pem` |

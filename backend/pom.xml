@@ -33,6 +33,7 @@
 	<properties>
 		<java.version>25</java.version>
 		<springdoc.version>3.1.0</springdoc.version>
+		<resilience4j.version>2.4.0</resilience4j.version>
 	</properties>
 
 	<!-- Versions for what Spring Boot's parent does not manage. Here rather than in each
@@ -43,6 +44,12 @@
 				<groupId>org.springdoc</groupId>
 				<artifactId>springdoc-openapi-starter-webmvc-scalar</artifactId>
 				<version>${springdoc.version}</version>
+			</dependency>
+			<!-- Resilience4j 2.4.0 for circuit breakers (Day 19). -->
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-spring-boot4</artifactId>
+				<version>${resilience4j.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
