@@ -14,13 +14,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * How many statements it takes to find out who is asking: one per request.
  *
- * <p>Not a contract test. Today the session's principal is an email, and {@code identity} turns
- * it into a user with one query. Before Day 10 that query runs inside {@code applications} and
- * {@code matching}, through an interface in {@code shared}. After it, it runs once in a resolver at the
- * edge. The move must not add a second lookup on the way, and that is what this test is for.
+ * <p>Not a contract test. Today the principal is the access token's email, and {@code identity}
+ * turns it into a user with one query. Before Day 10 that query runs inside {@code applications}
+ * and {@code matching}, through an interface in {@code shared}. After it, it runs once in a
+ * resolver at the edge. The move must not add a second lookup on the way, and that is what this
+ * test is for.
  *
- * <p>Expires on Day 13, when the principal carries the user's id and the count should drop to
- * zero. That day changes the expected number on purpose.
+ * <p>It does not expire. Day 13 put the id in the token's {@code sub} but kept the email as the
+ * principal, and this one lookup is the deleted-user check: it is what refuses a token that
+ * outlived its user ({@code SessionWithoutAUserIT}). A service that trusts {@code sub} asks
+ * {@code GET /internal/users/{id}} instead (Day 39).
  */
 class CurrentUserQueriesIT extends MatchingTest {
 

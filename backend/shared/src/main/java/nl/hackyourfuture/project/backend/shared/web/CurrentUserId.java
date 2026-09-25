@@ -15,8 +15,9 @@ import java.lang.annotation.Target;
  * {@code matching} answers 422, and {@code SessionWithoutAUserIT} pins both. A request with no
  * principal at all never gets this far; Spring Security answers it with 401 first.
  *
- * <p>Only {@code identity} knows how a principal becomes an id. Today that is one query by email.
- * Day 13 puts the id in the token, and the controllers using this do not change.
+ * <p>Only {@code identity} knows how a principal becomes an id. It is one query by the token's
+ * email. Day 13 put the id in the token and kept the lookup on purpose: it is what refuses a
+ * user deleted while their token is still valid ({@code SessionWithoutAUserIT}).
  */
 @Documented
 @Target(ElementType.PARAMETER)

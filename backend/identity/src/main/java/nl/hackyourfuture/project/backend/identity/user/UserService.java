@@ -7,6 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.UUID;
+
 
 @Service
 @RequiredArgsConstructor
@@ -63,6 +65,11 @@ public class UserService {
         if (!userRepository.deleteUser(user.getId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
+    }
+
+    // For the deleted-user rule: a service that trusts a token's sub asks this before acting (Day 39).
+    public boolean exists(UUID id) {
+        return userRepository.existsById(id);
     }
 
 }
