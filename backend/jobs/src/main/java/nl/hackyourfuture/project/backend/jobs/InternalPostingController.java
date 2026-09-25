@@ -20,6 +20,10 @@ import java.util.Set;
  * shortlist, the calls other modules make in process today, for Day 19's clients. Behind the
  * {@code /internal/**} chain, so service tokens only (Day 39); the gateway does not route it and
  * the public OpenAPI does not list it.
+ *
+ * <p>Takes {@code JobsDirectory} itself, not the {@link PostingLookup} or {@link PostingShortlist}
+ * interfaces, because from Day 19 the interfaces' {@code @Primary} beans are HTTP clients that call
+ * this controller.
  */
 @RestController
 class InternalPostingController {
@@ -30,12 +34,10 @@ class InternalPostingController {
     /** Shortlist length. Matching asks for 40. */
     static final int MAX_LIMIT = 100;
 
-    private final PostingLookup postingLookup;
-    private final PostingShortlist postingShortlist;
+    private final JobsDirectory jobsDirectory;
 
-    InternalPostingController(PostingLookup postingLookup, PostingShortlist postingShortlist) {
-        this.postingLookup = postingLookup;
-        this.postingShortlist = postingShortlist;
+    InternalPostingController(JobsDirectory jobsDirectory) {
+        this.jobsDirectory = jobsDirectory;
     }
 
     /**
@@ -52,7 +54,7 @@ class InternalPostingController {
         if (ids.size() > MAX_IDS) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At most " + MAX_IDS + " distinct ids");
         }
-        return postingLookup.byIds(ids);
+        return jobsDirectory.byIds(ids);
     }
 
     /**
@@ -70,7 +72,7 @@ class InternalPostingController {
         if (body.limit() == null || body.limit() < 1 || body.limit() > MAX_LIMIT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit must be between 1 and " + MAX_LIMIT);
         }
-        return postingShortlist.shortlist(body.city(), body.skills(), body.limit());
+        return jobsDirectory.shortlist(body.city(), body.skills(), body.limit());
     }
 
     record IdsRequest(List<String> ids) {

@@ -11,6 +11,7 @@ import nl.hackyourfuture.project.backend.support.TestUser;
 import nl.hackyourfuture.project.backend.identity.token.AccessTokens;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -30,8 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PostingBatchIT extends IntegrationTest {
 
-    @Autowired
-    private PostingLookup postingLookup;
+    @Autowired @Qualifier("jobsDirectory")
+    private PostingLookup postingLookup; // The in-process implementation, not the @Primary HTTP client.
 
     @Autowired
     private AccessTokens accessTokens;

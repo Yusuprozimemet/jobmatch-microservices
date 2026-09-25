@@ -6,6 +6,7 @@ import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.ShortlistFixture;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.util.List;
 
@@ -18,8 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ShortlistOrderIT extends IntegrationTest {
 
-    @Autowired
-    private PostingShortlist shortlist;
+    @Autowired @Qualifier("jobsDirectory")
+    private PostingShortlist shortlist; // The in-process implementation, not the @Primary HTTP client.
 
     @Test
     void ranksByMatchesThenDateThenIdOnePerRepostInTheCityUpToTheLimit() {

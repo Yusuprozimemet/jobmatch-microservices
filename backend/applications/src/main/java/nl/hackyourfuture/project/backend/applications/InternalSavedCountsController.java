@@ -17,6 +17,10 @@ import java.util.Set;
  * the call job search needs once {@code jobs} leaves on Day 17 (Day 19's client calls it). Behind
  * the {@code /internal/**} chain, so service tokens only (Day 39); the gateway does not route it
  * and the public OpenAPI does not list it.
+ *
+ * <p>Takes {@code ApplicationsDirectory} itself, not the {@link SavedJobCounts} interface,
+ * because from Day 19 the interface's {@code @Primary} bean is an HTTP client that calls this
+ * controller.
  */
 @RestController
 class InternalSavedCountsController {
@@ -24,10 +28,10 @@ class InternalSavedCountsController {
     /** Distinct ids per request. Job search asks one page at a time, at most 100. */
     static final int MAX_IDS = 500;
 
-    private final SavedJobCounts savedJobCounts;
+    private final ApplicationsDirectory applicationsDirectory;
 
-    InternalSavedCountsController(SavedJobCounts savedJobCounts) {
-        this.savedJobCounts = savedJobCounts;
+    InternalSavedCountsController(ApplicationsDirectory applicationsDirectory) {
+        this.applicationsDirectory = applicationsDirectory;
     }
 
     /**
@@ -44,7 +48,7 @@ class InternalSavedCountsController {
         if (ids.size() > MAX_IDS) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At most " + MAX_IDS + " distinct ids");
         }
-        return savedJobCounts.countsFor(ids);
+        return applicationsDirectory.countsFor(ids);
     }
 
     record IdsRequest(List<String> ids) {
