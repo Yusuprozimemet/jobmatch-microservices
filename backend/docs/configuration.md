@@ -68,8 +68,8 @@ scripts/dev-up.sh          # docker compose up -d db backend api-gateway fronten
 | `db` | 5432 | `postgres:18.4-alpine`, volume `db-data`, `pg_isready` healthcheck |
 | `jwt-key` | — | Runs and exits. Writes the token signing key into the `jwt-keys` volume on the first start, then keeps it until `down -v` |
 | `backend` | — | Built from `./backend`. Listens on 8080 inside the network only (Day 16). Waits for the database to be healthy and for `jwt-key` to finish |
-| `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. `depends_on: backend` |
-| `frontend` | 3000 | Built from `./frontend`. `depends_on: api-gateway` — start order only, **not** readiness |
+| `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. Healthcheck on `/actuator/health/readiness` (management port 9090, inside the network). `depends_on: backend` |
+| `frontend` | 3000 | Built from `./frontend`. Waits for the gateway to be healthy (`condition: service_healthy`), so `up --wait` returns once the gateway is ready |
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
 
 The browser only ever talks to port 3000. Next rewrites `/api/*` to `BACKEND_API_URL`
@@ -82,15 +82,16 @@ The gateway's settings, all with defaults that suit compose:
 | Variable | Default | |
 | --- | --- | --- |
 | `BACKEND_URL` | `http://localhost:8080` — `http://backend:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
+| `JOB_SERVICE_URL` | `BACKEND_URL`'s value | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. Unset until job-service is extracted (Day 17) |
 | `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login, register and the two password-reset steps, per client |
 | `GATEWAY_TRUSTED_PROXIES` | empty | A regex of proxy addresses whose `X-Forwarded-For` is believed. Leave it empty behind the frontend, which passes a client's own header through; set it only for a proxy that overwrites it |
 | `GATEWAY_CONNECT_TIMEOUT` / `GATEWAY_READ_TIMEOUT` | `5s` / `30s` | Past them the gateway answers 502 / 504 |
 | `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT` | `false`, local Tempo | As the backend's |
 
-**Nothing checks that the backend is actually up.** There is no actuator, no `/health`, and no
-healthcheck on the backend service — the frontend container starts as soon as the backend container
-starts, which is not the same as ready. In practice Next only calls the backend when a page is
-requested, so this is invisible until something automates against it.
+**The gateway's healthcheck makes `up --wait` wait until it is ready.** The backend has actuator on
+its management port but compose has no healthcheck for it. The gateway's check is the one compose
+waits on, and the frontend starts only after it. It does not close the window for a request sent
+straight to the published 8080 before the gateway is ready.
 
 ---
 

@@ -90,6 +90,17 @@ services:
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     ports:
       - "8080:8081"
+    # The gateway can answer 500 for a few hundred ms after its port opens (Day 38, #123/#124);
+    # healthy only once readiness is UP on the management port 9090, not published. The runtime
+    # image has no curl/wget/nc but has bash, so bash's /dev/tcp. Short interval/start_interval
+    # keep up --wait from waiting Docker's default 30 s.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
     depends_on:
       - backend
 
@@ -100,7 +111,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
 
   # The two data jobs. Neither is started by `docker compose up`: they run and
   # exit, it is not a service. A container job you add later shares this

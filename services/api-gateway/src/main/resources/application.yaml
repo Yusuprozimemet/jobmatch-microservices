@@ -56,6 +56,9 @@ management:
 gateway:
   # The backend's base URL: http://backend:8080 in compose.
   backend-url: ${BACKEND_URL:http://localhost:8080}
+  # Where job search goes (Day 40): the backend until job-service is extracted (Day 17) and
+  # JOB_SERVICE_URL is set.
+  job-service-url: ${JOB_SERVICE_URL:${gateway.backend-url}}
   # The key set access tokens are verified with; the backend publishes it.
   jwks-url: ${gateway.backend-url}/.well-known/jwks.json
   rate-limit:
