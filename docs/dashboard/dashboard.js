@@ -15,6 +15,9 @@ const md = s => esc(s)
 const dd = n => String(n).padStart(2, "0");
 const prLabel = r => r.pr ? "#" + r.pr : "start";
 const dayOfFile = f => { const m = f.match(/day-(\d+)/); return m ? +m[1] : 0; };
+// A day's place in the run order (plan.md): Day 38 runs before Day 17. Mirrors ranker() in the script.
+const ORDER = DATA.order || [];
+const rank = d => !d ? -1 : ORDER.includes(d) ? ORDER.indexOf(d) : ORDER.length + d;
 const NS = "http://www.w3.org/2000/svg";
 let sel = N - 1;
 function el(tag, attrs = {}, parent) {
@@ -58,7 +61,7 @@ R.forEach(r => {
     const d = dayOfFile(f);
     if (!d) continue;
     specEdits += n;
-    if (d > r.day) forward += n;
+    if (rank(d) > rank(r.day)) forward += n;
   }
 });
 
@@ -297,7 +300,7 @@ function drawHeat() {
     const r = cols[c];
     if (j < 0 || j >= files.length) return showTip(ev, rowTip(r));
     const f = files[j], n = (r.spec_files || {})[f] || 0, d = dayOfFile(f);
-    const where = !d ? "the plan" : d > r.day ? `a future day (working on day ${r.day})` : d === r.day ? "the current day" : "a finished day";
+    const where = !d ? "the plan" : rank(d) > rank(r.day) ? `a future day (working on day ${r.day})` : d === r.day ? "the current day" : "a finished day";
     showTip(ev, `<b>${prLabel(r)} → ${esc(f.replace("specs/", ""))}</b><div style="margin:3px 0 6px">${esc(r.title)}</div>
       <div class="row"><span>lines edited</span><span>${n}</span></div><div class="row"><span>target</span><span>${where}</span></div>`);
   });

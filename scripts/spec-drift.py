@@ -143,7 +143,16 @@ def snapshots(prs):
     return out
 
 
-def trajectory(snaps, blobs):
+def ranker(order):
+    """A day's place in the run order: 0 (and plan.md) first, a day the order does not list after it by number."""
+    pos = {d: i for i, d in enumerate(d for d in order if d != PLATFORM)}
+    return lambda d: -1 if not d else pos.get(d, len(pos) + d)
+
+
+def trajectory(snaps, blobs, order=()):
+    """Drift, gap and coverage per merge. Days compare by their place in the run order, so from
+    Day 38 the unbuilt Days 17-37 are not reached; with no order, by number."""
+    rank = ranker(order)
     for s in snaps:
         names = run("git", "ls-tree", "-r", "--name-only", s["sha"], "--", "plan.md", "specs").split()
         s["texts"] = {n: blobs.read(s["sha"], n) for n in names if n.endswith(".md")}
@@ -187,10 +196,10 @@ def trajectory(snaps, blobs):
         s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"], touched)
         m = re.match(r"day-(\d+)/", s["branch"])
         if m and s["kind"] in ("code", "close"):
-            day = max(day, int(m.group(1)))
+            day = max(day, int(m.group(1)), key=rank)
         words = collections.Counter(w for t in s["texts"].values() for w in WORD.findall(t.lower()))
         spec, code = spec_counts(s["texts"]), code_counts(s["sha"])
-        reached = spec_counts({f: t for f, t in s["texts"].items() if (day_of(f) or 99) <= max(day, 1)})
+        reached = spec_counts({f: t for f, t in s["texts"].items() if day_of(f) and rank(day_of(f)) <= rank(max(day, 1))})
         added = deleted = 0
         for line in run("git", "diff", "--numstat", snaps[0]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
             a, d, _ = line.split("\t")
@@ -222,7 +231,7 @@ def trajectory(snaps, blobs):
         r["spec_xy"] = [round(float(v), 4) for v in P[k]]
         r["code_xy"] = [round(float(v), 4) for v in P[n + k]]
     files = sorted({f for s in snaps for f in s["texts"] if f == "plan.md" or day_of(f)},
-                   key=lambda f: (day_of(f) or 0, f))
+                   key=lambda f: (rank(day_of(f)), f))
     lines = sum(t.count("\n") for t in snaps[0]["texts"].values())
     return rows, files, len(vocab), [round(float(v), 3) for v in (S ** 2 / (S ** 2).sum())[:2]], lines
 
@@ -580,7 +589,9 @@ def main():
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
     blobs = Blobs()
     snaps = snapshots(prs)
-    rows, files, vocab, pca, lines = trajectory(snaps, blobs)
+    head = snaps[-1]["sha"]
+    spec_days = [d for d in map(day_of, run("git", "ls-tree", "--name-only", head, "specs/").split()) if d]
+    rows, files, vocab, pca, lines = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
     days, order, stop = roadmap(snaps, prs, blobs)
     evidence_history(rows, days, snaps, blobs)
     now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
@@ -589,6 +600,7 @@ def main():
                next_step=next_step(days, open_prs, order, stop), stop_after=stop,
                open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
     data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
+                           order=[d for d in order if d != PLATFORM],
                            removals=removal_history(days, snaps, blobs),
                            hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
                            vocab_size=vocab, pca_var=pca,
