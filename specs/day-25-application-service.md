@@ -12,7 +12,7 @@ Saved jobs and the tracker run as their own service with their own database.
 - New `apps_db` holding `saved_jobs`, migrated with a `SET SCHEMA`-style move — do not
   edit existing migration files.
 - Hydration already goes over HTTP from Day 19; verify it still does.
-- `POST /internal/saved-counts` moves with it. The monolith has served it since Day 17;
+- `POST /internal/saved-counts` moves with it. The monolith has served it since Day 18;
   `job-service`'s client now points at `application-service`.
 - Day 08's `JobSavedCountQueriesIT` expires today: it counts statements in the shared
   database, and `saved_jobs` leaves it. Delete it, or rewrite it against `apps_db` inside
