@@ -32,6 +32,12 @@ WORDS = re.compile(r"[A-Za-z0-9_]+")
 COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*|--|<!--|#(\s|!|$))")
 COMMENT_TAIL = re.compile(r"/\*.*?\*/|\s(//|--|#)\s.*$")
 CRITERION = re.compile(r"^- \[( |x)\]", re.M)
+# A criterion's evidence: the PRs it cites, the tests it names (a class, or Class.member) and a
+# break it was seen to fail under ("Red with the permitAll line removed", "expected: 404 but was").
+CITED_PR = re.compile(r"(?<![\w&])#(\d+)\b")
+EVIDENCE_TEST = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Test|IT|Tests))(?:\.([a-z][A-Za-z0-9_]*))?\b")
+SEEN_RED = re.compile(r"\bRed (?:with|as|without|when|on)\b|went red|turned\b[^.]{0,30}\bred\b|but was")
+SKIPPABLE = re.compile(r"@Disabled\b|@(?:Enabled|Disabled)If")
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
@@ -286,6 +292,43 @@ def merged_tracks(branches, tracks):
     return sorted(merged)
 
 
+def criteria(section_text):
+    """Each criterion under "Acceptance criteria": its kind, whether it is ticked, and the PRs,
+    tests and seen-red breaks written into it."""
+    out = []
+    for block in re.split(r"^(?=- \[[ x]\])", section_text, flags=re.M):
+        if not block.startswith("- ["):
+            continue
+        tag = re.search(r"\*\*(new|hold)\*\*", block)
+        claim = re.sub(r"\s+", " ", re.sub(r"^- \[[ x]\]\s*(\*\*\w+\*\*\s*—\s*)?", "", block)).strip()[:140]
+        if claim.count("`") % 2:  # cut inside a code span: end before it
+            claim = claim[:claim.rindex("`")].rstrip()
+        out.append(dict(ticked=block.startswith("- [x]"), kind=tag.group(1) if tag else None,
+                        claim=claim, prs=sorted({int(n) for n in CITED_PR.findall(block)}),
+                        tests=sorted({c + ("." + m if m else "") for c, m in EVIDENCE_TEST.findall(block)}),
+                        red=bool(SEEN_RED.search(block))))
+    return out
+
+
+def test_state(tests, sha, blobs):
+    """Where each named test stands at a commit: present, skippable (a class or file CI can skip,
+    as GatewayHarnessIT is opt-in), or missing. CI runs every test that is present, so a hold
+    goes quiet only by its test leaving the tree or being switched off."""
+    files = collections.defaultdict(list)
+    for path in run("git", "ls-tree", "-r", "--name-only", sha).splitlines():
+        if path.endswith((".java", ".kt")):
+            files[os.path.splitext(os.path.basename(path))[0]].append(path)
+    out = {}
+    for t in tests:
+        cls, _, member = t.partition(".")
+        texts = [blobs.read(sha, p) for p in files.get(cls, [])]
+        if not any(not member or re.search(rf"\b{member}\b", x) for x in texts):
+            out[t] = "missing"
+        else:
+            out[t] = "skippable" if any(SKIPPABLE.search(x) for x in texts) else "present"
+    return out
+
+
 def roadmap(snaps, prs, blobs):
     head = snaps[-1]["sha"]
     merged = [p for p in prs.values() if p.get("state") == "MERGED"]
@@ -316,9 +359,28 @@ def roadmap(snaps, prs, blobs):
                          tracks=tracks, track_work=work, tracks_merged=done_tracks,
                          track_prs=sum(kind(p["title"], p["headRefName"]) == "code" for p in mine),
                          prs=[dict(number=p["number"], kind=kind(p["title"], p["headRefName"]), title=p["title"]) for p in mine],
-                         criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**"))))
+                         criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**")),
+                         evidence=criteria(crit)))
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])
-    return settle(days, order), order, stop
+    return evidence(settle(days, order), snaps, blobs), order, stop
+
+
+def evidence(days, snaps, blobs):
+    """Where each finished day's named tests stand on main. A name counts as evidence if it was in
+    the tree when the day's last PR merged: a claim can offer a choice (Day 14: one IT "or a case
+    added to" another), and a day can rewrite a test it names (Day 11), and neither is a loss."""
+    sha_of = {s["pr"]: s["sha"] for s in snaps if s["pr"]}
+    named = {t for d in days for c in d["evidence"] for t in c["tests"]}
+    now = test_state(named, snaps[-1]["sha"], blobs)
+    for d in days:
+        ended = [sha_of[p["number"]] for p in d["prs"] if p["number"] in sha_of]
+        if d["status"] not in FINISHED or not ended:
+            d["evidence"] = [dict(c, tests={}) for c in d["evidence"]]
+            continue
+        then = test_state({t for c in d["evidence"] for t in c["tests"]}, ended[-1], blobs)
+        for c in d["evidence"]:
+            c["tests"] = {t: now[t] for t in c["tests"] if then[t] != "missing"}
+    return days
 
 
 def conclusion(readme):

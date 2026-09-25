@@ -47,11 +47,15 @@ class Repo:
         return self
 
     def rows(self):
+        return self.inside(lambda blobs: sd.trajectory([dict(s) for s in self.snaps], blobs)[0])
+
+    def inside(self, fn):
+        """fn(blobs), run in the repository."""
         cwd = os.getcwd()
         os.chdir(self.path)
         blobs = sd.Blobs()
         try:
-            return sd.trajectory([dict(s) for s in self.snaps], blobs)[0]
+            return fn(blobs)
         finally:
             blobs.proc.stdin.close()
             blobs.proc.stdout.close()
@@ -91,6 +95,57 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(rows[1]["drift"], 0.0)
         rows = self.repo.merge({"specs/day-01-x.md": DAY + "gateway routes the login\n"}).rows()
         self.assertGreater(rows[2]["drift"], 0.0)
+
+
+CRITERIA = """- [x] **hold** — Refused: `contract/FooIT` passes. Broken on purpose: the check removed.
+      #2: `FooIT.refuses`. Red with the guard removed (`expected: 401 but was: 200`).
+- [x] **new** — Saved in `BarIT`, or a case added to `FooIT`. Red today: no table.
+      #3: a case in `FooIT.saves`.
+- [ ] **new** — Not started.
+"""
+
+
+class EvidenceTest(unittest.TestCase):
+    """A closed day's evidence: what each criterion cites, and whether its tests are still there."""
+
+    def setUp(self):
+        # The day's PR is #1, the second commit; later commits stand for later days.
+        self.repo = Repo().merge({"plan.md": PLAN}).merge(
+            {"src/FooIT.java": "class FooIT { void refuses() {} void saves() {} }\n"})
+
+    def tearDown(self):
+        self.repo.close()
+
+    def state(self):
+        days = [dict(day=1, status="done", prs=[dict(number=1)], evidence=sd.criteria(CRITERIA))]
+        return self.repo.inside(lambda blobs: sd.evidence(days, self.repo.snaps, blobs))[0]["evidence"]
+
+    def test_a_criterion_is_read_for_its_kind_prs_tests_and_break(self):
+        hold, new, open_ = sd.criteria(CRITERIA)
+        self.assertEqual((hold["kind"], hold["ticked"], hold["prs"], hold["red"]), ("hold", True, [2], True))
+        self.assertEqual(hold["tests"], ["FooIT", "FooIT.refuses"])
+        self.assertEqual((new["red"], open_["ticked"], open_["prs"]), (False, False, []))
+        self.assertTrue(hold["claim"].startswith("Refused: `contract/FooIT` passes."), hold["claim"])
+        cut = sd.criteria("- [x] **hold** — " + "x" * 130 + " `a/LongNameIT`\n")[0]["claim"]
+        self.assertEqual(cut.count("`"), 0)
+
+    def test_a_break_seen_red_is_told_from_a_claim_that_it_is_red_today(self):
+        seen = ["Red as named", "Red without the chain", "`savedJobs` went red", "turned two red, not one"]
+        for text in seen:
+            self.assertTrue(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
+        self.assertFalse(sd.criteria("- [x] **new** — X. Red today: the route does not exist.\n")[0]["red"])
+
+    def test_a_name_not_in_the_tree_when_the_day_ended_is_not_evidence(self):
+        self.assertEqual(self.state()[1]["tests"], {"FooIT": "present", "FooIT.saves": "present"})
+
+    def test_a_test_that_leaves_the_tree_or_can_be_skipped_is_reported(self):
+        self.repo.merge({"src/FooIT.java": "@Disabled class FooIT { void refuses() {} }\n"})
+        self.assertEqual(self.state()[1]["tests"], {"FooIT": "skippable", "FooIT.saves": "missing"})
+        self.repo.merge({"src/FooIT.java": ""})
+        self.repo.git("rm", "-q", "src/FooIT.java")
+        self.repo.git("commit", "-q", "-m", "gone")
+        self.repo.snaps.append(dict(self.repo.snaps[-1], sha=self.repo.git("rev-parse", "--short", "HEAD").strip()))
+        self.assertEqual(set(self.state()[0]["tests"].values()), {"missing"})
 
 
 def a_day(n, ticked=1, total=1, kinds=()):
