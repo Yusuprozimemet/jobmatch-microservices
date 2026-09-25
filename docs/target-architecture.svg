@@ -1,0 +1,280 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 970" width="1400" height="970">
+<defs><style><![CDATA[
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&display=swap');
+text{font-family:'Architects Daughter','Segoe Print','Comic Sans MS',cursive;}
+.bg{fill:#141414}
+.s{stroke:#e8e6e1;stroke-width:1.8;fill:none;stroke-linejoin:round}
+.f{fill:#1c1c1c}
+.hd{fill:#222}
+.t{fill:#f2f0ea}
+.st{fill:#b9b6ae}
+.lb{fill:#d6d3cb}
+.ar{stroke:#e8e6e1;stroke-width:1.8;fill:none}
+.ar.dn{stroke:#7fb4ff}
+.dash{stroke:#b9b6ae;stroke-width:1.6;fill:none;stroke-dasharray:6 6}
+.vpc{fill:none;stroke:#b9b6ae;stroke-width:1.8;stroke-dasharray:3 7;stroke-linecap:round}
+.grp{fill:none;stroke:#6d6a64;stroke-width:1.4}
+.br{fill:#1f4d34;stroke:#e8e6e1}
+.lam{fill:#f0a43a}
+.upc{fill:#141414;stroke:#f2f0ea;stroke-width:1.6}
+.upn{fill:#f2f0ea}
+.dnc{fill:#141414;stroke:#7fb4ff;stroke-width:1.6}
+.dnn{fill:#7fb4ff}
+]]></style>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="context-stroke" stroke-width="1.6"/></marker>
+<filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="2.2"/></filter>
+</defs>
+<rect class="bg" x="0" y="0" width="1400" height="970"/>
+
+<g filter="url(#rough)">
+<!-- legend -->
+<circle class="upc" cx="440" cy="66" r="12"/>
+<circle class="dnc" cx="650" cy="66" r="12"/>
+<line class="dash" x1="860" y1="66" x2="905" y2="66"/>
+
+<!-- edge -->
+<rect class="s hd" x="150" y="100" width="205" height="40" rx="8"/>
+<g class="s f"><circle cx="65" cy="300" r="16"/><path d="M35,350 q0,-32 30,-32 q30,0 30,32 z"/></g>
+<rect class="s f" x="155" y="170" width="195" height="66" rx="8"/>
+<rect class="s f" x="155" y="285" width="195" height="72" rx="8"/>
+<rect class="s" x="158" y="418" width="200" height="100" rx="6"/>
+<rect class="s" x="154" y="414" width="200" height="100" rx="6"/>
+<rect class="s f" x="150" y="410" width="200" height="100" rx="6"/>
+<path class="s f" d="M170,575 v44 a85,9 0 0 0 170,0 v-44"/>
+<ellipse class="s f" cx="255" cy="575" rx="85" ry="9"/>
+
+<!-- AKS cluster -->
+<rect class="vpc" x="400" y="100" width="330" height="580" rx="18"/>
+<rect class="s hd" x="425" y="140" width="280" height="40" rx="8"/>
+<rect class="s" x="453" y="213" width="240" height="100" rx="6"/>
+<rect class="s" x="449" y="209" width="240" height="100" rx="6"/>
+<rect class="s f" x="445" y="205" width="240" height="100" rx="6"/>
+<rect class="s" x="453" y="353" width="240" height="100" rx="6"/>
+<rect class="s" x="449" y="349" width="240" height="100" rx="6"/>
+<rect class="s f" x="445" y="345" width="240" height="100" rx="6"/>
+<rect class="s" x="453" y="493" width="240" height="78" rx="6"/>
+<rect class="s" x="449" y="489" width="240" height="78" rx="6"/>
+<rect class="s f" x="445" y="485" width="240" height="78" rx="6"/>
+<rect class="s" x="453" y="603" width="240" height="68" rx="6"/>
+<rect class="s" x="449" y="599" width="240" height="68" rx="6"/>
+<rect class="s f" x="445" y="595" width="240" height="68" rx="6"/>
+
+<!-- managed data -->
+<rect class="grp" x="750" y="100" width="260" height="580" rx="14"/>
+<rect class="s hd" x="765" y="140" width="230" height="40" rx="8"/>
+<path class="s f" d="M780,215 v72 a100,9 0 0 0 200,0 v-72"/>
+<ellipse class="s f" cx="880" cy="215" rx="100" ry="9"/>
+<path class="s f" d="M780,365 v60 a100,9 0 0 0 200,0 v-60"/>
+<ellipse class="s f" cx="880" cy="365" rx="100" ry="9"/>
+<path class="s f" d="M780,500 v46 a100,9 0 0 0 200,0 v-46"/>
+<ellipse class="s f" cx="880" cy="500" rx="100" ry="9"/>
+<path class="s f" d="M780,608 v46 a100,9 0 0 0 200,0 v-46"/>
+<ellipse class="s f" cx="880" cy="608" rx="100" ry="9"/>
+
+<!-- outside the cluster -->
+<rect class="s hd" x="1045" y="100" width="330" height="40" rx="8"/>
+<rect class="grp" x="1035" y="150" width="345" height="530" rx="14"/>
+<g class="s"><rect class="br" x="1060" y="300" width="135" height="56" rx="26"/><path d="M1097,302 q-10,26 0,52 M1158,302 q-10,26 0,52"/></g>
+<rect class="s f" x="1060" y="432" width="135" height="62" rx="6"/>
+<rect class="s f" x="1060" y="560" width="135" height="62" rx="6"/>
+<path class="s f" d="M1222,190 v50 a75,9 0 0 0 150,0 v-50"/>
+<ellipse class="s f" cx="1297" cy="190" rx="75" ry="9"/>
+<rect class="s f" x="1215" y="280" width="160" height="74" rx="6"/>
+<rect class="s f" x="1215" y="385" width="160" height="74" rx="6"/>
+<rect class="s f" x="1215" y="560" width="160" height="74" rx="6"/>
+
+<!-- top-matches request: 1..7 -->
+<path class="ar" d="M100,335 H151" marker-end="url(#ah)"/>
+<circle class="upc" cx="125" cy="319" r="12"/>
+<path class="ar" d="M252,283 V240" marker-end="url(#ah)"/>
+<path class="ar" d="M252,359 V406" marker-end="url(#ah)"/>
+<circle class="upc" cx="274" cy="383" r="12"/>
+<path class="ar" d="M255,520 V566" marker-end="url(#ah)"/>
+<path class="ar" d="M358,475 C400,468 405,400 441,395" marker-end="url(#ah)"/>
+<circle class="upc" cx="399" cy="436" r="12"/>
+<path class="ar" d="M520,343 V317" marker-end="url(#ah)"/>
+<circle class="upc" cx="542" cy="330" r="12"/>
+<path class="ar" d="M600,455 V481" marker-end="url(#ah)"/>
+<circle class="upc" cx="622" cy="469" r="12"/>
+<path class="ar" d="M693,398 H776" marker-end="url(#ah)"/>
+<circle class="upc" cx="733" cy="386" r="12"/>
+<path class="ar" d="M693,420 C760,462 950,462 1056,462" marker-end="url(#ah)"/>
+<circle class="upc" cx="746" cy="441" r="12"/>
+
+<!-- plain service-to-store and service-to-service -->
+<path class="ar" d="M693,523 H776" marker-end="url(#ah)"/>
+<path class="ar" d="M693,630 H776" marker-end="url(#ah)"/>
+<path class="ar" d="M540,574 V591" marker-start="url(#ah)" marker-end="url(#ah)"/>
+
+<!-- delete account: A..D -->
+<path class="ar dn" d="M358,430 C398,410 400,268 441,260" marker-end="url(#ah)"/>
+<circle class="dnc" cx="399" cy="347" r="12"/>
+<path class="ar dn" d="M693,258 H776" marker-end="url(#ah)"/>
+<circle class="dnc" cx="733" cy="246" r="12"/>
+<path class="ar dn" d="M690,222 C738,218 725,96 800,96 H990 C1030,96 1025,300 1057,316" marker-end="url(#ah)"/>
+<circle class="dnc" cx="965" cy="96" r="12"/>
+<path class="ar dn" d="M1062,338 C950,332 760,330 697,378" marker-end="url(#ah)"/>
+<circle class="dnc" cx="1024" cy="336" r="12"/>
+<path class="ar dn" d="M1100,358 C1040,420 1020,577 960,577 S760,577 697,622" marker-end="url(#ah)"/>
+<circle class="dnc" cx="1074" cy="391" r="12"/>
+
+<!-- async / data / phase 6 -->
+<path class="dash" d="M1297,252 V276" marker-end="url(#ah)"/>
+<path class="dash" d="M70,395 V688 H1360 C1392,688 1392,650 1392,610 V240 C1392,222 1386,215 1376,215" marker-end="url(#ah)"/>
+<path class="dash" d="M985,713 C1020,690 1025,540 984,528" marker-end="url(#ah)"/>
+
+<!-- bottom cards -->
+<rect class="s f" x="30" y="715" width="350" height="220" rx="12"/>
+<rect class="s f" x="400" y="715" width="340" height="220" rx="12"/>
+<path class="ar" d="M530,794 C510,804 500,812 494,822" marker-end="url(#ah)"/>
+<path class="ar" d="M610,794 C630,804 640,812 648,822" marker-end="url(#ah)"/>
+<rect class="s f" x="760" y="715" width="255" height="220" rx="12"/>
+<rect class="s f" x="1035" y="715" width="345" height="220" rx="12"/>
+<g transform="translate(1300,740)"><circle cx="35" cy="35" r="32" class="s f"/><path d="M13,45 A24,24 0 1 1 57,45" fill="none" stroke="#f0a43a" stroke-width="4" stroke-linecap="round"/><path d="M35,40 L50,22" stroke="#f2f0ea" stroke-width="2.5" stroke-linecap="round"/><circle cx="35" cy="40" r="4" fill="#f0a43a"/></g>
+</g>
+
+<!-- title and legend -->
+<text class="t" x="700" y="38" font-size="28" text-anchor="middle">JobMatch after the migration: the target architecture</text>
+<text class="upn" x="440" y="71" font-size="14" text-anchor="middle">1</text>
+<text class="lb" x="458" y="71" font-size="15">top-matches request</text>
+<text class="dnn" x="650" y="71" font-size="14" text-anchor="middle">A</text>
+<text class="lb" x="668" y="71" font-size="15">delete an account (GDPR)</text>
+<text class="lb" x="915" y="71" font-size="15">async, data sync, Phase 6 upload</text>
+
+<!-- edge text -->
+<text class="t" x="252" y="127" font-size="19" text-anchor="middle">Edge: the only way in</text>
+<text class="t" x="65" y="375" font-size="18" text-anchor="middle">User</text>
+<text class="t" x="252" y="198" font-size="18" text-anchor="middle">Frontend</text>
+<text class="st" x="252" y="219" font-size="13" text-anchor="middle">Next.js, unchanged</text>
+<text class="t" x="252" y="314" font-size="18" text-anchor="middle">Ingress</text>
+<text class="st" x="252" y="336" font-size="13" text-anchor="middle">ingress-nginx + TLS</text>
+<text class="lb" x="264" y="266" font-size="12">pages</text>
+<text class="upn" x="125" y="324" font-size="14" text-anchor="middle">1</text>
+<text class="upn" x="274" y="388" font-size="14" text-anchor="middle">2</text>
+<text class="lb" x="292" y="388" font-size="12">/api/*</text>
+<text class="t" x="250" y="433" font-size="18" text-anchor="middle">API Gateway</text>
+<text class="st" x="250" y="453" font-size="13" text-anchor="middle">Spring Cloud Gateway</text>
+<text class="st" x="250" y="472" font-size="13" text-anchor="middle">verifies JWT (JWKS)</text>
+<text class="st" x="250" y="491" font-size="13" text-anchor="middle">rate limit, adds X-User-Id</text>
+<text class="lb" x="267" y="549" font-size="12">count</text>
+<text class="t" x="255" y="600" font-size="16" text-anchor="middle">Rate-limit store</text>
+<text class="st" x="255" y="618" font-size="12" text-anchor="middle">shared by all replicas</text>
+
+<!-- cluster text -->
+<text class="st" x="418" y="125" font-size="15">AKS cluster (Kubernetes)</text>
+<text class="t" x="565" y="167" font-size="19" text-anchor="middle">Services: containers</text>
+<text class="t" x="565" y="230" font-size="18" text-anchor="middle">identity-service</text>
+<text class="st" x="565" y="251" font-size="13" text-anchor="middle">auth + user + profile</text>
+<text class="st" x="565" y="270" font-size="13" text-anchor="middle">signs JWTs, serves JWKS</text>
+<text class="st" x="565" y="289" font-size="13" text-anchor="middle">outbox: user.deleted</text>
+<text class="t" x="565" y="370" font-size="18" text-anchor="middle">matching-service</text>
+<text class="st" x="565" y="391" font-size="13" text-anchor="middle">shortlist + LLM scorer</text>
+<text class="st" x="565" y="410" font-size="13" text-anchor="middle">20 s LLM call isolated here</text>
+<text class="st" x="565" y="429" font-size="13" text-anchor="middle">scales on CPU (HPA)</text>
+<text class="t" x="565" y="510" font-size="18" text-anchor="middle">job-service</text>
+<text class="st" x="565" y="531" font-size="13" text-anchor="middle">search, read-only postings</text>
+<text class="st" x="565" y="550" font-size="13" text-anchor="middle">internal: batch, shortlist</text>
+<text class="t" x="565" y="620" font-size="18" text-anchor="middle">application-service</text>
+<text class="st" x="565" y="641" font-size="13" text-anchor="middle">saved jobs + tracker</text>
+<text class="lb" x="556" y="587" font-size="11">postings, saved counts</text>
+<text class="upn" x="542" y="335" font-size="14" text-anchor="middle">4</text>
+<text class="lb" x="560" y="335" font-size="12">skills</text>
+<text class="upn" x="622" y="474" font-size="14" text-anchor="middle">5</text>
+<text class="lb" x="640" y="474" font-size="12">shortlist</text>
+<text class="upn" x="399" y="441" font-size="14" text-anchor="middle">3</text>
+
+<!-- data text -->
+<text class="st" x="768" y="125" font-size="15">managed, not in the cluster</text>
+<text class="t" x="880" y="167" font-size="19" text-anchor="middle">Data: one store each</text>
+<text class="t" x="880" y="240" font-size="17" text-anchor="middle">identity DB</text>
+<text class="st" x="880" y="259" font-size="12" text-anchor="middle">Postgres: users, profiles,</text>
+<text class="st" x="880" y="276" font-size="12" text-anchor="middle">refresh tokens, outbox</text>
+<text class="t" x="880" y="390" font-size="17" text-anchor="middle">Cosmos DB</text>
+<text class="st" x="880" y="408" font-size="12" text-anchor="middle">match scores,</text>
+<text class="st" x="880" y="424" font-size="12" text-anchor="middle">expire by TTL</text>
+<text class="t" x="880" y="522" font-size="17" text-anchor="middle">jobs DB</text>
+<text class="st" x="880" y="540" font-size="12" text-anchor="middle">Postgres: fct_postings</text>
+<text class="t" x="880" y="630" font-size="17" text-anchor="middle">applications DB</text>
+<text class="st" x="880" y="648" font-size="12" text-anchor="middle">Postgres: saved_jobs</text>
+<text class="upn" x="733" y="391" font-size="14" text-anchor="middle">6</text>
+<text class="upn" x="746" y="446" font-size="14" text-anchor="middle">7</text>
+<text class="lb" x="880" y="452" font-size="12" text-anchor="middle">score only the misses</text>
+<text class="dnn" x="399" y="352" font-size="14" text-anchor="middle">A</text>
+<text class="dnn" x="733" y="251" font-size="14" text-anchor="middle">B</text>
+<text class="lb" x="735" y="284" font-size="11" text-anchor="middle">1 transaction</text>
+<text class="dnn" x="965" y="101" font-size="14" text-anchor="middle">C</text>
+<text class="lb" x="860" y="89" font-size="12" text-anchor="middle">relay publishes user.deleted</text>
+<text class="dnn" x="1024" y="341" font-size="14" text-anchor="middle">D</text>
+<text class="lb" x="880" y="321" font-size="11" text-anchor="middle">delete this user's data</text>
+<text class="dnn" x="1074" y="396" font-size="14" text-anchor="middle">D</text>
+<text class="lb" x="880" y="570" font-size="11" text-anchor="middle">delete saved jobs</text>
+
+<!-- outside text -->
+<text class="t" x="1210" y="127" font-size="19" text-anchor="middle">Outside the cluster</text>
+<text class="t" x="1127" y="290" font-size="16" text-anchor="middle">Message bus</text>
+<text class="t" x="1127" y="458" font-size="16" text-anchor="middle">LLM API</text>
+<text class="st" x="1127" y="477" font-size="12" text-anchor="middle">OpenAI-compatible</text>
+<text class="t" x="1127" y="586" font-size="16" text-anchor="middle">Google</text>
+<text class="st" x="1127" y="605" font-size="12" text-anchor="middle">sign-in (OAuth)</text>
+<text class="t" x="1297" y="214" font-size="16" text-anchor="middle">uploads</text>
+<text class="st" x="1297" y="232" font-size="12" text-anchor="middle">private blob storage</text>
+<text class="lam" x="1236" y="327" font-size="30" text-anchor="middle">λ</text>
+<text class="t" x="1310" y="302" font-size="16" text-anchor="middle">cv-parse</text>
+<text class="st" x="1310" y="320" font-size="11" text-anchor="middle">finds skills in a CV,</text>
+<text class="st" x="1310" y="336" font-size="11" text-anchor="middle">PUTs them to identity</text>
+<text class="lam" x="1236" y="432" font-size="30" text-anchor="middle">λ</text>
+<text class="t" x="1310" y="407" font-size="16" text-anchor="middle">mailer</text>
+<text class="st" x="1310" y="425" font-size="11" text-anchor="middle">queue-triggered mail</text>
+<text class="st" x="1310" y="441" font-size="11" text-anchor="middle">(may be cut)</text>
+<text class="t" x="1295" y="586" font-size="16" text-anchor="middle">Key Vault</text>
+<text class="st" x="1295" y="605" font-size="11" text-anchor="middle">secrets reach pods via</text>
+<text class="st" x="1295" y="620" font-size="11" text-anchor="middle">External Secrets</text>
+<text class="lb" x="720" y="705" font-size="13" text-anchor="middle">a CV goes straight to blob storage with a short-lived SAS URL from identity (Phase 6)</text>
+<text class="lb" x="1022" y="662" font-size="11" text-anchor="end">publish</text>
+
+<!-- card: built and deployed -->
+<text class="t" x="50" y="745" font-size="16">Built and deployed by</text>
+<text class="st" x="50" y="772" font-size="13">One IaC tool (chosen in Phase 7): AKS,</text>
+<text class="st" x="50" y="792" font-size="13">Postgres, Cosmos DB, storage, Key Vault</text>
+<text class="st" x="50" y="812" font-size="13">Helm: charts/common + a thin chart each</text>
+<text class="st" x="50" y="832" font-size="13">Argo CD syncs deploy/argocd (GitOps)</text>
+<text class="st" x="50" y="852" font-size="13">Flyway runs as a pre-upgrade hook Job</text>
+<text class="st" x="50" y="880" font-size="13">CI per service on every push: unit tests →</text>
+<text class="st" x="50" y="900" font-size="13">Day 1–4 contract tests (unedited) →</text>
+<text class="st" x="50" y="920" font-size="13">checkstyle → image → Argo CD sync</text>
+
+<!-- card: score cache -->
+<text class="t" x="570" y="743" font-size="15" text-anchor="middle">matching-service: scoring one posting</text>
+<text class="st" x="570" y="768" font-size="13" text-anchor="middle">Is (skills_hash, posting_id, scorer_version)</text>
+<text class="st" x="570" y="786" font-size="13" text-anchor="middle">already in Cosmos DB?</text>
+<text class="t" x="490" y="840" font-size="15" text-anchor="middle">no</text>
+<text class="t" x="652" y="840" font-size="15" text-anchor="middle">yes</text>
+<text class="st" x="415" y="864" font-size="13">1. ask the LLM (20 s timeout)</text>
+<text class="st" x="415" y="884" font-size="13">2. save the score, with a TTL</text>
+<text class="st" x="415" y="904" font-size="13">3. return it</text>
+<text class="t" x="652" y="866" font-size="15" text-anchor="middle">return it</text>
+<text class="st" x="652" y="884" font-size="12" text-anchor="middle">(no LLM call)</text>
+<text class="lb" x="570" y="926" font-size="12" text-anchor="middle">the TTL replaces the old cleanup job</text>
+
+<!-- card: data pipeline -->
+<text class="t" x="780" y="745" font-size="16">Data pipeline</text>
+<text class="st" x="780" y="765" font-size="12">unchanged by the migration</text>
+<text class="st" x="780" y="792" font-size="13">Airflow, on a schedule:</text>
+<text class="st" x="780" y="814" font-size="13">1. ingest job postings</text>
+<text class="st" x="780" y="834" font-size="13">2. Databricks + dbt build</text>
+<text class="st" x="780" y="854" font-size="13">3. publish fct_postings</text>
+<text class="st" x="780" y="872" font-size="13">    into the jobs DB</text>
+<text class="lb" x="780" y="904" font-size="12">re-pointed there on Day 20</text>
+
+<!-- card: observability -->
+<text class="t" x="1055" y="745" font-size="16">Observability</text>
+<text class="st" x="1055" y="772" font-size="13">Alloy collects from every pod</text>
+<text class="st" x="1055" y="792" font-size="13">Prometheus: metrics</text>
+<text class="st" x="1055" y="812" font-size="13">Tempo: traces</text>
+<text class="st" x="1055" y="832" font-size="13">Grafana: dashboards</text>
+<text class="st" x="1055" y="864" font-size="13">one trace id per request:</text>
+<text class="st" x="1055" y="884" font-size="13">gateway → service → LLM</text>
+<text class="t" x="1335" y="835" font-size="14" text-anchor="middle">Grafana</text>
+
+<text class="st" x="700" y="958" font-size="12" text-anchor="middle">From plan.md. Phases 3–5 are the extractions under way; Phases 6–7 (uploads, functions, Kubernetes) are provisional until the Day 28 evaluation.</text>
+</svg>

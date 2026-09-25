@@ -162,6 +162,15 @@ while everything is still one process, they will not hold over HTTP.
 
 ## Target architecture
 
+![JobMatch after the migration: the target architecture](docs/target-architecture.png)
+
+**How to read it.** Every request comes in through one door, the API gateway, which checks who
+the user is. Behind it, four small services each own one job and their own database. White
+numbers follow one request for a user's top job matches. Blue letters follow one account being
+deleted: the service that owns users announces it on a message bus, and the others delete that
+user's data. Outside the cluster are the things the services use but do not run: the LLM, file
+storage, Google sign-in and secrets.
+
 ```
 services/
   api-gateway/          routing, JWT verification, rate limiting
