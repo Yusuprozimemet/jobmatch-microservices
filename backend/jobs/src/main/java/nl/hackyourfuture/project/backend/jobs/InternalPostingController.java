@@ -1,7 +1,9 @@
 package nl.hackyourfuture.project.backend.jobs;
 
 import nl.hackyourfuture.project.backend.shared.jobs.PostingLookup;
+import nl.hackyourfuture.project.backend.shared.jobs.PostingShortlist;
 import nl.hackyourfuture.project.backend.shared.jobs.PostingSummary;
+import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,9 +16,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * What {@code jobs} answers other services over HTTP (Day 18): the calls other modules make in
- * process today, for Day 19's clients. Behind the {@code /internal/**} chain, so service tokens
- * only (Day 39); the gateway does not route it and the public OpenAPI does not list it.
+ * What {@code jobs} answers other services over HTTP (Day 18): posting details by id and the match
+ * shortlist, the calls other modules make in process today, for Day 19's clients. Behind the
+ * {@code /internal/**} chain, so service tokens only (Day 39); the gateway does not route it and
+ * the public OpenAPI does not list it.
  */
 @RestController
 class InternalPostingController {
@@ -24,10 +27,15 @@ class InternalPostingController {
     /** Distinct ids per batch. Saved jobs asks for a whole list, so Day 19's client splits at this. */
     static final int MAX_IDS = 500;
 
-    private final PostingLookup postingLookup;
+    /** Shortlist length. Matching asks for 40. */
+    static final int MAX_LIMIT = 100;
 
-    InternalPostingController(PostingLookup postingLookup) {
+    private final PostingLookup postingLookup;
+    private final PostingShortlist postingShortlist;
+
+    InternalPostingController(PostingLookup postingLookup, PostingShortlist postingShortlist) {
         this.postingLookup = postingLookup;
+        this.postingShortlist = postingShortlist;
     }
 
     /**
@@ -47,6 +55,27 @@ class InternalPostingController {
         return postingLookup.byIds(ids);
     }
 
+    /**
+     * {@link PostingShortlist#shortlist} as it is, in its order; {@code city} is optional. No skills
+     * is a 400 here: passed through, the list would expand to {@code IN ()}, which Postgres rejects.
+     */
+    @PostMapping("/internal/postings/shortlist")
+    List<ShortlistedPosting> shortlist(@RequestBody ShortlistRequest body) {
+        if (body == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body is required");
+        }
+        if (body.skills() == null || body.skills().isEmpty() || body.skills().contains(null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "skills is required and cannot be empty");
+        }
+        if (body.limit() == null || body.limit() < 1 || body.limit() > MAX_LIMIT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit must be between 1 and " + MAX_LIMIT);
+        }
+        return postingShortlist.shortlist(body.city(), body.skills(), body.limit());
+    }
+
     record IdsRequest(List<String> ids) {
+    }
+
+    record ShortlistRequest(String city, List<String> skills, Integer limit) {
     }
 }
