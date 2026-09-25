@@ -50,3 +50,6 @@ curl -s localhost:8080/api/jobs | head -c 200        # still 200
   fallback can trigger the other, or a single outage cascades.
 - From Day 39: application-service asks identity `GET /internal/users/{id}` before acting for a
   user, as matching-service does from Day 21 (the deleted-user rule).
+- From Day 40: application-service joins the harness as job-service did on Day 17: an entry in
+  `support/`'s route table, a container started from its image on the test Postgres, and a
+  gateway route with an upstream URL of its own that defaults to the backend until today.

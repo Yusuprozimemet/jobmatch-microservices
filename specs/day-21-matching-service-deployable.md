@@ -49,3 +49,6 @@ time curl -s localhost:8080/api/jobs > /dev/null      # unaffected
 - From Day 39: matching-service trusts the token's `sub`, so before acting for a user it asks
   identity `GET /internal/users/{id}` (204 or 404), as `SessionWithoutAUserIT` requires of the
   monolith. Whether it reads the user from the token or from `X-User-Id` is decided here.
+- From Day 40: matching-service joins the harness as job-service did on Day 17: an entry in
+  `support/`'s route table, a container started from its image on the test Postgres, and a
+  gateway route with an upstream URL of its own that defaults to the backend until today.

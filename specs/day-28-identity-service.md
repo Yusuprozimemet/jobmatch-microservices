@@ -50,3 +50,9 @@ docker compose up -d --build
 - From Day 39: the monolith has two keys, identity's user key and its own service key. The
   remainder that becomes identity-service takes both; the service issuer's name
   (`jobmatch-backend` today) is decided here, and every service that trusts it follows.
+- From Day 40: `contract/AuthGoogleSignInIT` (`@Import`, `@TestPropertySource`) and
+  `contract/ObservabilityLoggingIT` (`@TestPropertySource`, a log line captured in the test JVM)
+  are still bound to the monolith's context, on purpose. Google sign-in is identity's; four of
+  the logging class's five tests log from the test JVM and test the logging configuration, and
+  one calls `forgot-password`. What each binds to once the monolith becomes identity-service is
+  decided here: the logging configuration may belong to every service.
