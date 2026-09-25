@@ -601,6 +601,27 @@ platform step.
   own change, and read a stopped Docker as 320 failing tests before reading the first error.
 - *Estimated 3 pull requests in the outline, 4 once written in full; took 4.*
 
+**Day 18 — the seams answer over HTTP before anything leaves.** The first day of Phase 3.
+- **Three internal routes**, to service tokens only: posting details by id and the match
+  shortlist from `jobs`, saved counts by posting from `applications`. Each answers what the
+  in-process interface answers today, and none is called yet: Day 19's clients will be.
+- **Saved counts came to Day 18** by the maintainer's choice. Job search needs them once `jobs`
+  leaves on Day 17, and the seam rule asks for them to be serving before that, not built the
+  same day.
+- **Pinned first:** the gateway refuses all three, the public OpenAPI lists no `/internal/` path,
+  and the shortlist's order is asserted on a fixture where every ranking rule decides a place.
+
+366 tests green direct, 206 through the gateway, 37 in the gateway.
+
+- **The provisional spec was written for the old order**, with a `job-service` that did not exist
+  and a track Day 39 had already built; the plan-auditor found Days 17, 19 and 20 the same. Day 18
+  was rewritten against the code (#148); the other three are rewritten on their own days.
+- **The spec-auditor read the rewrite twice**, and the second read found five mistakes of mine,
+  among them a fixture the database refuses and a break a fixture would have hidden.
+- **Every track was written by the implementer agent on Haiku**, and review changed something in
+  all four.
+- *Estimated 3 pull requests in the provisional spec, 4 once rewritten; took 4.*
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -663,8 +684,9 @@ revoked the cross-module grants and traced the LLM call: zero in `contract/`, an
 its own and the harness's service key. Day 40 sent job paths by a table in `support/`, +237 −12,
 and changed `contract/` once, by approval: `ObservabilityIT` moved out (+30 −12 as a rename),
 because it tests the monolith's own actuator, not the API, and two of its requests and one metric
-were job search's.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Days 17–28 are the remaining tests, run in the corrected order (#115) |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→1, 3→1, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→9, 3→2, 4→5, 3→5, 3→4; Days 1 and 2 were one oversized pull request each) |
+were job search's. Day 18 put internal routes in front of three seams: zero in `contract/`, and
+`support/` +82 for the shortlist fixture two tests share.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Days 17–28 are the remaining tests, run in the corrected order (#115) |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→1, 3→1, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→9, 3→2, 4→5, 3→5, 3→4, 3→4; Days 1 and 2 were one oversized pull request each) |
 | Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 8 specs that could not be met, 3 spec verify commands that ran no tests, 1 spec check that could not fail, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 2 protected behaviours with no test behind them, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 3 database objects a spec missed (a moved enum, a cascade, a revoke), 1 missing claim that would have made a test flaky, 1 migration that broke two harness tests by construction, 1 setting that did nothing, 2 fixtures unlike production, 1 principal a spec would have changed by accident, 1 frontend regression a spec missed, 1 CI build that re-downloaded the world; Day 14: 1 spec item written for code that never existed, 1 spec change that would have broken a contract test, 1 grep criterion that could not print clean, 1 framework default that made a session, 1 new table without its revoke, 1 protected behaviour with no test behind it, 4 cookie properties no criterion checked; Day 15: 2 checks a pass-through proxy passed, 1 hold a gateway would have silenced, 1 token location no spec named, 3 access rules a spec missed, 1 track that did not exist, 1 rate limit that would have failed the suite, 1 verify that ran no tests, 1 CORS configuration that never existed, 2 framework defaults that broke what the spec asked for; Day 16: 1 verify that would have deleted the maintainer's database, 1 grep criterion that could never pass, 1 criterion that did not prove its goal, 1 trusted header that would have let any client pick its rate-limit bucket, 1 check by hand that could not run on a fresh volume, 1 deployment item with nothing in the repository, 2 documents wrong since the initial commit; Day 38: 2 checks that could not fail, 1 security
 chain a spec missed, 11 tests a track would turn red that no spec named, 1 verify command with an
 empty variable, 1 hold that named a test that does not notice the break, 1 grep that printed 106
@@ -681,8 +703,14 @@ missed, 3 stale doc paragraphs, 1 overclaim, 1 default interval that made a wait
 ran in the wrong directory and overwrote its own reports, 1 hand-off missing what a container forces,
 1 startup cycle a later day inherits, 1 fixture miscount, 1 test class misdescribed, 1 stale Javadoc
 hand-off, 1 test that could not tell a dropped header from one never sent, 1 compose wait that stops
-at the gateway; and outside the days, 1 dashboard measure that credited the spec with gap it did not close, #107) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 18 of 19 days worked; Day 38 needed one, the audit's (#119), made the day after it was written (#118); Days 39 and 40 one each, written in full and audited in the same PR (#127, #140); Days 5, 8, 9, 10, 11, 12 and 15 needed two and Days 13, 14 and 16 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 16 on Day 9, Day 14's second on Day 13, Day 16's second on Day 14) |
+at the gateway; Day 18: 1 track an earlier day had built, 1 criterion that contradicted an earlier
+day's test, 2 criteria wrong as worded, 1 hand-off no day owned, 1 cap with no number that would
+have refused a long saved list, 1 verify path that did not exist, 3 later specs still written for
+the old order, 2 decisions no Phase 3 day owned, 1 fixture the database refuses, 1 break a fixture
+could hide, 1 verify missing four of CI's classes, 1 hold with two cases no break could reach, 1
+break proved on the wrong command, 1 hand-off left in one spec's Notes; and outside the days, 1 dashboard measure that credited the spec with gap it did not close, #107) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 19 of 20 days worked; Day 38 needed one, the audit's (#119), made the day after it was written (#118); Days 39 and 40 one each, written in full and audited in the same PR (#127, #140), and Day 18 one,
+rewritten against the code and audited twice in the same PR (#148); Days 5, 8, 9, 10, 11, 12 and 15 needed two and Days 13, 14 and 16 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 16 on Day 9, Day 14's second on Day 13, Day 16's second on Day 14) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 3: #1 at 1,420 changed lines, #2 at 1,075, #3 at 712, all before Day 3; none since, with the gate having forced a split eight times, the sixth Day 15's Track C, the seventh Day 39's Track A, the eighth the README's drawings, outside the days (#142, #143). Recorded as 0 until after Phase 2. The checks did not block a merge until `main` was protected after Phase 2) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
