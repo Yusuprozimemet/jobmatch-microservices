@@ -60,11 +60,12 @@ class ManagementPortTest {
 
     @Test
     void aRoutedCallIsCountedForPrometheus() throws Exception {
-        assertThat(get(port, "/api/jobs/filters").statusCode()).isEqualTo(200);
+        assertThat(get(port, "/api/docs/openapi.yaml").statusCode()).isEqualTo(200);
 
         HttpResponse<String> metrics = get(managementPort, "/actuator/prometheus");
 
-        // Tagged with the route's pattern, not the path: one series for everything under /api.
+        // Tagged with the route's pattern, not the path: one series for everything under /api. A
+        // path no other route will take, so a route of their own for job paths leaves this as it is.
         assertThat(metrics.statusCode()).isEqualTo(200);
         assertThat(metrics.body().lines().filter(line -> line.startsWith("http_server_requests_seconds_count")))
                 .anySatisfy(line -> assertThat(line).contains("uri=\"/api/**\"").contains("status=\"200\""));
