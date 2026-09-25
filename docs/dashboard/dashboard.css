@@ -140,6 +140,9 @@ svg .lbl-strong { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
 details { border-top: 1px solid var(--grid); padding-top: 12px; }
 summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 td.r, th.r { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* A day with no evidence of a kind, or a named test not running on main. */
+td.none { color: var(--code); font-weight: 600; }
+.finding ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 4px; }
 tr.sel td { background: var(--surface-2); }
 .method { font-size: 14px; color: var(--ink-2); display: grid; gap: 10px; max-width: 76ch; }
 .method b { color: var(--ink); }

@@ -28,6 +28,15 @@
     </div>
   </section>
 
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Evidence behind the ticks</h2>
+      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped. A name counts only if it was in the tree when the day's last PR merged.</p>
+    </div>
+    <div class="scroll-x"><table id="evidence"></table></div>
+    <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
+  </section>
+
   <div class="stats" id="stats"></div>
 
   <div class="scrubber" role="group" aria-label="Choose a point in the history">
