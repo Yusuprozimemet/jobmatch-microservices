@@ -16,6 +16,8 @@
 
 	<properties>
 		<java.version>25</java.version>
+		<!-- The backend's, pinned in its dependencyManagement (Day 19). -->
+		<resilience4j.version>2.4.0</resilience4j.version>
 	</properties>
 
 	<dependencies>
@@ -28,6 +30,22 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+		</dependency>
+		<!-- The internal clients (Day 19): the counts client that moves here in Track D. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-restclient</artifactId>
+		</dependency>
+		<!-- Its breaker, as the monolith's clients have theirs (Day 19). -->
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-spring-boot4</artifactId>
+			<version>${resilience4j.version}</version>
+		</dependency>
+		<!-- Without it @CircuitBreaker silently does nothing. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aspectj</artifactId>
 		</dependency>
 		<!-- The OpenAPI annotations the copied PageResponse and the jobs classes carry (Track D), at the
 		     version the monolith's springdoc 3.1.0 resolves. Only the annotations: job-service serves no

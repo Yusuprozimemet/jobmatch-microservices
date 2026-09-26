@@ -26,6 +26,9 @@ app:
   # and APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL. Compose and the harness set them (Tracks C1, C2).
   internal:
     backend-key-set-url: ${BACKEND_KEY_SET_URL:}
+    # Where the counts client sends /internal/saved-counts: the monolith; compose and the harness
+    # set it (Tracks C1, C2). Empty would mean this process, which has no such route.
+    applications-url: ${INTERNAL_APPLICATIONS_URL:}
 
 # Observability. Actuator listens on its own port, which compose and the ingress do not
 # publish, so nothing here is reachable from the internet: on the application port every
@@ -63,3 +66,25 @@ management:
       export:
         enabled: ${OTEL_METRICS_ENABLED:false}
         url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+# The internal clients' breakers, as the monolith's (Day 19): both exception lists named, since
+# without them a 4xx counts as a failure, or with record-exceptions alone as a success. Only
+# savedJobCounts here: it is job-service's one client; the other two stay the monolith's.
+resilience4j:
+  circuitbreaker:
+    configs:
+      internal:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        record-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+    instances:
+      savedJobCounts:
+        base-config: internal
