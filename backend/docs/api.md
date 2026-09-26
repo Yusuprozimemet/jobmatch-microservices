@@ -425,7 +425,9 @@ Rank jobs against the logged-in user's profile
 | Auth | signed in |
 | Query | none — no `limit`, the answer is at most 25 rows |
 | Response body | An array of `{ postingId, title, company, location, category, postedDate, matchedSkills, matchedCount, ofSkills, jobSkillCount, matchScore, matchPercent, label, score, reason, aiScored }`, best first |
-| Returns | 200 · 401 not signed in · 422 no profile, or fewer than 5 skills on it |
+| Returns | 200 · 401 not signed in · 422 no profile, or fewer than 5 skills on it · 503 the postings could not be reached (Day 19) |
+
+The shortlist comes from jobs' internal route (§13). If it cannot be reached (connection or timeout, 5xx, open breaker), the answer is 503, never an empty list.
 
 **Two steps, and the split is the design.**
 
