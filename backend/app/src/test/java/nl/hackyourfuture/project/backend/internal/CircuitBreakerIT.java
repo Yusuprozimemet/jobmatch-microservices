@@ -19,14 +19,14 @@ import static io.github.resilience4j.circuitbreaker.CircuitBreaker.State.OPEN;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Day 19 Track D: the circuit breaker opens after five failures and recovers when the upstream
- * answers; it ignores a 4xx (a bug, not an outage). With {@code record-exceptions} alone a 4xx
- * would count as a success and dilute the failure rate; {@code ignore-exceptions} stops it being
- * recorded.
+ * The monolith's own {@code postingLookup} breaker: it opens after five failures and recovers
+ * when the upstream answers; it ignores a 4xx (a bug, not an outage). With {@code record-exceptions}
+ * alone a 4xx would count as a success and dilute the failure rate; {@code ignore-exceptions}
+ * stops it being recorded. The counts breaker is tested where the counts client lives.
  *
  * <p>The breaker is configured with 10 calls, at least 5 failures, 50 % open, 10 s open wait
- * (1 s here). Tests drive everything through {@code GET /api/jobs/{postingId}}, which uses the
- * counts client.
+ * (1 s here). Tests drive everything through {@code GET /api/saved-jobs}, which calls
+ * {@code /internal/postings/batch} through the posting lookup client.
  */
 class CircuitBreakerIT extends IntegrationTest {
 
@@ -35,14 +35,14 @@ class CircuitBreakerIT extends IntegrationTest {
 
     @DynamicPropertySource
     static void stubUrl(DynamicPropertyRegistry registry) {
-        registry.add("app.internal.applications-url", () -> StubUpstream.instance().baseUrl());
-        registry.add("resilience4j.circuitbreaker.instances.savedJobCounts.wait-duration-in-open-state", () -> "1s");
+        registry.add("app.internal.jobs-url", () -> StubUpstream.instance().baseUrl());
+        registry.add("resilience4j.circuitbreaker.instances.postingLookup.wait-duration-in-open-state", () -> "1s");
     }
 
     @BeforeEach
     void resetStubAndBreaker() {
         StubUpstream.instance().reset();
-        registry.circuitBreaker("savedJobCounts").reset();
+        registry.circuitBreaker("postingLookup").reset();
     }
 
     @Test
@@ -51,20 +51,21 @@ class CircuitBreakerIT extends IntegrationTest {
         TestUser user = aUser().create();
         save(user, postingId);
 
-        StubUpstream.instance().refuse("/internal/saved-counts", 503);
+        StubUpstream.instance().refuse("/internal/postings/batch", 503);
 
         List<Integer> callCounts = new ArrayList<>();
         for (int i = 0; i < 8; i++) {
-            ApiResponse response = anonymous().get("/api/jobs/" + postingId);
+            ApiResponse response = authenticatedAs(user).get("/api/saved-jobs");
 
             assertThat(response.status()).isEqualTo(200);
-            assertThat(response.at("/savedCount").asInt()).isZero();
+            assertThat(response.at("/totalElements").asInt()).isEqualTo(1);
+            assertThat(response.at("/content/0/title").isNull()).isTrue();
 
-            callCounts.add(StubUpstream.instance().calls("/internal/saved-counts"));
+            callCounts.add(StubUpstream.instance().calls("/internal/postings/batch"));
         }
 
         assertThat(callCounts).containsExactly(1, 2, 3, 4, 5, 5, 5, 5);
-        assertThat(registry.circuitBreaker("savedJobCounts").getState()).isEqualTo(OPEN);
+        assertThat(registry.circuitBreaker("postingLookup").getState()).isEqualTo(OPEN);
     }
 
     @Test
@@ -73,25 +74,25 @@ class CircuitBreakerIT extends IntegrationTest {
         TestUser user = aUser().create();
         save(user, postingId);
 
-        StubUpstream.instance().refuse("/internal/saved-counts", 503);
+        StubUpstream.instance().refuse("/internal/postings/batch", 503);
         for (int i = 0; i < 5; i++) {
-            anonymous().get("/api/jobs/" + postingId);
+            authenticatedAs(user).get("/api/saved-jobs");
         }
 
-        StubUpstream.instance().answer("/internal/saved-counts", 200, "{\"" + postingId + "\":0}");
+        StubUpstream.instance().answer("/internal/postings/batch", 200, "{\"" + postingId + "\":{\"title\":\"Test Posting\"}}");
 
         Thread.sleep(1200);
 
-        int callsBeforeRecovery = StubUpstream.instance().calls("/internal/saved-counts");
+        int callsBeforeRecovery = StubUpstream.instance().calls("/internal/postings/batch");
 
         for (int i = 0; i < 2; i++) {
-            ApiResponse response = anonymous().get("/api/jobs/" + postingId);
+            ApiResponse response = authenticatedAs(user).get("/api/saved-jobs");
             assertThat(response.status()).isEqualTo(200);
-            assertThat(response.at("/savedCount").asInt()).isZero();
+            assertThat(response.at("/content/0/title").asText()).isEqualTo("Test Posting");
         }
 
-        assertThat(StubUpstream.instance().calls("/internal/saved-counts")).isEqualTo(callsBeforeRecovery + 2);
-        assertThat(registry.circuitBreaker("savedJobCounts").getState()).isEqualTo(CLOSED);
+        assertThat(StubUpstream.instance().calls("/internal/postings/batch")).isEqualTo(callsBeforeRecovery + 2);
+        assertThat(registry.circuitBreaker("postingLookup").getState()).isEqualTo(CLOSED);
     }
 
     @Test
@@ -100,16 +101,16 @@ class CircuitBreakerIT extends IntegrationTest {
         TestUser user = aUser().create();
         save(user, postingId);
 
-        StubUpstream.instance().refuse("/internal/saved-counts", 400);
+        StubUpstream.instance().refuse("/internal/postings/batch", 400);
 
         for (int i = 0; i < 6; i++) {
-            ApiResponse response = anonymous().get("/api/jobs/" + postingId);
+            ApiResponse response = authenticatedAs(user).get("/api/saved-jobs");
             assertThat(response.status()).isEqualTo(500);
         }
 
-        assertThat(StubUpstream.instance().calls("/internal/saved-counts")).isEqualTo(6);
-        assertThat(registry.circuitBreaker("savedJobCounts").getState()).isEqualTo(CLOSED);
-        assertThat(registry.circuitBreaker("savedJobCounts").getMetrics().getNumberOfBufferedCalls()).isZero();
+        assertThat(StubUpstream.instance().calls("/internal/postings/batch")).isEqualTo(6);
+        assertThat(registry.circuitBreaker("postingLookup").getState()).isEqualTo(CLOSED);
+        assertThat(registry.circuitBreaker("postingLookup").getMetrics().getNumberOfBufferedCalls()).isZero();
     }
 
     private void save(TestUser user, String postingId) {

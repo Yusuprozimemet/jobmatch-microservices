@@ -115,6 +115,14 @@ public abstract class IntegrationTest {
     }
 
     /**
+     * A client inside the network: each path to the service that owns it ({@link Services}), never
+     * through the gateway, which does not route /internal. For calls between services.
+     */
+    protected ApiClient inNetwork() {
+        return ApiClient.routed("http://localhost:" + port, path -> Services.baseUrlFor(path, port, serviceUrls()));
+    }
+
+    /**
      * A client that has logged in as this user through {@code POST /api/auth/login}.
      *
      * <p>The real login endpoint, not a forged security context, so the test exercises whatever

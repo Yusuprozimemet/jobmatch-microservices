@@ -1,6 +1,7 @@
 package nl.hackyourfuture.project.backend.database;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.PostgresContainer;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -8,6 +9,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
 
@@ -20,14 +22,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>Not a contract test: it pins how the application reaches the database (Day 11). The roles
  * and schemas are real in every environment; only the passwords differ. These go through the
  * application's own pools, not the harness's connection, because a role that holds in the
- * database proves nothing if the application logs in as someone else.
+ * database proves nothing if the application logs in as someone else. The jobs role is checked
+ * through the harness's own login as jobs_user, since that login leaves this process; what the
+ * service itself connects as is checked where it runs.
  */
 class ModuleConnectionsIT extends IntegrationTest {
 
     @Autowired @Qualifier("identityDataSource") private DataSource identity;
     @Autowired @Qualifier("applicationsDataSource") private DataSource applications;
     @Autowired @Qualifier("matchingDataSource") private DataSource matching;
-    @Autowired @Qualifier("jobsDataSource") private DataSource jobs;
+    private final DataSource jobs = new DriverManagerDataSource(
+            PostgresContainer.jdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
 
     @Test
     void eachModuleLogsInAsItsOwnRoleWithItsOwnSchema() {

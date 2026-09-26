@@ -35,6 +35,11 @@ app:
     api-key: ""
     # Scheduled purge off. "-" is Spring's disabled-cron value.
     score-purge-cron: "-"
+  internal:
+    # The harness points job-service's URL here (Day 17), never at app.internal.jobs-url
+    # itself: a base class's @DynamicPropertySource wins over a subclass's, so a registration
+    # in IntegrationTest would override the failure tests' stub. Empty until then: this process.
+    jobs-url: ${harness.job-service-url:}
 
 management:
   server:

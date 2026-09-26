@@ -1,7 +1,6 @@
 package nl.hackyourfuture.project.backend.internal;
 
 import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
-import nl.hackyourfuture.project.backend.shared.jobs.PostingLookup;
 import nl.hackyourfuture.project.backend.shared.jobs.PostingSummary;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
@@ -11,11 +10,11 @@ import nl.hackyourfuture.project.backend.support.TestUser;
 import nl.hackyourfuture.project.backend.identity.token.AccessTokens;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,15 +23,12 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code POST /internal/postings/batch} (Day 18): {@link PostingLookup#byIds} over HTTP, to service
- * tokens only. What Day 19's client relies on: an id the mart does not have stays absent, which
- * {@code SavedJobHydrationIT}'s vanished-posting tests need; an empty list costs no query; and more
- * than 500 distinct ids is a 400 before any query, so the client splits a longer list.
+ * {@code POST /internal/postings/batch} over HTTP (Day 18), to service tokens only. What Day 19's
+ * client relies on: an id the mart does not have stays absent, which {@code SavedJobHydrationIT}'s
+ * vanished-posting tests need; an empty list costs no query; and more than 500 distinct ids is a
+ * 400 before any query, so the client splits a longer list.
  */
 class PostingBatchIT extends IntegrationTest {
-
-    @Autowired @Qualifier("jobsDirectory")
-    private PostingLookup postingLookup; // The in-process implementation, not the @Primary HTTP client.
 
     @Autowired
     private AccessTokens accessTokens;
@@ -43,12 +39,34 @@ class PostingBatchIT extends IntegrationTest {
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     @Test
-    void answersWhatTheLookupAnswersInProcessWithTheMonolithsOwnToken() {
-        String id1 = aPosting().id("batch-a").create().id();
-        String id2 = aPosting().id("batch-b").create().id();
+    void answersThePostingsWithTheMonolithsOwnToken() {
+        String id1 = aPosting()
+                .id("batch-a")
+                .title("Software Engineer")
+                .company("TechCorp")
+                .cities("amsterdam")
+                .skills("java", "spring")
+                .category("software_engineering")
+                .workMode("hybrid")
+                .employmentType("permanent")
+                .postedDaysAgo(5)
+                .create().id();
+
+        String id2 = aPosting()
+                .id("batch-b")
+                .title("Data Scientist")
+                .company("DataInc")
+                .cities("rotterdam", "amsterdam")
+                .skills("python", "sql", "r")
+                .category("data_science")
+                .workMode("remote")
+                .employmentType("contract")
+                .postedDaysAgo(2)
+                .create().id();
+
         String id3 = "batch-not-in-mart";
 
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of(id1, id2, id3, id1)));
@@ -60,16 +78,20 @@ class PostingBatchIT extends IntegrationTest {
         assertThat(body.get(id2)).isNotNull();
         assertThat(body.get(id3)).isNull();
 
-        Map<String, PostingSummary> inProcess = postingLookup.byIds(List.of(id1, id2, id3, id1));
-        JsonNode inProcessJson = JSON.valueToTree(inProcess);
-        assertThat(body).isEqualTo(inProcessJson);
+        LocalDate today = jdbc().sql("SELECT current_date").query(LocalDate.class).single();
+        assertThat(body.get(id1)).isEqualTo(JSON.valueToTree(new PostingSummary("Software Engineer", "TechCorp",
+                "Amsterdam", "hybrid", false, List.of("java", "spring"), "permanent", today.minusDays(5), "test",
+                "software_engineering", "fresh", 5)));
+        assertThat(body.get(id2)).isEqualTo(JSON.valueToTree(new PostingSummary("Data Scientist", "DataInc",
+                "Rotterdam, Amsterdam", "remote", true, List.of("python", "sql", "r"), "contract", today.minusDays(2),
+                "test", "data_science", "fresh", 2)));
     }
 
     @Test
     void answersAListedCallerToo() {
         String id = aPosting().id("batch-c").title("Test Title").create().id();
 
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of(id)));
@@ -82,7 +104,7 @@ class PostingBatchIT extends IntegrationTest {
     void anEmptyListIsAnEmptyObjectWithoutAQuery() {
         StatementCounter.reset();
 
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of()));
 
@@ -100,7 +122,7 @@ class PostingBatchIT extends IntegrationTest {
             ids.add("batch-id-" + i);
         }
 
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", ids));
 
@@ -119,7 +141,7 @@ class PostingBatchIT extends IntegrationTest {
             ids.add("batch-dup-" + i);
         }
 
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", ids));
 
@@ -128,7 +150,7 @@ class PostingBatchIT extends IntegrationTest {
 
     @Test
     void aBodyWithoutIdsIs400() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/batch", Map.of());
 
@@ -137,7 +159,7 @@ class PostingBatchIT extends IntegrationTest {
 
     @Test
     void noTokenIs401() {
-        ApiClient client = direct();
+        ApiClient client = inNetwork();
 
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of("batch-e")));
@@ -148,7 +170,7 @@ class PostingBatchIT extends IntegrationTest {
     @Test
     void theUsersCookieIs401() {
         TestUser user = aUser().create();
-        ApiClient client = authenticatedAsOnDirect(user);
+        ApiClient client = authenticatedInNetwork(user);
 
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of("batch-f")));
@@ -159,7 +181,7 @@ class PostingBatchIT extends IntegrationTest {
     @Test
     void aUserTokenInTheHeaderIs401() {
         String userToken = accessTokens.mint(UUID.randomUUID(), "x@example.test");
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + userToken);
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + userToken);
 
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of("batch-g")));
@@ -167,12 +189,12 @@ class PostingBatchIT extends IntegrationTest {
         assertThat(response.status()).isEqualTo(401);
     }
 
-    private ApiClient authenticatedAsOnDirect(TestUser user) {
+    private ApiClient authenticatedInNetwork(TestUser user) {
         if (user.password() == null) {
             throw new IllegalArgumentException(
                     "User " + user.email() + " has no password (Google-only account), so it cannot log in");
         }
-        ApiClient client = direct();
+        ApiClient client = inNetwork();
         var loginResponse = client.post("/api/auth/login",
                 Map.of("email", user.email(), "password", user.password()));
         if (loginResponse.status() != 200) {

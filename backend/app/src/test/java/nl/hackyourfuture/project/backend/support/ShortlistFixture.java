@@ -1,7 +1,9 @@
 package nl.hackyourfuture.project.backend.support;
 
+import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -24,6 +26,40 @@ public final class ShortlistFixture {
     );
 
     private ShortlistFixture() {
+    }
+
+    /**
+     * The whole answer {@link #EXPECTED} stands for, row by row. {@code today} is the database's
+     * {@code current_date}, which the postings are dated from: the JVM's date differs from it for
+     * part of every day, the container running in UTC.
+     */
+    public static List<ShortlistedPosting> expectedRows(LocalDate today) {
+        return List.of(
+                new ShortlistedPosting("order-a", "Backend Developer", "Company A", "Orderville",
+                        "software_engineering", today.minusDays(5), List.of("java", "sql", "go"),
+                        List.of("java", "sql", "go"), 3),
+                new ShortlistedPosting("order-b", "Software Engineer", "Company B", "Orderville",
+                        "software_engineering", today.minusDays(1), List.of("java", "sql"),
+                        List.of("java", "sql"), 2),
+                new ShortlistedPosting("order-r1", "Backend Developer", "Acme Repost", "Orderville",
+                        "software_engineering", today.minusDays(2), List.of("java", "sql"),
+                        List.of("java", "sql"), 2),
+                new ShortlistedPosting("order-c", "Java Developer", "Company C", "Orderville",
+                        "software_engineering", today.minusDays(3), List.of("java", "sql"),
+                        List.of("java", "sql"), 2),
+                new ShortlistedPosting("order-d", "Database Engineer", "Company D", "Orderville",
+                        "software_engineering", null, List.of("java", "sql"),
+                        List.of("java", "sql"), 2),
+                new ShortlistedPosting("order-e1", "Frontend Engineer", "Company E1", "Orderville",
+                        "software_engineering", today.minusDays(6), List.of("java"),
+                        List.of("java"), 1),
+                new ShortlistedPosting("order-e2", "Fullstack Developer", "Company E2", "Orderville",
+                        "software_engineering", today.minusDays(6), List.of("java"),
+                        List.of("java"), 1),
+                new ShortlistedPosting("order-f", "Systems Engineer", "Company F", "Orderville",
+                        "software_engineering", today.minusDays(10), List.of("java"),
+                        List.of("java"), 1)
+        );
     }
 
     /** Inserts the postings; {@link #EXPECTED} is the list they must come back as. */
