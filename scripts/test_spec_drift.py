@@ -331,6 +331,12 @@ Days keep their numbers; they run in this order:
                                           ["0", "A", "B", "C", "D"]),
                          ["C"])
         self.assertEqual(sd.merged_tracks(["day-39/spec-written"], ["0", "A1", "A2", "B"]), [])
+        # A track split again past the gate (Day 17's B1 into b1a..b1c): the letter after the digits
+        # is a part of that track, not a track of its own.
+        self.assertEqual(sd.merged_tracks(["day-17/track-b1a-service-key", "day-17/track-b1c-trusted-callers",
+                                           "day-17/track-b2b-internal-client-and-breaker"],
+                                          ["0", "A1", "A2", "B1", "B2", "C1"]),
+                         ["B1", "B2"])
 
 
 if __name__ == "__main__":

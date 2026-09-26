@@ -297,10 +297,11 @@ def track_names(section_text):
 
 def merged_tracks(branches, tracks):
     """The tracks with a merged branch. `track-a1-...` is A1 when the table lists A1; otherwise it
-    is part of A, as Day 15's `track-c1`..`c4` were its one track C."""
+    is part of A, as Day 15's `track-c1`..`c4` were its one track C. A letter after the digits is a
+    part of that track: Day 17 split B1 again into `track-b1a`..`b1c`."""
     merged = set()
     for branch in branches:
-        m = re.search(r"/track-([0-9a-z])([0-9]*)(?:-|$)", branch)
+        m = re.search(r"/track-([0-9a-z])([0-9]*)[a-z]?(?:-|$)", branch)
         if m:
             full_name = (m.group(1) + m.group(2)).upper()
             if full_name in tracks:
