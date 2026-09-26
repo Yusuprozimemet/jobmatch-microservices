@@ -14,8 +14,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
 /**
- * Who may call job-service (Day 17): anyone for job search, the scraper for actuator, and from
- * Track B1 other services, with a service token, for {@code /internal/**}.
+ * Who may call job-service (Day 17): the scraper for actuator, other services for
+ * {@code /internal/**} with service tokens, and anyone for job search.
  */
 @Configuration
 @EnableWebSecurity
@@ -42,11 +42,33 @@ public class SecurityConfig {
     }
 
     /**
-     * The public chain (order 2 is reserved for the /internal/** chain added in Track B1).
-     *
-     * <p>Permits the job search GET routes, the service key set, and error pages. Everything
-     * else requires authentication. No user tokens are read here: {@code jobs} never reads a
-     * user, and {@code StaleCookieIT} sends stale cookies to {@code /api/jobs} and expects 200.
+     * Service tokens only (Day 39, Day 17): the bearer header never the cookie. CSRF off because
+     * a bearer token is not sent by a browser on its own (Day 18's POST routes). Ordered ahead of
+     * the application chain because the first matching chain wins.
+     */
+    @Bean
+    @Order(2)
+    public SecurityFilterChain internalFilterChain(HttpSecurity http, InternalCallers callers) {
+        http
+                .securityMatcher("/internal/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .oauth2ResourceServer(rs -> rs
+                        .authenticationManagerResolver(callers.resolver())
+                        // No bearerTokenResolver: the default reads only the Authorization header,
+                        // so the user's access_token cookie is ignored here as intended.
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+        return http.build();
+    }
+
+    /**
+     * The public chain. Permits the job search GET routes, the service key set, and error pages.
+     * Everything else requires authentication. No user tokens are read here: {@code jobs} never
+     * reads a user, and {@code StaleCookieIT} sends stale cookies to {@code /api/jobs} and expects 200.
      *
      * <p>Not {@code denyAll()}: that would turn a trusted 404 or 400 into 403. Not without the
      * key set or {@code /error}: the monolith could not fetch the key set, and any 400 or 500
