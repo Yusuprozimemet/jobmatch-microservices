@@ -29,6 +29,14 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
 		</dependency>
+		<!-- The OpenAPI annotations the copied PageResponse and the jobs classes carry (Track D), at the
+		     version the monolith's springdoc 3.1.0 resolves. Only the annotations: job-service serves no
+		     docs of its own (Day 17). Boot does not manage its version. -->
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-annotations-jakarta</artifactId>
+			<version>2.2.52</version>
+		</dependency>
 		<!-- Traces, as the backend makes them since Day 05: Micrometer tracing exporting OTLP, not the
 		     Java agent. -->
 		<dependency>
