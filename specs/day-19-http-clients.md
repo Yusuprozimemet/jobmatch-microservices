@@ -119,26 +119,38 @@ over 400 lines, so it splits: the builder and the Resilience4j wiring first (A1)
 client (A2). Six PRs.
 
 ## Acceptance criteria
-- [ ] **hold** — The Day 1–4 suite passes unedited, direct and through the gateway (CI's class
+- [x] **hold** — The Day 1–4 suite passes unedited, direct and through the gateway (CI's class
       list), with the clients serving from Track A2 on. Green today (366 direct, 206 through the
       gateway on 54283b8). Broken on purpose in Track A2's PR: the client's fallback made
       unconditional (`{}` for every call). The spec-auditor's scratch `@Primary` lookup returning
       `{}` turned 8 of `SavedJobHydrationIT`'s 11 red.
-- [ ] **hold** — A saved list longer than the batch cap still lists with details: a user with 501
+      #157: the fallback made unconditional turned 8 of 11 `SavedJobHydrationIT` red, e.g.
+      `expected: "Backend Developer" but was: ""`. At the close, on `main` at ebc1061: 390 direct,
+      0 failures, 1 skipped (`GatewayHarnessIT`); 206 through the gateway; `contract/` unchanged
+      since this spec change (`git diff 2fddeaf HEAD` printed nothing).
+- [x] **hold** — A saved list longer than the batch cap still lists with details: a user with 501
       saved postings gets all 501 from `GET /api/saved-jobs` (six pages of at most 100), each with
       its title. Track 0 adds it as `internal/LongSavedListIT`, not in `contract/`, which the
       Verify's diff keeps unchanged; green today, when `byIds` has no cap. Broken
       on purpose in Track A2's PR: the chunking removed, so the route answers 400, which is not an
       outage and surfaces as a 500.
-- [ ] **hold** — The statement counts do not move: `SavedJobHydrationQueriesIT` (one statement on
+      #155: `internal/LongSavedListIT`, its 501 postings one builder posting copied in a
+      statement (501 builder calls took 53 s). Red on #155 with `byIds` answering only the first
+      500 (`expected: "Long 500"`), and on #157 with the chunking removed (`expected: 200 but was:
+      500`).
+- [x] **hold** — The statement counts do not move: `SavedJobHydrationQueriesIT` (one statement on
       `fct_postings` for a whole list, none for an empty one) and `JobSavedCountQueriesIT` (one on
       `saved_jobs` per page) pass unedited. The route runs the same in-process implementation, and
       `StatementCounter` counts per database, whichever process sends the statement. Broken on
       purpose in Track A2's PR: the chunk size set to 1 (one statement per saved posting).
-- [ ] **hold** — Every `RestClient` comes from Spring's builder:
+      #157: chunk size 1 turned `readsTheMartOncePerPageWhateverItsSize` red, `expected: 1L but
+      was: 6L`, 3 of 4 (the empty list rightly stays at 0). Both classes unedited, green at the
+      close.
+- [x] **hold** — Every `RestClient` comes from Spring's builder:
       `ModuleBoundariesTest.restClientsComeFromSpring` passes. Broken on purpose in Track A1's PR:
       `RestClient.builder()` in the `shared.internal` builder.
-- [ ] **hold** — The routes still answer from the in-process implementations: Day 18's
+      #156: red as named, an architecture violation from `restClientsComeFromSpring`.
+- [x] **hold** — The routes still answer from the in-process implementations: Day 18's
       `PostingBatchIT`, `PostingShortlistIT`, `SavedCountsIT` and `ShortlistOrderIT` pass, with
       `JobsDirectory.java` and `ApplicationsDirectory.java` unchanged over the day. Track 0 gives
       the controllers and the tests the in-process bean; green today. Broken on purpose in Track
@@ -148,18 +160,31 @@ client (A2). Six PRs.
       the route was hit about 700 times in 2 s, the breaker opened on the first timeouts, and the
       outer call fell back to `{}`: `answersWhatTheLookupAnswersInProcess…` red with two entries
       expected.
-- [ ] **new** — Saved jobs survive the postings being unavailable: with `app.internal.jobs-url` at
+      #155 gave the controllers `JobsDirectory` and `ApplicationsDirectory` and the four tests their
+      qualifiers. #157: the break as named, `PostingBatchIT` alone, `expected: 2 but was: 0`.
+- [x] **new** — Saved jobs survive the postings being unavailable: with `app.internal.jobs-url` at
       the stub refusing with 503, `GET /api/saved-jobs` answers 200 with every saved posting
       listed, its state kept and its details empty; with the stub answering 400, it answers 500.
       Red today: the property does nothing, so the details are present. Track A2.
-- [ ] **new** — Top matches fail fast and say so: with `app.internal.jobs-url` at the stub hanging,
+      #157: `internal/PostingLookupUnavailableIT`, 503 and a hang (2.3 s) give empty details, a 400
+      a 500. Red without the client bean, as on `main`: 3 of 3.
+- [x] **new** — Top matches fail fast and say so: with `app.internal.jobs-url` at the stub hanging,
       `GET /api/jobs/top-matches` answers 503 with a ProblemDetail, in under 3 s. Red today: 200
       with matches. Track B.
-- [ ] **new** — Job search survives the counts being unavailable: with
+      #158: `internal/PostingShortlistUnavailableIT`, a hang a 503 in 2.3 s with the `detail`
+      saying the postings could not be reached, rendered as the route's 422 is; an upstream 503 a
+      503; a 400 a 500. Red without the client bean: 3 of 3 (`expected: 503 but was: 200`); with
+      the fallback returning `[]`, both outage cases 200; with the client failing every call,
+      `MatchTopMatchesIT` and `MatchRankingIT` 13 of 16.
+- [x] **new** — Job search survives the counts being unavailable: with
       `app.internal.applications-url` at the stub refusing with 503, `GET /api/jobs` and
       `GET /api/jobs/{postingId}` answer 200 with `savedCount` 0 on a posting one user saved. Red
       today: 1. Track C.
-- [ ] **new** — The breaker opens, recovers by itself, and ignores a 4xx. Driven through
+      #159: `internal/SavedJobCountsUnavailableIT`, search found by title and detail both 0; a hang
+      0 in 2.2 s; a 400 a 500. Red without the client bean (`expected: 0 but was: 1`); with the
+      fallback returning an empty map, `expected: 200 but was: 500`, the `NullPointerException`
+      named above; with the client answering 0 always, `JobSavedCountIT` 5 of 6.
+- [x] **new** — The breaker opens, recovers by itself, and ignores a 4xx. Driven through
       `GET /api/jobs` and the counts client, the breakers reset between tests:
       - with the stub refusing with 503, after 5 calls the stub's count stops rising (the scratch
         run: 1, 2, 3, 4, 5, then 5, 5, 5) and the callers get the fallback at once;
@@ -170,7 +195,13 @@ client (A2). Six PRs.
 
       Red today: no breaker. Track D. Broken on purpose there: the `ignore-exceptions` rule
       removed, and the 400 case fails.
-- [ ] **new** — The clients serve, and every call is observed: `GET /api/saved-jobs`,
+      #160: `internal/CircuitBreakerIT`, 3 tests, the sequence 1, 2, 3, 4, 5, 5, 5, 5 as the
+      scratch run had it. Driven through `GET /api/jobs/{postingId}`, not `/api/jobs` as written:
+      job detail asks for one id, which the stub can answer, where a search page's ids would all
+      need to be in its answer. Red as named: `itIgnoresA4xx` `expected: 0 but was: 6`, the 400s
+      recorded as successes. Red too with `@CircuitBreaker` removed from the counts client
+      (`expected: 200 but was: 500`).
+- [x] **new** — The clients serve, and every call is observed: `GET /api/saved-jobs`,
       `GET /api/jobs/top-matches` and `GET /api/jobs` each answer 200; the monolith's
       `/actuator/prometheus` then has `http_client_requests_seconds_count` with `status="200"` and
       `uri` `/internal/postings/batch`, `/internal/postings/shortlist` and
@@ -180,6 +211,11 @@ client (A2). Six PRs.
       today: no such series. Track D. Broken on purpose there: the `Authorization` header dropped,
       so the route answers 401, a 4xx that surfaces as a 500 (the series alone would stay: a 401 is
       recorded too, with `status="401"`).
+      #160: `matching/InternalCallsObservedIT`, in `matching` to reach `LlmCallObservedIT`'s
+      package-private span collector, and sharing its context. The server ancestor is named: `http
+      get /api/saved-jobs` for the batch call. Red as named: both tests `expected: 200 but was:
+      500`; and with the route-to-caller map swapped, `"http get /api/saved-jobs"` does not end
+      with `/api/jobs`.
 
 ## Verify
 ```bash
@@ -228,3 +264,27 @@ No compose check: a fresh compose volume has no mart, so `/api/jobs` answers 500
   implementer only at a run: the request factory whose read timeout gets no fallback, a breaker
   that counted a 4xx, a parent span that is Spring Security's and a break the series would have
   survived, a URL property read too early for Day 17, and a stub one hang would have blocked.
+- **Closed on Day 19.** Estimated 3 in the provisional draft, 6 once rewritten (0, A1, A2, B, C,
+  D); took 6, plus the spec change (#154) and this close.
+- **A spec claim that did not reproduce.** The rewrite chose `JdkClientHttpRequestFactory` because,
+  in the spec-auditor's scratch run, the `SimpleClientHttpRequestFactory` turned a read timeout
+  into a `RestClientException` that no fallback caught. In #156 the Simple factory swapped in left
+  `InternalClientsIT` green, and a throwaway test tried three hangs (no headers; JSON headers then
+  a stalled body; headers with no content type): both factories gave `ResourceAccessException` in
+  about 2 s every time. The JDK factory stays; the `InternalClients` Javadoc no longer makes the
+  claim, and the hang tests pin what the fallbacks need.
+- **Every track was written by the implementer agent on Haiku**, and review changed something in
+  all six, twice rewriting a file: Track 0's stub and its test (446 lines, over the gate; and a
+  test that could not fail), and Track D's observation test (labels pointing the wrong way, no 200
+  check, an ancestor check that only asked for "api"). Its reports misstated counts twice
+  (`PostingBatchIT` "18", `SavedJobsIT` "7"; "9 postings") and a departure once (Track B's test
+  extends `MatchingTest`, kept), and left out findings it was asked for once (Track D's metric
+  lines and span names). The reports' numbers in the PRs are from surefire, not from the agent.
+- **My mistakes.** My first `StubUpstreamTest` could not fail: `failsWithin` passes on a timeout,
+  and its answer went before the hang arrived (#155). A break script stopped with a break still in
+  the file (#156, restored). One break did not apply and ran green on unbroken code, which I nearly
+  read as the suite not noticing (#158). Shell quoting mangled break patches twice more (#159, #160), each
+  caught by a dry run before a break ran; the patches are files now.
+- **What the harness learned:** the JDK `HttpClient` retries a GET once when a connection closes
+  with no answer, so a hang is tested with a POST, as the clients send; and `StubUpstream` runs on
+  virtual threads, since one hang blocks a single-threaded stub.
