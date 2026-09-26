@@ -21,14 +21,14 @@ services:
       timeout: 5s
       retries: 10
 
-  # Writes identity's user key and the monolith's service key (Day 39). Runs and exits: it
-  # writes both keys into the jwt-keys volume on the first start and keeps them after that, until
-  # `docker compose down -v`. Never in git, and never made by the backend, which does not start
-  # without them. The backend's own runtime image, because it already has openssl and is already
+  # Writes identity's user key, the monolith's service key, and job-service's key (Day 39, Day 17).
+  # Runs and exits: it writes keys into the jwt-keys volume on the first start and keeps them after
+  # that, until `docker compose down -v`. Never in git, and never made by the services, which do not
+  # start without them. The backend's own runtime image, because it already has openssl and is already
   # pulled.
   jwt-key:
     image: eclipse-temurin:25-jre
-    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem"]
+    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem && sh /jwt-key.sh /keys/job-service.pem"]
     volumes:
       - jwt-keys:/keys
       - ./scripts/jwt-key.sh:/jwt-key.sh:ro
@@ -69,6 +69,31 @@ services:
       - jwt-keys:/run/keys:ro
     # No published port (Day 16): the gateway below is the way in, on 8080. 9090, the management
     # port, is not published either; Prometheus reaches it over the compose network.
+    depends_on:
+      db:
+        condition: service_healthy
+      jwt-key:
+        condition: service_completed_successfully
+
+  # job-service (Day 17, Track C1): not yet routed to by anything (Track D routes to it). Reads the
+  # jobs mart directly as jobs_user, so does not depend on the monolith's jobs module. No published
+  # port: the gateway will reach it over the compose network once it routes to it. No healthcheck
+  # yet; that and the port come with Track D.
+  job-service:
+    build: ./services/job-service
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_JOBS_USER: jobs_user
+      DB_JOBS_PASSWORD: ${JOBS_DB_PASSWORD:-password}
+      SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/job-service.pem
+      BACKEND_KEY_SET_URL: http://backend:8080/.well-known/service-jwks.json
+      INTERNAL_APPLICATIONS_URL: http://backend:8080
+      TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
+      OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
+    volumes:
+      - jwt-keys:/run/keys:ro
     depends_on:
       db:
         condition: service_healthy

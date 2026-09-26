@@ -61,7 +61,7 @@ public final class TestServiceCaller {
         return INSTANCE;
     }
 
-    /** Point {@code app.internal.trusted-issuers[jobmatch-test-caller]} here. */
+    /** Point a trusted-issuers list entry's {@code key-set-url} here. */
     public String jwksUrl() {
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/.well-known/service-jwks.json";
     }
