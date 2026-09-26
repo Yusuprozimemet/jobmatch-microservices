@@ -21,6 +21,12 @@ app:
   service-jwt:
     private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
 
+  # Who may call /internal/** (Day 39, Day 17). The monolith has a property of its own, so an
+  # environment list cannot wipe it; other callers are a list: APP_INTERNAL_TRUSTEDISSUERS_0_NAME
+  # and APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL. Compose and the harness set them (Tracks C1, C2).
+  internal:
+    backend-key-set-url: ${BACKEND_KEY_SET_URL:}
+
 # Observability. Actuator listens on its own port, which compose and the ingress do not
 # publish, so nothing here is reachable from the internet: on the application port every
 # /actuator/** path falls through to SecurityConfig's anyRequest().authenticated() and
