@@ -305,8 +305,9 @@ A service token is RS256, `aud` = `jobmatch-internal`, and lives at most 5 minut
 the key set it is verified with from the trusted issuers
 ([`InternalCallers`](../app/src/main/java/nl/hackyourfuture/project/backend/config/InternalCallers.java)):
 the monolith's own, `jobmatch-backend`, trusted in process, and whatever
-`app.internal.trusted-issuers` names (issuer → key set URL, empty by default; Day 17 adds
-job-service). An issuer not on the list gets `401`. The monolith signs its own tokens with
+`app.internal.trusted-issuers` lists as `{name, key-set-url}` entries, empty by default. Set via
+environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and `APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`.
+An issuer not on the list gets `401`. The monolith signs its own tokens with
 `SERVICE_JWT_PRIVATE_KEY_FILE`
 ([`ServiceTokens`](../app/src/main/java/nl/hackyourfuture/project/backend/config/ServiceTokens.java)),
 never the user key, and publishes the public half at `GET /.well-known/service-jwks.json`.

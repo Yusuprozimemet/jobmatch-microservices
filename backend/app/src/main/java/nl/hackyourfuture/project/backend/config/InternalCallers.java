@@ -17,25 +17,28 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtIss
 import org.springframework.stereotype.Component;
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Trusts service tokens from authorized issuers for /internal/** (Day 39). Each issuer's token is
  * verified against that issuer's public key, with iss and aud=jobmatch-internal; nothing else is
- * trusted until configured (Day 17 adds job-service). The monolith trusts its own tokens in process,
- * with the service key's public half.
+ * trusted until configured. The monolith trusts its own tokens in process, with the service key's
+ * public half. Other issuers are a list of {name, key-set-url} entries, bound from environment
+ * variables as {@code APP_INTERNAL_TRUSTEDISSUERS_0_NAME} and {@code APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL},
+ * not a map, because a hyphenated issuer name cannot be set from the environment as a map key
+ * (Day 17: Boot binds {@code APP_INTERNAL_TRUSTEDISSUERS_JOBMATCH_JOB_SERVICE} as the key
+ * {@code jobmatch.job.service}).
  */
 @Slf4j
 @Component
 public class InternalCallers {
 
-    private final AuthenticationManagerResolver<String> issuerResolver;
+    private final Map<String, AuthenticationManager> managers = new LinkedHashMap<>();
 
     public InternalCallers(ServiceSigningKey key, Environment environment) {
-        Map<String, AuthenticationManager> managers = new HashMap<>();
-
         // The monolith is its own first caller (Days 18-19), and a key-set URL cannot know a test's
         // random port, so it trusts itself in process.
         try {
@@ -46,22 +49,26 @@ public class InternalCallers {
             throw new IllegalStateException("Could not set up in-process JWT decoding", e);
         }
 
-        // Trusted external issuers from configuration, empty by default (Day 17 adds job-service).
-        Map<String, String> trustedIssuers = Binder.get(environment)
-                .bind("app.internal.trusted-issuers", Bindable.mapOf(String.class, String.class))
-                .orElse(Map.of());
-
-        for (Map.Entry<String, String> issuer : trustedIssuers.entrySet()) {
-            String issuerName = issuer.getKey();
-            String keySetUrl = issuer.getValue();
-            NimbusJwtDecoder externalDecoder = NimbusJwtDecoder.withJwkSetUri(keySetUrl).build();
-            setJwtValidator(externalDecoder, issuerName);
-            managers.put(issuerName, new JwtAuthenticationProvider(externalDecoder)::authenticate);
+        // Trusted external issuers from configuration, empty by default. Track D adds job-service here.
+        for (TrustedIssuer issuer : Binder.get(environment)
+                .bind("app.internal.trusted-issuers", Bindable.listOf(TrustedIssuer.class))
+                .orElse(List.of())) {
+            if (issuer.name() == null || issuer.name().isBlank() || issuer.keySetUrl() == null
+                    || issuer.keySetUrl().isBlank()) {
+                throw new IllegalStateException("app.internal.trusted-issuers has " + issuer + ": each entry "
+                        + "needs a name and a key-set-url");
+            }
+            NimbusJwtDecoder externalDecoder = NimbusJwtDecoder.withJwkSetUri(issuer.keySetUrl()).build();
+            setJwtValidator(externalDecoder, issuer.name());
+            managers.put(issuer.name(), new JwtAuthenticationProvider(externalDecoder)::authenticate);
         }
 
-        this.issuerResolver = managers::get;
-
         log.info("Internal routes accept service tokens from [{}]", String.join(", ", managers.keySet()));
+    }
+
+    /** The issuers trusted, by name. */
+    Set<String> issuers() {
+        return managers.keySet();
     }
 
     /**
@@ -69,7 +76,7 @@ public class InternalCallers {
      * trusted list. An issuer not in the map yields null, which Spring turns into a 401.
      */
     public AuthenticationManagerResolver<HttpServletRequest> resolver() {
-        return new JwtIssuerAuthenticationManagerResolver(issuerResolver);
+        return new JwtIssuerAuthenticationManagerResolver(managers::get);
     }
 
     private static void setJwtValidator(NimbusJwtDecoder decoder, String issuer) {
@@ -77,5 +84,9 @@ public class InternalCallers {
                 JwtValidators.createDefaultWithIssuer(issuer),
                 new JwtClaimValidator<List<String>>(JwtClaimNames.AUD,
                         audience -> audience != null && audience.contains(ServiceTokens.AUDIENCE))));
+    }
+
+    /** One trusted caller: its issuer name and the URL of its key set. */
+    record TrustedIssuer(String name, String keySetUrl) {
     }
 }
