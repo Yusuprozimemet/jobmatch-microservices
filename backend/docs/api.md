@@ -382,7 +382,7 @@ Search and filter job postings
 | Query | All four optional; a blank value is treated as absent. `q` matches title, company, city or skill with `ILIKE %q%`. `category` and `workMode` are exact matches on the mart columns. `location` is an **exact city match** against `fct_postings_cities`, not a substring: the value comes from `/api/jobs/filters`, and matching `%Ede%` instead also returned Enschede, Medemblik, Nederweert and Sweden. |
 | Response body | An array of `{ postingId, title, companyName, location, workMode, isRemote, skills, employmentType, postedDate, source, category, freshnessClass, ageDays, savedCount }` |
 | Ordering and cap | `posted_date DESC NULLS LAST, posting_id`, capped at **200 rows**. The tie-breaker is what makes the cut-off stable between calls. There is no paging — see [section 12](#12-not-in-the-api). |
-| Notes | `location` is the posting's cities, title-cased and joined with commas, not the raw location text. A hard-coded exclusion list keeps countries, provinces and "remote" out of every city-derived value, because the city column carries them too; provinces that double as city names (Utrecht, Groningen) and city-states (Singapore) stay in. The proper fix is upstream in the mart. `savedCount` counts distinct users who saved the posting — across all users, so it is a popularity signal, not "did I save this". `freshnessClass` and `ageDays` are the pipeline's verdict on how stale a listing is. Closed postings are **not** filtered out. |
+| Notes | `location` is the posting's cities, title-cased and joined with commas, not the raw location text. A hard-coded exclusion list keeps countries, provinces and "remote" out of every city-derived value, because the city column carries them too; provinces that double as city names (Utrecht, Groningen) and city-states (Singapore) stay in. The proper fix is upstream in the mart. `savedCount` counts distinct users who saved the posting — across all users, so it is a popularity signal, not "did I save this"; it comes from applications' internal route (§13), and while that cannot be reached (connection or timeout, 5xx, open breaker) it reads 0 on every posting. `freshnessClass` and `ageDays` are the pipeline's verdict on how stale a listing is. Closed postings are **not** filtered out. |
 | Returns | 200 |
 
 ### GET /api/jobs/filters
@@ -405,7 +405,7 @@ Get one job posting in full
 | Method | GET |
 | Auth | none |
 | Response body | the search fields plus `description`, `experienceLevel`, `educationLevel`, `salaryMin`, `salaryMax`, `salaryCurrency`, `salaryPeriod`, `sourceUrl`, `status` |
-| Behaviour | `{postingId}` is the mart's `posting_id`. Closed postings are served too, so a saved job does not 404 once it closes — `status` says which it is. `description` arrives with HTML stripped and entities decoded by the pipeline. `sourceUrl` is where "Apply externally" goes. |
+| Behaviour | `{postingId}` is the mart's `posting_id`. Closed postings are served too, so a saved job does not 404 once it closes — `status` says which it is. `description` arrives with HTML stripped and entities decoded by the pipeline. `sourceUrl` is where "Apply externally" goes. `savedCount` comes from applications' internal route (§13), and while that cannot be reached (connection or timeout, 5xx, open breaker) it reads 0 on the posting. |
 | Returns | 200 · 404 no such posting |
 
 ---
