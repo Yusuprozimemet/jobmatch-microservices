@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The job-service's public access rules. The GET routes are permitted but answer 404 today
  * (nothing serves them yet); Track D's controllers turn these into 200s. Anything else answers
- * 401 because there is no token.
+ * 401 because there is no token. The key set answers 200: {@code ServiceJwksController} serves it.
  */
 class PublicAccessTest extends JobServiceTest {
 
@@ -39,8 +39,8 @@ class PublicAccessTest extends JobServiceTest {
     }
 
     @Test
-    void getServiceKeySetAnswers404Anonymous() throws Exception {
-        assertThat(get("/.well-known/service-jwks.json").statusCode()).isEqualTo(404);
+    void getServiceKeySetAnswersAnonymous() throws Exception {
+        assertThat(get("/.well-known/service-jwks.json").statusCode()).isEqualTo(200);
     }
 
     @Test
