@@ -15,6 +15,12 @@ logging:
   pattern:
     correlation: "[%X{traceId:-},%X{spanId:-}] "
 
+app:
+  # job-service's own key for service tokens (Day 39): a PEM, PKCS#8 file. No default on purpose:
+  # without it, it does not start. Compose writes it with scripts/jwt-key.sh (Track C1).
+  service-jwt:
+    private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
+
 # Observability. Actuator listens on its own port, which compose and the ingress do not
 # publish, so nothing here is reachable from the internet: on the application port every
 # /actuator/** path falls through to SecurityConfig's anyRequest().authenticated() and

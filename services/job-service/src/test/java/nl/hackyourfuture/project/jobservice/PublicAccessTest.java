@@ -1,7 +1,6 @@
 package nl.hackyourfuture.project.jobservice;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
 import java.io.IOException;
@@ -17,8 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (nothing serves them yet); Track D's controllers turn these into 200s. Anything else answers
  * 401 because there is no token.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class PublicAccessTest {
+class PublicAccessTest extends JobServiceTest {
 
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
 

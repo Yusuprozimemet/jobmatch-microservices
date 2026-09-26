@@ -1,7 +1,6 @@
 package nl.hackyourfuture.project.jobservice;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -17,8 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The job-service's health and metrics, on a management port compose does not publish.
  * Nothing here needs a token: the port is reachable only from inside the network.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class ManagementPortTest {
+class ManagementPortTest extends JobServiceTest {
 
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
