@@ -37,7 +37,8 @@ class InternalClientsIT extends IntegrationTest {
 
     @DynamicPropertySource
     static void stubUpstream(DynamicPropertyRegistry registry) {
-        // Do not set app.internal.* so the class keeps the monolith's defaults (empty).
+        // Do not set app.internal.* here: the tests below read test.internal.unset-url, which
+        // nothing sets, so it means this process whatever the harness points the others at.
         registry.add("test.internal.stub-url", () -> StubUpstream.instance().baseUrl());
     }
 
@@ -48,7 +49,7 @@ class InternalClientsIT extends IntegrationTest {
 
     @Test
     void emptyPropertyMeansThisProcessWithAServiceToken() {
-        RestClient client = internalClients.forUrlProperty("app.internal.jobs-url").get();
+        RestClient client = internalClients.forUrlProperty("test.internal.unset-url").get();
 
         // The internal /users/{id} route answers 204 with the token, 401 without.
         TestUser user = aUser().create();
@@ -116,7 +117,7 @@ class InternalClientsIT extends IntegrationTest {
 
     @Test
     void sameClientIsReturnedEveryTime() {
-        var supplier = internalClients.forUrlProperty("app.internal.jobs-url");
+        var supplier = internalClients.forUrlProperty("test.internal.unset-url");
         RestClient first = supplier.get();
         RestClient second = supplier.get();
 

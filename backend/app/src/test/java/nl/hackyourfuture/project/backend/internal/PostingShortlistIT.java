@@ -1,8 +1,6 @@
 package nl.hackyourfuture.project.backend.internal;
 
 import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
-import nl.hackyourfuture.project.backend.shared.jobs.PostingShortlist;
-import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.ShortlistFixture;
@@ -12,11 +10,11 @@ import nl.hackyourfuture.project.backend.identity.token.AccessTokens;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,9 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * unbounded query.
  */
 class PostingShortlistIT extends IntegrationTest {
-
-    @Autowired @Qualifier("jobsDirectory")
-    private PostingShortlist postingShortlist; // The in-process implementation, not the @Primary HTTP client.
 
     @Autowired
     private AccessTokens accessTokens;
@@ -53,7 +48,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void ranksTheFixtureAsTrackZeroPinnedItWithTheMonolithsOwnToken() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
@@ -70,23 +65,22 @@ class PostingShortlistIT extends IntegrationTest {
     }
 
     @Test
-    void theWholeJsonBodyEqualsTheInProcessAnswer() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+    void theWholeJsonBodyIsTheFixturesShortlist() {
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
 
         assertThat(response.status()).isEqualTo(200);
 
-        List<ShortlistedPosting> inProcess = postingShortlist.shortlist(
-                ShortlistFixture.CITY, ShortlistFixture.SKILLS, ShortlistFixture.LIMIT);
-        JsonNode inProcessJson = JSON.valueToTree(inProcess);
-        assertThat(response.json()).isEqualTo(inProcessJson);
+        LocalDate today = jdbc().sql("SELECT current_date").query(LocalDate.class).single();
+        JsonNode expectedJson = JSON.valueToTree(ShortlistFixture.expectedRows(today));
+        assertThat(response.json()).isEqualTo(expectedJson);
     }
 
     @Test
     void answersAListedCallerToo() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
@@ -98,7 +92,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void skillsEmptyListIs400() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "skills", List.of(), "limit", ShortlistFixture.LIMIT));
@@ -108,7 +102,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void skillsMissingIs400() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "limit", ShortlistFixture.LIMIT));
@@ -118,7 +112,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void limit0Is400() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "skills", ShortlistFixture.SKILLS, "limit", 0));
@@ -128,7 +122,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void limit101Is400() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "skills", ShortlistFixture.SKILLS, "limit", 101));
@@ -138,7 +132,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void noTokenIs401() {
-        ApiClient client = direct();
+        ApiClient client = inNetwork();
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
@@ -149,7 +143,7 @@ class PostingShortlistIT extends IntegrationTest {
     @Test
     void theUsersCookieIs401() {
         TestUser user = aUser().create();
-        ApiClient client = authenticatedAsOnDirect(user);
+        ApiClient client = authenticatedInNetwork(user);
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
@@ -160,7 +154,7 @@ class PostingShortlistIT extends IntegrationTest {
     @Test
     void aUserTokenInTheHeaderIs401() {
         String userToken = accessTokens.mint(UUID.randomUUID(), "x@example.test");
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + userToken);
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + userToken);
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
@@ -168,12 +162,12 @@ class PostingShortlistIT extends IntegrationTest {
         assertThat(response.status()).isEqualTo(401);
     }
 
-    private ApiClient authenticatedAsOnDirect(TestUser user) {
+    private ApiClient authenticatedInNetwork(TestUser user) {
         if (user.password() == null) {
             throw new IllegalArgumentException(
                     "User " + user.email() + " has no password (Google-only account), so it cannot log in");
         }
-        ApiClient client = direct();
+        ApiClient client = inNetwork();
         var loginResponse = client.post("/api/auth/login",
                 Map.of("email", user.email(), "password", user.password()));
         if (loginResponse.status() != 200) {
