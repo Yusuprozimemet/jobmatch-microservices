@@ -205,7 +205,8 @@ the gateway.
 | B2 | | The `shared` copies, the breaker config and its dependencies | 300–350 |
 | C1 | | The monolith's issuer list (with `IntegrationTest`); compose adds job-service unrouted, the third key and the scrape job | 200–300 |
 | C2 | | The harness container, its key set and relay; CI builds the image first; run instructions; `JobServiceHarnessIT` | 300–380 |
-| D | | The move and the switch; `JobsLeftTheMonolithIT`; the test edits above; dead config | 300–380 |
+| D1 | | The move and the switch; the test edits above (#174) | 340 |
+| D2 | | `JobsLeftTheMonolithIT`; dead config | 60–120 |
 | E1 | | In job-service's module: a stub upstream, the counts fallback cases, the breaker | 300–380 |
 | E2 | | `JobServiceObservedIT` (metric and trace), added to CI's gateway list; docs and Javadocs | 250–350 |
 
@@ -213,7 +214,8 @@ The tracks run in this order: B builds on A's pom, C2 needs B1's key set, D need
 needs the client D moves. The estimates are the second read's `wc -l` of what each track copies.
 In a scratch clone, D's move counted 0 lines for the ten files, 1 and 1 for `MartSkills`, 47 for
 `jobs/pom.xml` and 99 for `SavedJobCountsUnavailableIT`. A track still over 400 splits again, and
-its PR says where.
+its PR says where. D came to 453 lines and split: D1 is everything the suite needs to stay green
+after the move; D2 is what stays true without it (the new test, the unused config and comments).
 
 ## Acceptance criteria
 - [ ] **new** — In compose, job-service runs with no published port.
