@@ -347,6 +347,13 @@ def criteria(section_text):
     return out
 
 
+def in_evidence_format(crit):
+    """Whether a spec was written to the evidence format (#55: every criterion new or hold, every
+    check seen to fail), which came in on Day 9. A spec written before it tags no criterion, and
+    nothing asked its ticks to cite a PR, name a test or record a break: its zeros are not measured."""
+    return any(c["kind"] for c in crit)
+
+
 def test_state(tests, sha, blobs):
     """Where each named test stands at a commit: present, skippable (a class or file CI can skip,
     as GatewayHarnessIT is opt-in), or missing. CI runs every test that is present, so a hold
@@ -388,6 +395,7 @@ def roadmap(snaps, prs, blobs):
         exp0 = re.search(r"Expected PRs:\*\* *(\d+)", first)
         phase = re.search(r"\*\*Phase:\*\* *(\d+)", text)
         title = re.search(r"^# Day \d+ — (.+)$", text, re.M)
+        ev = criteria(crit)
         status = ("done" if total and ticked == total
                   else "provisional" if "**Status:** provisional" in text else "ready")
         days.append(dict(day=d, file=path, title=title.group(1) if title else path, phase=int(phase.group(1)) if phase else None,
@@ -397,7 +405,8 @@ def roadmap(snaps, prs, blobs):
                          track_prs=sum(kind(p["title"], p["headRefName"]) == "code" for p in mine),
                          prs=[dict(number=p["number"], kind=kind(p["title"], p["headRefName"]), title=p["title"]) for p in mine],
                          criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**")),
-                         evidence=criteria(crit), removal_checks=removal_checks(text)))
+                         evidence_format=in_evidence_format(ev),
+                         evidence=ev, removal_checks=removal_checks(text)))
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])
     return evidence(settle(days, order), snaps, blobs), order, stop
 
