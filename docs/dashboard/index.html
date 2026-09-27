@@ -128,6 +128,16 @@
     </details>
   </section>
 
+  <section class="panel" id="tokens">
+    <div class="panel-head">
+      <h2>Tokens spent</h2>
+      <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the migration day whose branch they ran on.</p>
+    </div>
+    <div class="legend" id="token-legend"></div>
+    <div id="token-bars"></div>
+    <div class="scroll-x"><table id="token-days"></table></div>
+  </section>
+
   <section class="panel" id="conclusion">
     <div class="panel-head">
       <div class="eyebrow" id="conclusion-eyebrow">Conclusion</div>

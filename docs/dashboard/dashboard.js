@@ -485,7 +485,59 @@ function drawConclusion() {
     : `<tbody><tr><td class="t">The README has no measurement table.</td></tr></tbody>`;
 }
 
-drawNow(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
+/* ---------- tokens ---------- */
+const MODEL_VAR = { "claude-opus-5-5": "var(--m-opus)", "claude-opus-5": "var(--m-opus-prev)", "claude-sonnet-5": "var(--m-sonnet)", "claude-haiku-4-5": "var(--m-haiku)" };
+const modelName = m => m.replace(/^claude-/, "").replace(/^(\w)(\w*)-/, (_, a, b) => a.toUpperCase() + b + " ").replace(/-/g, ".");
+const kilo = n => n >= 1e6 ? fmt(n / 1e6, 2) + "M" : n >= 1e3 ? fmt(n / 1e3, 0) + "k" : String(n);
+function drawTokens() {
+  const T = DATA.tokens || [];
+  const box = document.getElementById("token-bars");
+  if (!T.length) { box.innerHTML = '<p class="load-error">No token counts yet: run <code>python scripts/token-usage.py</code>.</p>'; return; }
+  const sum = (rows, k) => rows.reduce((a, r) => a + r[k], 0);
+  const models = [...new Set(T.map(r => r.model))].sort((a, b) => sum(T.filter(r => r.model === b), "output") - sum(T.filter(r => r.model === a), "output"));
+  const color = m => MODEL_VAR[m] || "var(--other)";
+  document.getElementById("token-legend").innerHTML = models.map(m =>
+    `<span><i class="dot" style="background:${color(m)}"></i>${esc(modelName(m))} · ${kilo(sum(T.filter(r => r.model === m), "output"))}</span>`).join("");
+  const dates = [...new Set(T.map(r => r.date))].sort();
+  const H = 260, P = { l: 56, r: 12, t: 12, b: 30 }, bw = (LW - P.l - P.r) / dates.length;
+  const perDate = dates.map(d => T.filter(r => r.date === d));
+  const top = Math.max(...perDate.map(rs => sum(rs, "output")));
+  const yMax = Math.ceil(top / 10 ** Math.floor(Math.log10(top)) * 2) / 2 * 10 ** Math.floor(Math.log10(top));
+  const ly = v => P.t + (1 - v / yMax) * (H - P.t - P.b);
+  box.innerHTML = "";
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Output tokens per date by model" }, box);
+  steps(0, yMax, 4).forEach(t => {
+    el("line", { x1: P.l, x2: LW - P.r, y1: ly(t), y2: ly(t), stroke: "var(--grid)" }, svg);
+    el("text", { x: P.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = kilo(t);
+  });
+  perDate.forEach((rs, i) => {
+    const x = P.l + i * bw;
+    let y = 0;
+    models.forEach(m => {
+      const v = sum(rs.filter(r => r.model === m), "output");
+      if (!v) return;
+      const rect = el("rect", { x: x + bw * 0.15, y: ly(y + v), width: bw * 0.7, height: ly(y) - ly(y + v), fill: color(m) }, svg);
+      rect.addEventListener("mousemove", ev => showTip(ev, `<b>${dates[i]} · ${esc(modelName(m))}</b>
+        <div class="row"><span>output</span><span>${kilo(v)}</span></div>
+        <div class="row"><span>input + cache</span><span>${kilo(sum(rs.filter(r => r.model === m), "input") + sum(rs.filter(r => r.model === m), "cache_write") + sum(rs.filter(r => r.model === m), "cache_read"))}</span></div>
+        <div class="row"><span>replies</span><span>${sum(rs.filter(r => r.model === m), "replies")}</span></div>`));
+      rect.addEventListener("mouseleave", hideTip);
+      y += v;
+    });
+    el("text", { x: x + bw / 2, y: H - P.b + 18, "text-anchor": "middle", class: "num" }, svg).textContent = dates[i].slice(5);
+  });
+  const days = [...new Set(T.map(r => r.day))].sort((a, b) => rank(a) - rank(b));
+  const cell = (rs, m) => { const v = sum(rs.filter(r => r.model === m), "output"); return `<td class="num">${v ? kilo(v) : "–"}</td>`; };
+  document.getElementById("token-days").innerHTML =
+    `<thead><tr><th>Day</th><th>Replies</th><th>Output</th><th>Input + cache</th>${models.map(m => `<th>${esc(modelName(m))}</th>`).join("")}</tr></thead><tbody>` +
+    days.map(d => {
+      const rs = T.filter(r => r.day === d);
+      return `<tr><td>${d == null ? "Between days (main, tooling, docs)" : "Day " + dd(d)}</td><td class="num">${sum(rs, "replies")}</td>
+        <td class="num">${kilo(sum(rs, "output"))}</td><td class="num">${kilo(sum(rs, "input") + sum(rs, "cache_write") + sum(rs, "cache_read"))}</td>${models.map(m => cell(rs, m)).join("")}</tr>`;
+    }).join("") + "</tbody>";
+}
+
+drawNow(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
 }
 
 function start() {

@@ -535,6 +535,15 @@ def conclusion(readme):
     return dict(reads=reads, measured=[r for r in rows[2:] if len(r) == 2])
 
 
+def token_usage():
+    """Tokens per date, migration day and model, as scripts/token-usage.py last counted them."""
+    path = os.path.join(PAGE, "token-usage.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def fill(page, data, name):
     # A PR title is written by whoever opens the PR; "</script>" in one must not end the data line.
     data = data.replace("</", "<\\/")
@@ -604,7 +613,7 @@ def main():
                            order=[d for d in order if d != PLATFORM],
                            removals=removal_history(days, snaps, blobs),
                            hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
-                           vocab_size=vocab, pca_var=pca,
+                           vocab_size=vocab, pca_var=pca, tokens=token_usage(),
                            conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md"))),
                       separators=(",", ":"))
     target = args.build or args.out
