@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * job-service and the monolith trust each other, and only whom they list (Day 17, Track C2), with
+ * job-service and the monolith trust each other, and only whom they list (Day 17, Tracks C2 and D), with
  * job-service in its container ({@link JobService}). It has no {@code /internal/nothing}: a trusted
  * caller gets 404 there, which a chain that refuses everyone, as {@code denyAll()} would, cannot give.
  */
@@ -40,6 +40,15 @@ class JobServiceHarnessIT extends IntegrationTest {
     @Test
     void theMonolithsOwnTokenGetsPastJobServicesChain() {
         assertThat(postToJobServiceInternal("Bearer " + serviceToken.mint())).isEqualTo(404);
+    }
+
+    @Test
+    void theMonolithsOwnTokenGetsPostingsFromJobService() {
+        ApiClient client = ApiClient.at(JobService.baseUrl()).withHeader("Authorization", "Bearer " + serviceToken.mint());
+
+        ApiResponse response = client.post("/internal/postings/batch", Map.of("ids", List.of("seed-0001")));
+
+        assertThat(response.status()).isEqualTo(200);
     }
 
     @Test

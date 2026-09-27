@@ -70,10 +70,16 @@ public final class JobService {
     private JobService() {
     }
 
+    /** The container's mapped application port. */
+    public static int port() {
+        ensureStarted();
+        return container.getMappedPort(PORT);
+    }
+
     /** Where a client reaches job-service: its own base URL, container host and mapped port. */
     public static String baseUrl() {
         ensureStarted();
-        return "http://" + container.getHost() + ":" + container.getMappedPort(PORT);
+        return "http://" + container.getHost() + ":" + port();
     }
 
     /** The relay's address from this JVM, for tests of the relay itself. */

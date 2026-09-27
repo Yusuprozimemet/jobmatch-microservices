@@ -4,7 +4,6 @@ import nl.hackyourfuture.project.backend.shared.jobs.PostingLookup;
 import nl.hackyourfuture.project.backend.shared.jobs.PostingShortlist;
 import nl.hackyourfuture.project.backend.shared.jobs.PostingSummary;
 import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
-import nl.hackyourfuture.project.backend.shared.mart.MartSkills;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.simple.JdbcClient;
