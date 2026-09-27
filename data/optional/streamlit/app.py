@@ -29,9 +29,9 @@ load_dotenv()
 st.set_page_config(page_title="Pipeline health", page_icon="📊")
 st.title("Pipeline health")
 
-# The same BACKEND_PG_* names the sync uses. One database, one set of
-# settings: a dashboard with its own names is a dashboard that quietly points
-# at the wrong server.
+# Read the published mart, so the same BACKEND_PG_* settings as the publish,
+# which point at jobs_db. One database, one set of settings: a dashboard with
+# its own names is a dashboard that quietly points at the wrong server.
 DSN = (
     f"host={os.environ['BACKEND_PG_HOST']} "
     f"port={os.getenv('BACKEND_PG_PORT', '5432')} "

@@ -59,6 +59,20 @@ env:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        # Trust, so no password lives here: the container exists for one job
+        # and publishes only to the runner. The test gives its roles random ones.
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -150,6 +164,12 @@ jobs:
 
       - name: Test
         working-directory: ./data
+        # The swap's no-window guarantee needs a real server. The fake-connection
+        # tests in test_sync.py stay green with autocommit=True, so they cannot
+        # see the window between drop and rename; test_publish_postgres.py tests
+        # it against the Postgres service above.
+        env:
+          PUBLISH_TEST_ADMIN_DSN: host=localhost port=5432 user=postgres dbname=postgres
         run: uv run pytest -q
 
   dag-integrity:

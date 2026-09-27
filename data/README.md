@@ -209,9 +209,10 @@ will not show it again.
 It is yours, not your team's. Paste it only into your local `.env`, never into
 Slack, a pull request or an LLM prompt.
 
-**3. Create your local database.** The backend's own script makes the
-`project_db` database, the `app` and `analytics` schemas, and a login role for
-each. Start the database first, from the repository root:
+**3. Create your local database.** The backend's own script makes
+`project_db` with the `app` schema and `jobs_db` with the `analytics` and
+`analytics_dev` schemas, with a login role for each. Start the database first,
+from the repository root:
 
 ```bash
 cd <repository root>
@@ -590,6 +591,9 @@ whole team can see, with no deploy:
 `DATABRICKS_CATALOG`, `DBT_SCHEMA`, `AZURE_TENANT_ID`, `BACKEND_PG_HOST`,
 `BACKEND_PG_DB`.
 
+`BACKEND_PG_DB` is `jobs_db`, job-service's database (Day 20); moving it at
+cutover is the maintainer's step (see `docs/runbooks/jobs-db.md`).
+
 They are set for you when your team is provisioned. Miss one and the task that
 needs it fails saying which one, rather than doing something surprising.
 
@@ -629,9 +633,11 @@ one pipeline.
 
 The other direction: your credential can read the backend's own tables, so a
 model can join against how the application is actually being used.
-`src/publishing/sync.py` has `read_backend_table` ready for it. Add a task once you have
-agreed with the backend which table you are reading, and keep it before
-`dbt_build` so the models can use what it lands.
+`src/publishing/sync.py` has `read_backend_table` ready for it; note that it
+reads the `app` schema in `project_db`, a different database from the one where
+you publish the mart (`jobs_db`). Add a task once you have agreed with the
+backend which table you are reading, and keep it before `dbt_build` so the
+models can use what it lands.
 
 Agreeing it matters more than it sounds. Their tables are theirs to change, and
 nothing warns you when they do: a column you depend on can disappear in a
