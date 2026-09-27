@@ -269,6 +269,18 @@ def run_order(plan, spec_days):
     return [d for d in sorted(spec_days) if d not in listed] + listed, stop
 
 
+def out_of_order(order):
+    """The days that do not run in numeric order: those outside the longest run of the order that
+    rises by number: Days 38-40 ran ahead of Day 17, Day 17 behind Days 18-19, and Day 25 is planned
+    behind Days 26-27."""
+    days = [d for d in order if d != PLATFORM]
+    best = []  # best[i]: the longest rising run that ends at days[i]
+    for i, d in enumerate(days):
+        best.append(max((best[j] for j in range(i) if days[j] < d), key=len, default=[]) + [d])
+    keep = set(max(best, key=len, default=[]))
+    return [d for d in days if d not in keep]
+
+
 def settle(days, order):
     """Each day's status. A day is finished once a day later in the run order has code merged, or
     its own closing PR has; finished with every box ticked is done, with boxes open is closed
@@ -390,6 +402,7 @@ def roadmap(snaps, prs, blobs):
                 if TRACK_ROW.match(r)}
         mine = sorted((p for p in merged if p["headRefName"].startswith(f"day-{d:02d}/")), key=lambda p: p["number"])
         done_tracks = merged_tracks([p["headRefName"] for p in mine], tracks)
+        worked = sorted(s["date"] for s in snaps if s["pr"] in {p["number"] for p in mine})
         ticked, total = crit.count("- [x]"), len(CRITERION.findall(crit))
         exp = re.search(r"Expected PRs:\*\* *(\d+)", text)
         exp0 = re.search(r"Expected PRs:\*\* *(\d+)", first)
@@ -405,6 +418,7 @@ def roadmap(snaps, prs, blobs):
                          track_prs=sum(kind(p["title"], p["headRefName"]) == "code" for p in mine),
                          prs=[dict(number=p["number"], kind=kind(p["title"], p["headRefName"]), title=p["title"]) for p in mine],
                          criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**")),
+                         worked=[worked[0], worked[-1]] if worked else None,
                          evidence_format=in_evidence_format(ev),
                          evidence=ev, removal_checks=removal_checks(text)))
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])
@@ -629,6 +643,7 @@ def main():
                open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
     data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
                            order=[d for d in order if d != PLATFORM],
+                           out_of_order=out_of_order(order),
                            removals=removal_history(days, snaps, blobs),
                            hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
                            vocab_size=vocab, pca_var=pca, tokens=token_usage(),

@@ -325,6 +325,12 @@ Days keep their numbers; they run in this order:
         self.assertEqual(stop, 28)
         self.assertEqual(sd.run_order(self.PLAN, list(range(1, 40)))[0][16:18], [38, 39])
 
+    def test_the_days_out_of_order_are_those_that_break_the_rising_run(self):
+        order = list(range(1, 17)) + [38, 39, 40, 18, 19, 17, 20, 21, 26, 27, 25, 28, sd.PLATFORM]
+        self.assertEqual(sd.out_of_order(order), [38, 39, 40, 17, 25])
+        self.assertEqual(sd.out_of_order(list(range(1, 10))), [])
+        self.assertEqual(sd.out_of_order([]), [])
+
     def test_the_repositorys_plan_parses(self):
         with open(os.path.join(HERE, os.pardir, "plan.md"), encoding="utf-8") as f:
             order, stop = sd.run_order(f.read(), list(range(1, 38)))

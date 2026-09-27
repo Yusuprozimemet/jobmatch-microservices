@@ -82,7 +82,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Drift and gap, merge by merge</h2>
-      <p>Drift is the angle between today's spec text and the spec as written on Sep 20. Gap is the angle between the whole spec and the code, over the shared code-name vocabulary. Both are in degrees, so they share one axis. The strip under the axis shows what kind of PR each merge was.</p>
+      <p>Drift is the angle between today's spec text and the spec as written on Sep 20. Gap is the angle between the whole spec and the code, over the shared code-name vocabulary. Both are in degrees, so they share one axis. The strip under the axis shows what kind of PR each merge was; below that, a tick where each calendar date begins, so a busy date takes more width. A day marked * ran out of numeric order: Days 38–40 before Day 17, and Day 17 after Days 18–19.</p>
     </div>
     <div class="legend">
       <span><i style="background:var(--spec)"></i>Drift: spec vs plan as written</span>
@@ -91,6 +91,7 @@
       <span><i class="dot" style="background:var(--code)"></i>Code track</span>
       <span><i class="dot" style="background:var(--close)"></i>Close the day</span>
       <span><i class="dot" style="background:var(--other)"></i>Other (docs, CI)</span>
+      <span><b style="color:var(--ooo)">D38*</b>Run out of numeric order</span>
     </div>
     <div id="lines"></div>
     <div class="panel-head" style="margin-top:6px">

@@ -18,6 +18,11 @@ const dayOfFile = f => { const m = f.match(/day-(\d+)/); return m ? +m[1] : 0; }
 // A day's place in the run order (plan.md): Day 38 runs before Day 17. Mirrors ranker() in the script.
 const ORDER = DATA.order || [];
 const rank = d => !d ? -1 : ORDER.includes(d) ? ORDER.indexOf(d) : ORDER.length + d;
+// The days that break the rising run of the order: run ahead of a lower day, or behind a higher one.
+const OOO = new Set(DATA.out_of_order || []);
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortDate = s => `${MONTHS[+s.slice(5, 7) - 1]} ${+s.slice(8)}`;
+const ranBetween = d => { const i = ORDER.indexOf(d); return [ORDER[i - 1], ORDER[i + 1]].map(x => x ? `Day ${dd(x)}` : "–"); };
 const NS = "http://www.w3.org/2000/svg";
 let sel = N - 1;
 function el(tag, attrs = {}, parent) {
@@ -177,12 +182,16 @@ function drawReadout() {
 }
 
 /* ---------- line charts ---------- */
-const LW = 1000, LP = { l: 44, r: 104, t: 14, b: 46 };
+const LW = 1000, LP = { l: 44, r: 104, t: 14, b: 60 };
 const lx = i => LP.l + (i / (N - 1)) * (LW - LP.l - LP.r);
 function dayStarts() {
   const out = []; let d = -1;
   R.forEach((r, i) => { if (r.day !== d) { out.push([i, r.day]); d = r.day; } });
   return out;
+}
+// The first merge of each calendar day: the x axis is merges, so a busy date takes more width.
+function dateStarts() {
+  return R.map((r, i) => [i, r.date]).filter(([i, s]) => !i || R[i - 1].date !== s);
 }
 const steps = (lo, hi, n) => Array.from({ length: n + 1 }, (_, i) => +(lo + (hi - lo) * i / n).toFixed(1));
 function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digits = 1 }) {
@@ -199,7 +208,15 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digi
     if (!d || lx(i) - lastX < 34) return;
     lastX = lx(i);
     el("line", { x1: lx(i), x2: lx(i), y1: LP.t, y2: H - LP.b, stroke: "var(--grid)", "stroke-dasharray": "2 3" }, svg);
-    el("text", { x: lx(i) + 3, y: H - LP.b + (strip ? 30 : 16), class: "num" }, svg).textContent = "D" + dd(d);
+    const t = el("text", { x: lx(i) + 3, y: H - LP.b + (strip ? 30 : 16), class: "num" + (OOO.has(d) ? " ooo" : "") }, svg);
+    t.textContent = "D" + dd(d) + (OOO.has(d) ? "*" : "");
+  });
+  let lastDate = -99;
+  dateStarts().forEach(([i, s]) => {
+    el("line", { x1: lx(i), x2: lx(i), y1: H - LP.b, y2: H - LP.b + (strip ? 36 : 22), stroke: "var(--axis)" }, svg);
+    if (lx(i) - lastDate < 44) return;
+    lastDate = lx(i);
+    el("text", { x: lx(i) + 3, y: H - LP.b + (strip ? 46 : 32), class: "date" }, svg).textContent = shortDate(s);
   });
   if (strip) {
     const w = (LW - LP.l - LP.r) / (N - 1);
@@ -386,20 +403,22 @@ function drawNow() {
     return `<div class="phase-row"><div class="phase-name"><b>${p}. ${name}</b>Days ${ds[0].day}–${ds[ds.length - 1].day}</div><div class="tiles">${ds.map(d => {
       const share = d.tracks.length ? Math.min(1, d.tracks_merged.length / d.tracks.length) : 0;
       const bar = d.status === "active" ? `<span class="bar"><i style="width:${Math.round(share * 100)}%"></i></span>` : "";
-      return `<div class="tile ${d.status}${STOPS.includes(d.day) ? " stop" : ""}" data-day="${d.day}" tabindex="0" aria-label="Day ${d.day}, ${STATUS[d.status]}">${dd(d.day)}${bar}</div>`;
+      return `<div class="tile ${d.status}${STOPS.includes(d.day) ? " stop" : ""}${OOO.has(d.day) ? " ooo" : ""}" data-day="${d.day}" tabindex="0" aria-label="Day ${d.day}, ${STATUS[d.status]}">${dd(d.day)}${bar}</div>`;
     }).join("")}</div></div>`;
   }).join("");
   document.getElementById("roadmap").innerHTML = rows + `<div class="tile-legend">
     <span><i class="tile done"></i>Done</span><span><i class="tile closed"></i>Closed, boxes open</span><span><i class="tile active"></i>In progress (bar: tracks merged)</span>
     <span><i class="tile"></i>Ready</span><span><i class="tile provisional"></i>Provisional</span>
-    <span><i class="tile stop"></i>Ends a phase</span></div>`;
+    <span><i class="tile stop"></i>Ends a phase</span><span><i class="tile ooo"></i>Run out of numeric order</span></div>`;
   document.querySelectorAll("#roadmap .tile[data-day]").forEach(tile => {
     const d = days.find(x => x.day === +tile.dataset.day);
     const show = ev => showTip(ev, `<b>Day ${dd(d.day)} · ${STATUS[d.status]}</b><div style="margin:3px 0 6px">${md(d.title)}</div>
       <div class="row"><span>estimate</span><span>${d.expected_first ?? "–"} → ${d.expected ?? "–"} PRs</span></div>
       <div class="row"><span>track PRs merged</span><span>${d.track_prs}</span></div>
       <div class="row"><span>criteria ticked</span><span>${d.criteria.ticked}/${d.criteria.total}</span></div>
-      <div class="row"><span>tagged new / hold</span><span>${d.criteria.new} / ${d.criteria.hold}</span></div>`);
+      <div class="row"><span>tagged new / hold</span><span>${d.criteria.new} / ${d.criteria.hold}</span></div>
+      <div class="row"><span>merged on</span><span>${d.worked ? shortDate(d.worked[0]) + (d.worked[1] !== d.worked[0] ? " – " + shortDate(d.worked[1]) : "") : "–"}</span></div>
+      ${OOO.has(d.day) ? `<div class="row"><span>runs between</span><span>${ranBetween(d.day).join(" and ")}</span></div>` : ""}`);
     tile.addEventListener("mousemove", show);
     tile.addEventListener("focus", () => { const r = tile.getBoundingClientRect(); show({ clientX: r.right, clientY: r.bottom }); });
     tile.addEventListener("mouseleave", hideTip);
