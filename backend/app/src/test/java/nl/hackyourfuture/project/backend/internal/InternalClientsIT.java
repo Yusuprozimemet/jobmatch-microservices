@@ -128,9 +128,8 @@ class InternalClientsIT extends IntegrationTest {
     void breakersAreConfiguredAsTheSpecSays() {
         var postingLookupBreaker = circuitBreakerRegistry.circuitBreaker("postingLookup");
         var postingShortlistBreaker = circuitBreakerRegistry.circuitBreaker("postingShortlist");
-        var savedJobCountsBreaker = circuitBreakerRegistry.circuitBreaker("savedJobCounts");
 
-        for (var breaker : new Object[]{postingLookupBreaker, postingShortlistBreaker, savedJobCountsBreaker}) {
+        for (var breaker : new Object[]{postingLookupBreaker, postingShortlistBreaker}) {
             var config = ((io.github.resilience4j.circuitbreaker.CircuitBreaker) breaker).getCircuitBreakerConfig();
 
             assertThat(config.getSlidingWindowSize()).isEqualTo(10);

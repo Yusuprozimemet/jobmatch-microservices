@@ -59,7 +59,7 @@ public final class StubUpstream {
         return INSTANCE;
     }
 
-    /** What to set {@code app.internal.jobs-url} or {@code app.internal.applications-url} to. */
+    /** What to set {@code app.internal.jobs-url} to. */
     public String baseUrl() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }
