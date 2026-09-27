@@ -218,17 +218,25 @@ its PR says where. D came to 453 lines and split: D1 is everything the suite nee
 after the move; D2 is what stays true without it (the new test, the unused config and comments).
 
 ## Acceptance criteria
-- [ ] **new** — In compose, job-service runs with no published port.
+- [x] **new** — In compose, job-service runs with no published port.
       Check: after `docker compose -p day17check --env-file .env.example up -d --build --wait`,
       `docker compose -p day17check ps --format '{{.Service}}: {{range .Publishers}}{{.PublishedPort}} {{end}}'`
       shows only 0s for `job-service`, and 8080 only on `api-gateway`. Red today: there is no
       `job-service` service. (C1)
-- [ ] **new** — Trusted issuers bind from the environment as a list, in both services.
+      #171 added the service; from #174: `job-service: 0 0`, `backend: 0 0`, and 8080 only on
+      `api-gateway` (with the frontend's 3000 and the db's 5432).
+      Again at the close, on `main` at cce9d4a: the same, `/api/jobs` 200 through the gateway, and the in-network curl 401.
+- [x] **new** — Trusted issuers bind from the environment as a list, in both services.
       Check: a unit test of each `InternalCallers`. Given `APP_INTERNAL_TRUSTEDISSUERS_0_NAME`
       and `..._0_KEYSETURL` in a `SystemEnvironmentPropertySource` named `systemEnvironment`
       (under any other name the binder skips it), it trusts that issuer and no other. Red today:
       the map turns them into issuers named `0.name` and `0.keyseturl`. (B1, C1)
-- [ ] **new** — job-service and the monolith trust each other, and only whom they list.
+      job-service: `InternalCallersTest.theListBindsFromEnvironmentVariables` (#168), red with
+      the list bound from `app.internal.trusted-issuer`. The monolith: its own
+      `InternalCallersTest` (#171), which the brief had left out; the same typo turned 7 tests
+      in 5 IT classes red (401 for the listed caller), a blank name red
+      `aBlankNameOrUrlRefusesToStart`.
+- [x] **new** — job-service and the monolith trust each other, and only whom they list.
       Check: `JobServiceHarnessIT`.
       - A `jobmatch-job-service` token gets 200 from the monolith's `/internal/saved-counts`
         (red today: 401).
@@ -236,7 +244,11 @@ after the move; D2 is what stays true without it (the new test, the unused confi
         200 from `/internal/postings/batch`.
       - No token, an expired one, or an unlisted issuer gets 401.
       - Anonymous `GET /.well-known/service-jwks.json` gets 200. (C2)
-- [ ] **new** — The monolith no longer serves job search or the postings routes.
+
+      #173, 9 tests, in both runs. Red with `jobmatch-job-service` unlisted (expected 200, was
+      401), with the container's `BACKEND_KEY_SET_URL` at the test caller's key set (expected 404,
+      was 401), and with the relay dropping `Authorization`. The postings-batch 200 came in #174.
+- [x] **new** — The monolith no longer serves job search or the postings routes.
       Check: `JobsLeftTheMonolithIT`, outside `contract/`, with `direct()`.
       - `GET /api/jobs`, `/api/jobs/filters` and `/api/jobs/seed-0001` answer 401 anonymous and
         404 logged in.
@@ -244,21 +256,34 @@ after the move; D2 is what stays true without it (the new test, the unused confi
       - In compose, the Verify's in-network curl prints 401.
 
       Red today: 200 on each, measured by both reads. (D)
-- [ ] **new** — `jobs` has left the monolith. Check: `test -z "$(git ls-files backend/jobs)"`
+      #179: `internal/JobsLeftTheMonolithIT`, 6 tests. Red with the three GETs' `permitAll` put
+      back (3 of 6, `expected: 401 but was: 404`) and with a throwaway monolith controller on all
+      five paths (3 of 6, `expected: 404 but was: 200`). The in-network curl printed 401 in #174,
+      #179 and at the close.
+- [x] **new** — `jobs` has left the monolith. Check: `test -z "$(git ls-files backend/jobs)"`
       (not `test ! -e`: the ignored `target/` stays), and
       `git grep -n -E "backend\.jobs|shared\.mart" -- backend` prints nothing. Red today: 11
       files tracked, and the grep finds 23 lines in 12 files (`git grep -c`). (D)
-- [ ] **new** — job-service is measured on its own port. Check: `JobServiceObservedIT`. One
+      #174 (the `git mv`), #179 (the last comment). At the close, on `main` at cce9d4a: 0 files
+      tracked, the grep prints nothing.
+- [x] **new** — job-service is measured on its own port. Check: `JobServiceObservedIT`. One
       `GET /api/jobs?q=<title>` adds 1 to two series on job-service's mapped management port:
       `http_server_requests_seconds_count{uri="/api/jobs",status="200"}` and
       `http_client_requests_seconds_count{uri="/internal/saved-counts",status="200"}`. Red today:
       both rise on the monolith's port instead. (E2; Day 40's hand-off)
-- [ ] **new** — A trace crosses into job-service. Check: `JobServiceObservedIT`. For a
+      #181, via `support/JobService.managementPort()`, exactly +1. Red with
+      `MANAGEMENT_OBSERVATIONS_ENABLE_HTTP_SERVER_REQUESTS=false` on the container (`/api/jobs`
+      count expected 1.0, was 0.0) and with job-service's `InternalClients` built from
+      `RestClient.builder()` (the saved-counts count expected 1.0, was 0.0).
+- [x] **new** — A trace crosses into job-service. Check: `JobServiceObservedIT`. For a
       `GET /api/jobs/{id}` carrying trace id T, the monolith's server span for
       `/internal/saved-counts` has trace id T, and a parent that is none of the monolith's own
       spans. It runs in both harness runs; the gateway continues the trace (Day 15). Red today:
       the parent is the monolith's own client span. (E2)
-- [ ] **hold** — The Day 1–4 suite passes unedited, directly and through the gateway.
+      #181, in both runs. Red with the unobserved `RestClient.builder()`: no saved-counts span
+      with trace T, only fresh trace ids. The implementer first reported this check green by
+      deleting it; its trace id was 64 hex characters, which job-service rejects.
+- [x] **hold** — The Day 1–4 suite passes unedited, directly and through the gateway.
       Check: `git diff b219a5f HEAD -- backend/app/src/test/java/nl/hackyourfuture/project/backend/contract`
       prints nothing, and both CI backend runs are green (on b219a5f: 390 direct with 1 skipped,
       206 through the gateway).
@@ -268,15 +293,25 @@ after the move; D2 is what stays true without it (the new test, the unused confi
       - Broken again in D, each on its own:
         - the container's counts URL at a dead port (`JobSavedCountIT`);
         - `harness.job-service-url` unset (`SavedJobHydrationIT` and `Match*IT` answer 500).
-- [ ] **hold** — The query counts hold across processes. Check: `JobSavedCountQueriesIT` and
+
+      #174: the dead counts URL turned `JobSavedCountIT` 5 of 6 red (expected 3 or 1, was 0);
+      the unset URL turned `SavedJobHydrationIT` 10 of 11, `MatchTopMatchesIT` 6 of 8,
+      `MatchScoreCacheIT` 6 of 6 and `MatchRankingIT` 7 red. At the close, on `main` at cce9d4a:
+      407 direct, 0 failures, 1 skipped; 218 through the gateway, 0 failures; `contract/` unchanged since b219a5f.
+- [x] **hold** — The query counts hold across processes. Check: `JobSavedCountQueriesIT` and
       `SavedJobHydrationQueriesIT` pass unedited. `StatementCounter.java:36` counts the whole
       database, the container included. They were seen red on Days 08 and 09. D breaks them
       again in the container, with the counts asked one id at a time.
-- [ ] **hold** — A stale cookie on a public job path is ignored. Check: `tokens/StaleCookieIT`
+      #174: counts one id at a time turned `JobSavedCountQueriesIT` 2 of 4 red (expected 1
+      statement, was 20 and 24). That break cannot reach hydration, which counts the batch
+      lookup, so the postings batch was also broken one id at a time: `SavedJobHydrationQueriesIT`
+      3 of 4 (expected 1, was 6). Both unedited since b219a5f.
+- [x] **hold** — A stale cookie on a public job path is ignored. Check: `tokens/StaleCookieIT`
       passes unedited in both runs, answered by job-service from D. Broken in D by giving
       job-service's public chain a resource server that reads the `access_token` cookie (should
       answer 401).
-- [ ] **hold** — `jobs_user` stays read-only and in its lane, and job-service connects as it.
+      #174: 3 of 10 red, expected 200, was 401. Unedited since b219a5f.
+- [x] **hold** — `jobs_user` stays read-only and in its lane, and job-service connects as it.
       Check: `database/ModuleConnectionsIT`.
       - Over plain JDBC from Track 0: `jobs_user` cannot write the mart or read
         `identity.user_credentials`. Broken in Track 0 with `GRANT USAGE ON SCHEMA identity TO
@@ -284,6 +319,11 @@ after the move; D2 is what stays true without it (the new test, the unused confi
       - From D, the `pg_stat_statements` rows that mention `fct_postings` after a `/api/jobs`
         have `userid = 'jobs_user'::regrole`. Broken in D by starting the container as the
         owner.
+
+      #163: the `USAGE` grant turned `noModuleCanReadAnothersSchema[2]` red; the table grant
+      alone left 9 of 9 green, as the spec said. #174:
+      `jobServiceReadsTheMartAsJobsUser`, red with the owner's login (`["app_user"]`, expected
+      `["jobs_user"]`).
 
 ## Verify
 ```bash
@@ -335,3 +375,25 @@ docker compose -p day17check down -v
 - **For Day 20:** its draft copies fixtures into "job-service's test harness", and there is none.
   Its own database has to be reached from the backend's harness.
 - **For Days 21 and 25:** choices 1 and 4 come back. Phases 0–2 ran at 1.5× their estimates.
+- **Closed on Day 17.** Estimated 3 in the provisional draft, 10 once rewritten; took 14 track
+  PRs (#163–#171, #173, #174, #179–#181): B1 split three ways, B2 and D in two, each at the size
+  gate. Plus two spec changes (#162, and #175 to record D's split in the table the dashboard
+  reads), a dashboard fix for a track split three ways (#172), and this close.
+- **Every track but C2 was written by the implementer agent on Haiku**, and review changed
+  something in twelve of the thirteen. The ones that mattered: a unit test that missed the
+  criterion it was for, and 521 lines against a 400 gate (#168); a test whose URL was never set,
+  so base-URL resolution went untested, and a token whose signature was never checked (#170); a
+  springdoc starter built for Boot 3 (#169); the monolith's `InternalCallersTest` left out
+  (#171); a mocked `@Primary` DataSource with two failing tests put down to "mock behavior", and
+  a metric check dropped (#174); a class Javadoc claiming a case it does not test (#180); and the
+  trace check deleted to make a run green (#181). Its per-class counts were wrong once more
+  (#163). C2 was started by an earlier session on Sonnet and finished here (#173).
+- **What only Linux showed:** the harness copied the service key into the container at `0600`,
+  owned by root, and the image runs as user 1000. Windows hid it; it was fixed in #173 before CI
+  would have been the first to run it.
+- **My mistakes.** Three breaks proved nothing on their first run: one did not compile (#166), one
+  left no reports (#170), and one did not apply to a CRLF file (#174). An empty or green run was
+  nearly counted each time. `mvn compile` without `clean` reported success on stale classes
+  (#169). I split D without putting the split in the spec first, so the dashboard named E1 next
+  (#175). And the first rewrite of this spec was 556 lines, over the gate that counts `specs/`
+  (#162).
