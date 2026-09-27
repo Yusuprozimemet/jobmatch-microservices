@@ -29,14 +29,14 @@ maintainer, and nothing starts after a phase ends until they say so.
    Track 0 holds the tests that must pass before and after the change, and lands first.
 3. **A closing PR:** `day-NN/close-the-day`. Tick each criterion with its evidence (test or
    command, and the PR it landed in), add Notes to the spec, and update the README's Day entry
-   and measurement table.
+   and measurement table. Run `python scripts/token-usage.py` and commit the refreshed
+   `docs/dashboard/token-usage.json`: CI cannot read the transcripts it counts.
 4. **After opening any PR, stop and wait for the maintainer to say "merged".** Do not start the
    next step, and do not start a new phase, until told.
 5. **After every "merged", refresh the dashboard before the next step:** the merge rebuilds the
    [public one](https://yusuprozimemet.github.io/jobmatch-microservices/) by itself (`.github/workflows/dashboard.yml`). On fresh
-   `main`, run `python scripts/spec-drift.py`. A session that can publish to the maintainer's
-   dashboard artifact republishes it from `--build dashboard.html`; any other session reports the
-   next step the script prints.
+   `main`, run `python scripts/spec-drift.py` and report the next step it prints. The page on
+   GitHub Pages is the only dashboard; nothing else is republished.
 6. **When a phase's last day closes,** run the plan-auditor on the phase that just ended and on
    the next, report, and stop.
 
