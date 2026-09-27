@@ -286,8 +286,9 @@ def settle(days, order):
     return days
 
 
-# A track's name is a letter or a digit, with a number when a day splits one (Day 39's A1, A2).
-TRACK_ROW = re.compile(r"^\| *([0-9A-Z][0-9]?) *\|")
+# A track's name is a letter or a digit, with a number when a day splits one (Day 39's A1, A2),
+# or a lowercase letter (Day 20's 0a, 0b).
+TRACK_ROW = re.compile(r"^\| *([0-9A-Z][0-9]?[a-z]?) *\|")
 
 
 def track_names(section_text):
@@ -298,16 +299,17 @@ def track_names(section_text):
 def merged_tracks(branches, tracks):
     """The tracks with a merged branch. `track-a1-...` is A1 when the table lists A1; otherwise it
     is part of A, as Day 15's `track-c1`..`c4` were its one track C. A letter after the digits is a
-    part of that track: Day 17 split B1 again into `track-b1a`..`b1c`."""
+    part of that track: Day 17 split B1 again into `track-b1a`..`b1c`, unless the table lists it
+    with that letter, as Day 20 lists 0a and 0b."""
+    by_lower = {t.lower(): t for t in tracks}
     merged = set()
     for branch in branches:
-        m = re.search(r"/track-([0-9a-z])([0-9]*)[a-z]?(?:-|$)", branch)
+        m = re.search(r"/track-([0-9a-z])([0-9]*)([a-z]?)(?:-|$)", branch)
         if m:
-            full_name = (m.group(1) + m.group(2)).upper()
-            if full_name in tracks:
-                merged.add(full_name)
-            else:
-                merged.add(m.group(1).upper())
+            head, number, part = m.groups()
+            name = next((by_lower[c] for c in (head + number + part, head + number) if c in by_lower),
+                        head.upper())
+            merged.add(name)
     return sorted(merged)
 
 
