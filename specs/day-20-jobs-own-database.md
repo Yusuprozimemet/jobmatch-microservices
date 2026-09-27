@@ -108,46 +108,81 @@ shape, not its code; C needs A and B. The estimates are guesses from the files l
 at almost 1.5× its rewritten estimate.
 
 ## Acceptance criteria
-- [ ] **new** — Only job-service's and the publish's roles reach `jobs_db`. A new `JobsDatabaseIT`
+- [x] **new** — Only job-service's and the publish's roles reach `jobs_db`. A new `JobsDatabaseIT`
       connects to `jobs_db` as `jobs_user` and as `analytics_user`, and is refused as
       `identity_user`, `applications_user` and `matching_user` (`permission denied for database
       "jobs_db"`, with the quotes). Red today: `jobs_db` does not exist, so the `jobs_user` connection fails. Broken
       on purpose once 0b lands: drop the `REVOKE CONNECT … FROM PUBLIC`, and `matching_user`
       connects. The auditor saw this in a throwaway container.
-- [ ] **new** — `project_db` has no analytics schema, and `jobs_db` has the three mart tables.
+      #186: `database/JobsDatabaseIT`, 5 cases. Without the `REVOKE`, the three refused roles
+      connected: 3 failures, "Expecting code to raise a throwable".
+- [x] **new** — `project_db` has no analytics schema, and `jobs_db` has the three mart tables.
       `BackendApplicationTests.martTablesAreOutsideTheAppSchema` asserts both. Red today:
       `project_db.analytics` has `fct_postings`, `fct_postings_cities` and `fct_postings_skills`.
-- [ ] **new** — `jobs_user` can still read after a second publish. The publish test runs
+      #184 routed the tables half through `jobsJdbc()`; pointed at a database with no mart
+      (`JOBS_DATABASE = "postgres"`), it failed. #186 added the "none in `project_db`" half. That
+      half was not seen failing until the close: the harness made to create `analytics` in
+      `project_db` again, and it failed at
+      `martTablesAreOutsideTheAppSchema:58`, `expected: 0L but was: 1L`. Reverted.
+- [x] **new** — `jobs_user` can still read after a second publish. The publish test runs
       `sync.publish` twice into `jobs_db` as `analytics_user`, then reads as `jobs_user`.
       Red today: there is no `jobs_db` and no such test. Broken on purpose: drop the default
       privilege, and the read fails with "permission denied for table fct_postings".
-- [ ] **hold** — The swap leaves no window. While `publish` sits between its drop and its rename,
+      #188: `test_publish_postgres.py::test_jobs_user_reads_after_a_second_publish`, in CI against
+      a `postgres:18.4-alpine` service container. Without the default privilege both tests failed,
+      `InsufficientPrivilege: permission denied for table fct_postings`.
+- [x] **hold** — The swap leaves no window. While `publish` sits between its drop and its rename,
       a second connection asking for the table with a short `lock_timeout` gets a lock timeout,
       not "relation does not exist". The same test uses a real Postgres. Today's 9 tests use a
       fake connection and stay green, the auditor found, with `autocommit=True` in `sync.py:108`.
       Broken on purpose: `autocommit=True`, and the new test fails with `UndefinedTable`.
-- [ ] **hold** — The Day 1–4 `contract/` classes pass unedited, direct and through the gateway.
+      #188: `test_the_swap_leaves_no_window`. With `autocommit=True`: "Expected LockNotAvailable,
+      got UndefinedTable: relation "analytics.fct_postings" does not exist", 1 failed, 10 passed.
+      At the close: `tests/publishing` 11 passed, none skipped.
+- [x] **hold** — The Day 1–4 `contract/` classes pass unedited, direct and through the gateway.
       Checked with `git diff <the spec-change PR's merge> HEAD -- backend/app/src/test/java/**/contract/`
       (empty), as Day 19 did, and CI's gateway run. Broken on purpose: point `aPosting()` back at
       `project_db` after 0b, and `JobSearchIT`, `MatchRankingIT` and `SavedJobHydrationIT` error
       in setup: `project_db` has no `analytics` any more.
-- [ ] **hold** — The statement counts do not move. `SavedJobHydrationQueriesIT` sees 1 on
+      #186: `aPosting()` back on `jdbc()` gave 11 errors in the three classes, all `relation
+      "analytics.fct_postings" does not exist`. At the close, on `main` at ef72030: `git diff
+      38d3d79 HEAD` over `contract/` printed nothing; 412 direct, 0 failures, 1 skipped (`GatewayHarnessIT`, opt-in);
+      218 through the gateway (CI's class list), 0 failures.
+- [x] **hold** — The statement counts do not move. `SavedJobHydrationQueriesIT` sees 1 on
       `fct_postings` per page and 0 for an empty list, now in `jobs_db`. `PostingBatchIT` sees 0
       for an empty list and for 501 ids. Broken on purpose, in job-service, so each break needs
       `docker build -t jobmatch-job-service:harness services/job-service` before the run, or a stale
       image passes. First, a per-id loop in `JobsDirectory.byIds`: the hydration test must report
       more than 1. Second, remove its empty-list short-circuit (`JobsDirectory.java:50`):
       `PostingBatchIT`'s empty-list check must report 1.
-- [ ] **new** — `db-setup.py` on an empty `postgres:18.4-alpine` creates `jobs_db` with the grants
+      #186, each with the image rebuilt. The per-id loop: 3 failures, `expected: 1L but was: 6L`,
+      counted in `jobs_db`. **The second break did not report 1.** Without the short-circuit,
+      `PostingBatchIT.anEmptyListIsAnEmptyObjectWithoutAQuery` failed on its status, `expected:
+      200 but was: 500`: Postgres rejects `IN ()` when it parses the query, and
+      `pg_stat_statements` records no failed statement, so the count would still read 0. Seen
+      the same way in #184. The check fails; it fails on the status, not the count.
+- [x] **new** — `db-setup.py` on an empty `postgres:18.4-alpine` creates `jobs_db` with the grants
       above and no analytics schema in `project_db`. Checked with `psql` as each module role
       (commands in the PR). Red today: `\l` lists no `jobs_db`.
-- [ ] **new** — Compose serves job search from `jobs_db` (Verify below): `curl
+      #187: `jobs_user`, `analytics_user` and `analytics_dev_user` connect; `identity_user`,
+      `applications_user`, `matching_user` and `app_user` get `FATAL: permission denied for
+      database "jobs_db"`; `project_db` has 0 analytics schemas; a second run changed nothing.
+      Without `revoke_connect(conn, JOBS_DATABASE)`, `matching_user` connected.
+- [x] **new** — Compose serves job search from `jobs_db` (Verify below): `curl
       localhost:8080/api/jobs` answers 200 with the seeded postings, and `project_db` has no
       `analytics`. Red today: compose creates no `jobs_db`.
-- [ ] **new** — The rollback has been run once. A reader can follow `docs/runbooks/jobs-db.md`
+      #187: 500 on the empty mart, 200 with `totalElements: 24` once seeded, 0 analytics schemas
+      in `project_db`. With `JOBS_DB_NAME=project_db`, 500 and `relation "analytics.fct_postings"
+      does not exist`. At the close, the Verify above in project `day20close`: 500 on the empty mart,
+      200 with `totalElements: 24` from `seed-0001` once seeded, 0 in `project_db`; then `down -v`.
+- [x] **new** — The rollback has been run once. A reader can follow `docs/runbooks/jobs-db.md`
       from its commands alone. In a separate compose project, its rollback puts job search back
       on `project_db` (`/api/jobs` 200 with `DB_NAME=project_db`), and its cutover moves it back.
       The PR pastes the output. Red today: the file does not exist.
+      #190: in project `day20runbook`, cutover, rollback and cutover again, each step with
+      `/api/jobs` 200 and `pg_stat_activity` naming the database `jobs_user` is on. The rollback
+      published twice, so `jobs_user`'s read survived a republish. Rollback step 1 without
+      `jobs_user`'s `USAGE` and default privilege: 500, `permission denied for schema analytics`.
 
 ## Verify
 ```bash
@@ -202,3 +237,38 @@ seed commands, and the closing PR records what ran.
   In production it is not, and `db-setup.py` gives it no `CONNECT` there.
 - A compose volume created before today keeps its `project_db.analytics` until someone drops it.
   The README's note says so. Nothing in compose reads it any more.
+- **Closed on Day 20.** Estimated 3 in the provisional draft, 5 once rewritten; took 5 track PRs
+  (#184, #186, #187, #188, #190), none split. Plus the spec change (#183), a dashboard fix so it
+  could read the tracks `0a` and `0b` (#185), a CI fix outside the tracks (#189), and this close.
+  In lines the day came in under its estimate for the first time in Phase 3: 823 against
+  900–1,350, with 0a (101) and 0b (147) at about half. The seam first, then a change of URL, is
+  what made 0b small.
+- **The hold's second break was worded wrong** (above): the spec said the count would report 1,
+  and it reports a 500 instead. The auditor and I both wrote it from the code without running it.
+  Both runs, #184 and #186, showed it.
+- **The #188 merge failed Data CI/CD's Azure sign-in, and #189 now skips that push unless
+  `AZURE_PUSH_ENABLED` is set.** #188 was the first merge in this repository to touch `data/`, so
+  it was the first run of the `build` job on `main`. The Azure identifiers came with the monolith
+  snapshot, and their federated credential does not trust this repository (`AADSTS700213`). The
+  push and deploy jobs stay; the variable is unset here, so they are skipped. No day owned this.
+- **Every track but C was written by the implementer agent on Haiku**, and review changed
+  something in all four: 0a's pool and URL helpers (#184); two extra data sources in the harness
+  (#186); a `db-setup.py` docstring saying `app_user` reads the mart and the admin owns the schemas,
+  both false (#187); a probe check that could not tell a probe that never ran from one that
+  succeeded (#188). C is a document and a rehearsal, written here (#190).
+- **What only running showed:** the rollback needs `jobs_db`'s grants copied, since a plain
+  `GRANT` is lost at the first republish (#190's break, now in the runbook); a restart without
+  `--no-deps` recreates `db` (#190); MSYS rewrites a container path in `docker compose exec`
+  from Git Bash (#187).
+- **My mistakes.** A break run with `-pl app` and no `-am` after `clean`, so every test errored
+  on a missing class, not on the break (#184). Java string literals with real newlines that did not
+  compile, and a `git checkout --` before staging that threw away `PostgresContainer.java`'s
+  change, reapplied from the reviewed diff (#186). Throwaway credentials committed, which
+  GitGuardian flagged 4 times, and ruff checked with 0.15.13 when the lockfile pins 0.16.2, so CI
+  failed where my run passed (#188). At the close, this machine had no `uv`; the publishing tests
+  ran under the system Python (pytest 9.0.3, psycopg 3.3.4).
+- **Hand-offs.** `jobs_user`'s `CONNECT` on `project_db` goes to Day 25 or 28 (above).
+  `backend/docs/configuration.md` still lists `DB_JOBS_USER` among the backend's settings
+  (§ the backend's table and the module-role line near the end). The backend has had no `jobs`
+  pool since Day 17; #188 found it and left it. No day owns it yet: the plan-auditor's read after
+  this close is asked to place it.
