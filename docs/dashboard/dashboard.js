@@ -411,12 +411,15 @@ function drawNow() {
 // Counted from each finished day's ticked criteria; the test states are main's, from the script.
 function drawEvidence() {
   const days = DATA.days.filter(d => finished(d) && d.evidence.some(c => c.ticked));
-  const cell = (n, of) => `<td class="r${n ? "" : " none"}">${n}/${of}</td>`;
+  // A day written before the evidence format was never asked to record these: its zero is "not measured".
+  const cell = (n, of, pre) => pre ? `<td class="r pre">${n ? `${n}/${of}` : "not measured"}</td>`
+    : `<td class="r${n ? "" : " none"}">${n}/${of}</td>`;
   document.getElementById("evidence").innerHTML = `<thead><tr><th>Day</th><th class="r">Cite a PR</th><th class="r">Name a test</th><th class="r">Seen red</th><th class="r">Tests on main</th><th>Title</th></tr></thead><tbody>` +
     days.map(d => {
       const ev = d.evidence.filter(c => c.ticked), states = ev.flatMap(c => Object.values(c.tests));
       const off = states.filter(s => s !== "present").length;
-      return `<tr><td class="num">${dd(d.day)}</td>${cell(ev.filter(c => c.prs.length).length, ev.length)}${cell(ev.filter(c => Object.keys(c.tests).length).length, ev.length)}${cell(ev.filter(c => c.red).length, ev.length)}<td class="r${off ? " none" : ""}">${states.length ? `${states.length - off}/${states.length} present` : "–"}</td><td class="t">${md(d.title)}</td></tr>`;
+      const pre = !d.evidence_format;
+      return `<tr${pre ? ` title="Spec written before the evidence format (#55)"` : ""}><td class="num">${dd(d.day)}${pre ? ` <span class="pre-tag">pre-format</span>` : ""}</td>${cell(ev.filter(c => c.prs.length).length, ev.length, pre)}${cell(ev.filter(c => Object.keys(c.tests).length).length, ev.length, pre)}${cell(ev.filter(c => c.red).length, ev.length, pre)}<td class="r${off ? " none" : ""}">${states.length ? `${states.length - off}/${states.length} present` : "–"}</td><td class="t">${md(d.title)}</td></tr>`;
     }).join("") + "</tbody>";
   const gaps = days.flatMap(d => d.evidence.flatMap(c => Object.entries(c.tests).filter(([, s]) => s !== "present")
     .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> is ${s} · ${md(c.claim)}</li>`)));

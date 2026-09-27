@@ -173,6 +173,11 @@ class EvidenceTest(unittest.TestCase):
         for text in unseen:
             self.assertFalse(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
 
+    def test_a_spec_with_no_criterion_tagged_predates_the_evidence_format(self):
+        self.assertFalse(sd.in_evidence_format(sd.criteria("- [x] Login returns 200.\n- [x] Logout clears it.\n")))
+        self.assertTrue(sd.in_evidence_format(sd.criteria("- [x] Login returns 200.\n- [x] **hold** — X.\n")))
+        self.assertTrue(sd.in_evidence_format(sd.criteria(CRITERIA)))
+
     def test_a_name_not_in_the_tree_when_the_day_ended_is_not_evidence(self):
         self.assertEqual(self.state()[1]["tests"], {"FooIT": "present", "FooIT.saves": "present"})
 
