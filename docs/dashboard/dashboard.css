@@ -13,6 +13,7 @@
   --close: #1baf7a;
   --other: #9aa1ad;
   --gap: #0e1116;
+  --ooo: #8a4fd6;
   --m-opus: #2a78d6; --m-opus-prev: #93b9ea; --m-sonnet: #1baf7a; --m-haiku: #eb6834;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
@@ -24,7 +25,7 @@
     --page: #0d0f12; --surface: #15181c; --surface-2: #1d2126;
     --ink: #f3f5f8; --ink-2: #b8bec9; --muted: #868d99;
     --grid: #262a31; --axis: #3a3f48; --ring: rgba(255,255,255,0.10);
-    --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8;
+    --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8; --ooo: #a57be6;
     --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926;
   }
 }
@@ -33,7 +34,7 @@
   --page: #0d0f12; --surface: #15181c; --surface-2: #1d2126;
   --ink: #f3f5f8; --ink-2: #b8bec9; --muted: #868d99;
   --grid: #262a31; --axis: #3a3f48; --ring: rgba(255,255,255,0.10);
-  --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8;
+  --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8; --ooo: #a57be6;
     --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926;
 }
 * { box-sizing: border-box; }
@@ -106,6 +107,7 @@ td.t { white-space: normal; min-width: 150px; }
 .tile.active { background: color-mix(in oklab, var(--spec) 16%, var(--surface)); border: 2px solid var(--spec); color: var(--ink); font-weight: 600; }
 .tile.provisional { border-style: dashed; color: var(--muted); }
 .tile.closed { background: color-mix(in oklab, var(--close) 12%, var(--surface)); border: 1px dashed color-mix(in oklab, var(--close) 70%, var(--surface)); color: var(--ink); }
+.tile.ooo::before { content: ""; position: absolute; left: 0; top: 0; border-style: solid; border-width: 8px 8px 0 0; border-color: var(--ooo) transparent transparent transparent; border-top-left-radius: 5px; }
 .tile.stop::after { content: ""; position: absolute; right: 3px; top: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-2); }
 .tile .bar { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 3px; border-radius: 2px; background: var(--grid); overflow: hidden; }
 .tile .bar i { display: block; height: 100%; background: var(--code); }
@@ -135,6 +137,8 @@ td.t { white-space: normal; min-width: 150px; }
 .legend i.dash { background: repeating-linear-gradient(90deg, var(--gap) 0 4px, transparent 4px 7px) !important; height: 2px; }
 svg { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--body); }
 svg text { fill: var(--muted); font-size: 11px; }
+svg .ooo { fill: var(--ooo); font-weight: 600; }
+svg .date { fill: var(--ink-2); font: 500 11px var(--mono); }
 svg .lbl { fill: var(--ink-2); font-size: 12px; font-weight: 500; }
 svg .lbl-strong { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
 .scroll-x { overflow-x: auto; }
