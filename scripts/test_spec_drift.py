@@ -337,6 +337,9 @@ Days keep their numbers; they run in this order:
                                            "day-17/track-b2b-internal-client-and-breaker"],
                                           ["0", "A1", "A2", "B1", "B2", "C1"]),
                          ["B1", "B2"])
+        # A table that names the letter (Day 20's 0a, 0b) makes it a track of its own.
+        self.assertEqual(sd.track_names("| 0a | | Work |\n| 0b | | Work |\n| A | | Work |"), ["0a", "0b", "A"])
+        self.assertEqual(sd.merged_tracks(["day-20/track-0a-jobs-db-seams"], ["0a", "0b", "A"]), ["0a"])
 
 
 if __name__ == "__main__":
