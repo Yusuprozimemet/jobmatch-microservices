@@ -18,13 +18,13 @@ class SecondHarnessTest extends IntegrationTest {
     @Test
     void seesNothingAnotherTestClassCreated() {
         assertThat(jdbc().sql("SELECT count(*) FROM users").query(Long.class).single()).isZero();
-        assertThat(jdbc().sql("SELECT count(*) FROM analytics.fct_postings WHERE source = 'test'")
+        assertThat(jobsJdbc().sql("SELECT count(*) FROM analytics.fct_postings WHERE source = 'test'")
                 .query(Long.class).single()).isZero();
     }
 
     @Test
     void seesTheBaselineMart() {
-        assertThat(jdbc().sql("SELECT count(*) FROM analytics.fct_postings WHERE source = 'seed'")
+        assertThat(jobsJdbc().sql("SELECT count(*) FROM analytics.fct_postings WHERE source = 'seed'")
                 .query(Long.class).single()).isEqualTo(24);
     }
 }

@@ -32,7 +32,10 @@ class ModuleConnectionsIT extends IntegrationTest {
     @Autowired @Qualifier("applicationsDataSource") private DataSource applications;
     @Autowired @Qualifier("matchingDataSource") private DataSource matching;
     private final DataSource jobs = new DriverManagerDataSource(
-            PostgresContainer.jdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
+            PostgresContainer.jobsJdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
+    // jobs_user keeps CONNECT on project_db, so what it must not read there is checked from there.
+    private final DataSource jobsOnProjectDb = new DriverManagerDataSource(
+            PostgresContainer.jdbcUrl("public"), "jobs_user", PostgresContainer.rolePassword());
 
     @Test
     void eachModuleLogsInAsItsOwnRoleWithItsOwnSchema() {
@@ -124,7 +127,9 @@ class ModuleConnectionsIT extends IntegrationTest {
                 .sql("""
                         SELECT DISTINCT userid::regrole::text FROM public.pg_stat_statements
                         WHERE query ILIKE '%fct_postings%' AND query NOT ILIKE '%pg_stat_statements%'
+                          AND dbid = (SELECT oid FROM pg_database WHERE datname = :database)
                         """)
+                .param("database", PostgresContainer.JOBS_DATABASE)
                 .query(String.class)
                 .list();
         assertThat(users).containsExactly("jobs_user");
@@ -135,7 +140,7 @@ class ModuleConnectionsIT extends IntegrationTest {
             case "identity" -> identity;
             case "applications" -> applications;
             case "matching" -> matching;
-            case "jobs" -> jobs;
+            case "jobs" -> jobsOnProjectDb;
             default -> throw new IllegalArgumentException(module);
         };
     }

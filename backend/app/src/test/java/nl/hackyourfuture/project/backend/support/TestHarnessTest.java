@@ -21,10 +21,10 @@ class TestHarnessTest extends IntegrationTest {
 
     @Test
     void seedsTheMartWithPostingsCitiesAndSkills() {
-        long postings = count("SELECT count(*) FROM analytics.fct_postings");
-        long withCities = count("SELECT count(DISTINCT posting_id) FROM analytics.fct_postings_cities");
-        long withSkills = count("SELECT count(DISTINCT posting_id) FROM analytics.fct_postings_skills");
-        long withDates = count("SELECT count(*) FROM analytics.fct_postings WHERE posted_date IS NOT NULL");
+        long postings = martCount("SELECT count(*) FROM analytics.fct_postings");
+        long withCities = martCount("SELECT count(DISTINCT posting_id) FROM analytics.fct_postings_cities");
+        long withSkills = martCount("SELECT count(DISTINCT posting_id) FROM analytics.fct_postings_skills");
+        long withDates = martCount("SELECT count(*) FROM analytics.fct_postings WHERE posted_date IS NOT NULL");
 
         assertThat(postings).isGreaterThanOrEqualTo(20);
         assertThat(withCities).isEqualTo(postings);
@@ -35,11 +35,11 @@ class TestHarnessTest extends IntegrationTest {
 
     @Test
     void seedsPostingsAcrossCitiesCategoriesAndWorkModes() {
-        assertThat(distinct("SELECT DISTINCT city FROM analytics.fct_postings_cities"))
+        assertThat(martDistinct("SELECT DISTINCT city FROM analytics.fct_postings_cities"))
                 .contains("amsterdam", "rotterdam", "utrecht", "eindhoven");
-        assertThat(distinct("SELECT DISTINCT category FROM analytics.fct_postings"))
+        assertThat(martDistinct("SELECT DISTINCT category FROM analytics.fct_postings"))
                 .contains("software_engineering", "data_engineering", "devops");
-        assertThat(distinct("SELECT DISTINCT work_mode FROM analytics.fct_postings"))
+        assertThat(martDistinct("SELECT DISTINCT work_mode FROM analytics.fct_postings"))
                 .containsExactlyInAnyOrder("onsite", "hybrid", "remote");
     }
 
@@ -109,7 +109,11 @@ class TestHarnessTest extends IntegrationTest {
         return jdbc().sql(sql).query(Long.class).single();
     }
 
-    private java.util.List<String> distinct(String sql) {
-        return jdbc().sql(sql).query(String.class).list();
+    private long martCount(String sql) {
+        return jobsJdbc().sql(sql).query(Long.class).single();
+    }
+
+    private java.util.List<String> martDistinct(String sql) {
+        return jobsJdbc().sql(sql).query(String.class).list();
     }
 }

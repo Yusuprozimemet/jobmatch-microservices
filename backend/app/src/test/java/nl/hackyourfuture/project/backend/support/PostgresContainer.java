@@ -37,11 +37,15 @@ public final class PostgresContainer {
     /** Every schema a module's tables can be in, in the order unqualified names resolve. */
     public static final List<String> TABLE_SCHEMAS = List.of("identity", "applications", "matching", "app");
 
+    /** The database where job-service and the mart live; project_db until the harness creates jobs_db. */
+    public static final String JOBS_DATABASE = "project_db";
+
     // The one password every module role has here. Test-only; compose and production set their own.
     private static final String ROLE_PASSWORD = "password";
 
     private static final PostgreSQLContainer CONTAINER;
     private static final DataSource DATA_SOURCE;
+    private static final DataSource JOBS_DATA_SOURCE;
 
     static {
         CONTAINER = new PostgreSQLContainer(DockerImageName.parse(IMAGE))
@@ -55,6 +59,7 @@ public final class PostgresContainer {
                         "-c", "shared_preload_libraries=pg_stat_statements");
         CONTAINER.start();
         DATA_SOURCE = buildDataSource();
+        JOBS_DATA_SOURCE = buildJobsDataSource();
         // In public, not a module schema: the connection's first schema would otherwise get the
         // extension's view inside the schema Flyway owns.
         execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA public");
@@ -82,6 +87,11 @@ public final class PostgresContainer {
         return DATA_SOURCE;
     }
 
+    /** The same, onto the jobs database: the mart, where job-service reads it. */
+    public static DataSource jobsDataSource() {
+        return JOBS_DATA_SOURCE;
+    }
+
     /** JDBC URL looking in every module schema and then {@code app}: the harness's own view. */
     public static String jdbcUrl() {
         return jdbcUrl(String.join(",", TABLE_SCHEMAS));
@@ -91,6 +101,12 @@ public final class PostgresContainer {
     public static String jdbcUrl(String schema) {
         String url = CONTAINER.getJdbcUrl();
         return url + (url.contains("?") ? "&" : "?") + "currentSchema=" + schema;
+    }
+
+    /** JDBC URL onto the jobs database with one schema as the search path, as job-service connects. */
+    public static String jobsJdbcUrl(String schema) {
+        return "jdbc:postgresql://" + CONTAINER.getHost() + ":" + CONTAINER.getMappedPort(5432) + "/"
+                + JOBS_DATABASE + "?currentSchema=" + schema;
     }
 
     /** The password every module role has in the test container. */
@@ -153,6 +169,15 @@ public final class PostgresContainer {
         var dataSource = new SimpleDriverDataSource();
         dataSource.setDriverClass(org.postgresql.Driver.class);
         dataSource.setUrl(jdbcUrl());
+        dataSource.setUsername(CONTAINER.getUsername());
+        dataSource.setPassword(CONTAINER.getPassword());
+        return dataSource;
+    }
+
+    private static DataSource buildJobsDataSource() {
+        var dataSource = new SimpleDriverDataSource();
+        dataSource.setDriverClass(org.postgresql.Driver.class);
+        dataSource.setUrl(jobsJdbcUrl("analytics"));
         dataSource.setUsername(CONTAINER.getUsername());
         dataSource.setPassword(CONTAINER.getPassword());
         return dataSource;

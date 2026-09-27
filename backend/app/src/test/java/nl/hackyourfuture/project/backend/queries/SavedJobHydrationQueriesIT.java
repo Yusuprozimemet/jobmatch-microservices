@@ -23,9 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * which carries a {@code LEFT JOIN} into {@code analytics.fct_postings}. After it, the one
  * statement is the batched lookup {@code jobs} runs. It would become one per posting if the
  * batch were ever replaced by a loop, and that is what this test is for.
- *
- * <p>Expires on Day 20, when the mart moves to {@code jobs_db} and this container no longer
- * sees the statement.
  */
 class SavedJobHydrationQueriesIT extends IntegrationTest {
 
@@ -59,7 +56,7 @@ class SavedJobHydrationQueriesIT extends IntegrationTest {
         assertThat(response.at("/totalElements").asLong()).isEqualTo(SAVED.size());
         // The page really is that big - otherwise the sizes would all test the same thing.
         assertThat(response.at("/content").size()).isEqualTo(Math.min(size, SAVED.size()));
-        assertThat(StatementCounter.statementsMentioning("fct_postings")).isEqualTo(1);
+        assertThat(StatementCounter.jobsStatementsMentioning("fct_postings")).isEqualTo(1);
     }
 
     // Added with the rewrite, not before it: the LEFT JOIN ran even with nothing to join, so
@@ -74,6 +71,6 @@ class SavedJobHydrationQueriesIT extends IntegrationTest {
         assertThat(response.status()).isEqualTo(200);
         assertThat(response.at("/totalElements").asLong()).isZero();
         assertThat(response.at("/content").size()).isZero();
-        assertThat(StatementCounter.statementsMentioning("fct_postings")).isZero();
+        assertThat(StatementCounter.jobsStatementsMentioning("fct_postings")).isZero();
     }
 }

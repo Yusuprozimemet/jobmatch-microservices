@@ -110,7 +110,7 @@ class PostingBatchIT extends IntegrationTest {
 
         assertThat(response.status()).isEqualTo(200);
         assertThat(response.json().size()).isZero();
-        assertThat(StatementCounter.statementsMentioning("fct_postings")).isZero();
+        assertThat(StatementCounter.jobsStatementsMentioning("fct_postings")).isZero();
     }
 
     @Test
@@ -127,7 +127,7 @@ class PostingBatchIT extends IntegrationTest {
                 Map.of("ids", ids));
 
         assertThat(response.status()).isEqualTo(400);
-        assertThat(StatementCounter.statementsMentioning("fct_postings")).isZero();
+        assertThat(StatementCounter.jobsStatementsMentioning("fct_postings")).isZero();
     }
 
     @Test
