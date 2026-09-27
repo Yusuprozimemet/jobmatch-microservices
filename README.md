@@ -794,8 +794,22 @@ docker build -t jobmatch-job-service:harness services/job-service   # the suite 
 cd backend && ./mvnw verify
 ```
 
-Job listings come from the data pipeline, so on a fresh database volume `/api/jobs` answers 500
-until the pipeline has published its marts — see [`data/README.md`](data/README.md).
+Job listings come from the data pipeline, which publishes its marts into `jobs_db`, job-service's
+own database (Day 20). On a fresh database volume `/api/jobs` answers 500 until it has published
+them — see [`data/README.md`](data/README.md) — or until you load the test suite's mart:
+
+```bash
+for f in analytics-schema analytics-seed; do
+  docker compose exec -T db psql -U admin -d jobs_db -v ON_ERROR_STOP=1 \
+    -c "SET ROLE analytics_user" -f - < backend/app/src/test/resources/fixtures/$f.sql
+done
+```
+
+A volume created before Day 20 has no `jobs_db`. Add it once, without deleting anything (never
+`down -v`): `docker compose up -d db`, so the container has the analytics passwords, then
+`docker compose exec -T db sh -c 'sh /docker-entrypoint-initdb.d/20-jobs-db.sh'` (quoted, so Git
+Bash on Windows does not rewrite the path). Its old
+`project_db.analytics` stays until you drop it; nothing in compose reads it any more.
 
 ## Repository layout
 

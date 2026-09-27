@@ -6,8 +6,9 @@
 # have to exist first. A volume created before Day 11 never ran this: start it again with
 # `docker compose down -v`, or run db-setup.py against it.
 #
-# identity_user owns identity, and so on; jobs_user owns nothing and only reads the mart. No module
-# reads another's schema (Day 38), the rule db-setup.py applies; a volume created before Day 38 had
+# identity_user owns identity, and so on; jobs_user owns nothing and only reads the analytics mart
+# from jobs_db. 20-jobs-db.sh creates that schema and jobs_db after this runs. No module reads
+# another's schema (Day 38), the rule db-setup.py applies; a volume created before Day 38 had
 # the grants, and each module's own migration revokes them.
 set -eu
 
@@ -24,11 +25,4 @@ CREATE ROLE jobs_user LOGIN PASSWORD :'jobs_password';
 CREATE SCHEMA identity AUTHORIZATION identity_user;
 CREATE SCHEMA applications AUTHORIZATION applications_user;
 CREATE SCHEMA matching AUTHORIZATION matching_user;
-
--- jobs reads the mart. In compose anything in analytics is created by this admin, so its future
--- tables are granted too; production gets the same from db-setup.py's read-only rule.
-CREATE SCHEMA IF NOT EXISTS analytics;
-GRANT USAGE ON SCHEMA analytics TO jobs_user;
-GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO jobs_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA analytics GRANT SELECT ON TABLES TO jobs_user;
 SQL

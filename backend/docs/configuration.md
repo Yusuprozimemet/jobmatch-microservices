@@ -237,21 +237,24 @@ The one that matters to the backend team is **`BACKEND_PG_PUBLISH_SCHEMA`** — 
 
 # 6. The database: schemas and roles
 
-[`scripts/db-setup.py`](../../scripts/db-setup.py) creates the production-like arrangement: the
-database, six schemas, and one login role per owner.
+[`scripts/db-setup.py`](../../scripts/db-setup.py) creates the production-like arrangement: two
+databases, six schemas, and one login role per owner.
 
-| Schema | Owner role | Written by | Read by |
-| --- | --- | --- | --- |
-| `app` | `app_user` | the backend's migrations, V1–V14 | everyone, read-only |
-| `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11) | its owner only (Day 38) |
-| `analytics` | `analytics_user` | the scheduled pipeline | everyone, read-only; the backend reads it as `jobs_user`, which owns nothing |
-| `analytics_dev` | `analytics_dev_user` | trainees, by hand | everyone, read-only |
+| Database | Schema | Owner role | Written by | Read by |
+| --- | --- | --- | --- | --- |
+| `project_db` | `app` | `app_user` | the backend's migrations, V1–V14 | everyone, read-only |
+| `project_db` | `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11) | its owner only (Day 38) |
+| `jobs_db` | `analytics` | `analytics_user` | the scheduled pipeline | `jobs_user` (job-service) and `analytics_dev_user`, read-only |
+| `jobs_db` | `analytics_dev` | `analytics_dev_user` | trainees, by hand | `jobs_user` and `analytics_user`, read-only |
 
-Each role has full access to what it owns and read-only access to the others, for existing and future
-objects, except the module schemas: no other login reads them, so a module that leaves the process
-takes a login that reads only its own data. A database set up before Day 38 had those grants; each
-module's own migration revokes them. **The separation is enforced by grants, not by agreement** — that is the whole point, and it
-is what makes "the backend cannot corrupt the marts" a fact rather than a promise.
+Each role has full access to what it owns and read-only access to the others in the same database,
+for existing and future objects, except the module schemas: no other login reads them, so a module
+that leaves the process takes a login that reads only its own data. A database set up before Day 38
+had those grants; each module's own migration revokes them. Only `jobs_user` and the two analytics
+roles may connect to `jobs_db` (Day 20); a `project_db` set up before then keeps its analytics
+schemas until [the runbook](../../docs/runbooks/jobs-db.md) drops them. **The separation is
+enforced by grants, not by agreement** — that is the whole point, and it is what makes "the backend
+cannot corrupt the marts" a fact rather than a promise.
 
 The third schema exists so a trainee building a mart never needs the credential that owns
 production. The script is idempotent, so a failed run can be repeated.
