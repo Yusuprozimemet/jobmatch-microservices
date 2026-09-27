@@ -55,6 +55,16 @@
 			<artifactId>swagger-annotations-jakarta</artifactId>
 			<version>2.2.52</version>
 		</dependency>
+		<!-- Track D: jobs reads the mart as jobs_user through JobsDatabase. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
 		<!-- Traces, as the backend makes them since Day 05: Micrometer tracing exporting OTLP, not the
 		     Java agent. -->
 		<dependency>

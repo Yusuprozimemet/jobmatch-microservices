@@ -105,9 +105,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/.well-known/jwks.json").permitAll()
                         // The service key set, for services verifying the monolith's tokens (Day 39).
                         .requestMatchers(HttpMethod.GET, "/.well-known/service-jwks.json").permitAll()
-                        // Only these /api/jobs routes are public - top-matches stays private.
+                        // Job search moved to job-service (Day 17); top-matches, matching's, stays private.
                         .requestMatchers(HttpMethod.GET, "/api/jobs/top-matches").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/jobs", "/api/jobs/filters", "/api/jobs/*").permitAll()
                         .anyRequest().authenticated()
                 )
                 // Return 401 for an unauthenticated API call instead of redirecting to Google,

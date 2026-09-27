@@ -44,7 +44,7 @@ public abstract class IntegrationTest {
     @DynamicPropertySource
     static void useTestContainer(DynamicPropertyRegistry registry) {
         // Flyway logs in as the container's owner, as it does in compose; every module as its own
-        // role, with its own schema as the search path (Day 11). jobs reads the mart.
+        // role, with its own schema as the search path (Day 11).
         registry.add("spring.flyway.url", PostgresContainer::jdbcUrl);
         registry.add("spring.flyway.user", () -> PostgresContainer.instance().getUsername());
         registry.add("spring.flyway.password", () -> PostgresContainer.instance().getPassword());
@@ -53,9 +53,6 @@ public abstract class IntegrationTest {
             registry.add("app.datasource." + module + ".username", () -> module + "_user");
             registry.add("app.datasource." + module + ".password", PostgresContainer::rolePassword);
         }
-        registry.add("app.datasource.jobs.url", () -> PostgresContainer.jdbcUrl("analytics"));
-        registry.add("app.datasource.jobs.username", () -> "jobs_user");
-        registry.add("app.datasource.jobs.password", PostgresContainer::rolePassword);
         // The application does not start without a signing key (Day 12), and none is committed.
         registry.add("app.jwt.private-key-file", () -> TestSigningKey.path().toString());
         // The service key (Day 39) is separate and required like the user key.
@@ -66,6 +63,9 @@ public abstract class IntegrationTest {
         // job-service (Day 17). A supplier: its container is up before a context needs its key set.
         registry.add("app.internal.trusted-issuers[1].name", () -> "jobmatch-job-service");
         registry.add("app.internal.trusted-issuers[1].key-set-url", () -> JobService.baseUrl() + "/.well-known/service-jwks.json");
+        // The monolith's postings clients call the container; application-test.yaml maps
+        // app.internal.jobs-url to it, so a failure test's own app.internal.jobs-url still wins.
+        registry.add("harness.job-service-url", JobService::baseUrl);
     }
 
     @BeforeEach

@@ -35,8 +35,7 @@ class InternalCallsObservedIT extends MatchingTest {
     /** Each internal route, and the {@code /api} request whose client calls it. */
     private static final Map<String, String> CALLED_BY = Map.of(
             "/internal/postings/batch", "/api/saved-jobs",
-            "/internal/postings/shortlist", "/api/jobs/top-matches",
-            "/internal/saved-counts", "/api/jobs");
+            "/internal/postings/shortlist", "/api/jobs/top-matches");
 
     @LocalManagementPort
     private int managementPort;
@@ -78,7 +77,7 @@ class InternalCallsObservedIT extends MatchingTest {
         });
     }
 
-    /** Saved jobs, top matches and job search, each through its client, each answering 200. */
+    /** Saved jobs and top matches, each through its client, each answering 200. */
     private void askEveryCaller(String prefix) {
         TestUser saver = aUser().create();
         posting(prefix + "-saved", "Observed Saved Job", "java");
@@ -92,8 +91,6 @@ class InternalCallsObservedIT extends MatchingTest {
         posting(prefix + "-match", "Observed Engineer", "java", "sql");
         model().willScoreInPromptOrder(80);
         assertThat(authenticatedAs(matcher).get("/api/jobs/top-matches").status()).isEqualTo(200);
-
-        assertThat(anonymous().get("/api/jobs").status()).isEqualTo(200);
     }
 
     /** The nearest server span above {@code span} in its trace, walking parent ids. */

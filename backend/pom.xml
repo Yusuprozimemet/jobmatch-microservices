@@ -24,7 +24,6 @@
 	<modules>
 		<module>shared</module>
 		<module>identity</module>
-		<module>jobs</module>
 		<module>applications</module>
 		<module>matching</module>
 		<module>app</module>

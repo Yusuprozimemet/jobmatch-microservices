@@ -7,18 +7,20 @@ import java.util.function.Predicate;
 
 /**
  * Which paths belong to which service and where each one is. A service's URL defaults to the
- * monolith, so the Day 1-4 suite runs unchanged; a test class can point a service at a URL of
- * its own.
+ * monolith, except job-service defaults to its container (Day 17); a test class can point any
+ * service at a URL of its own.
  */
 public final class Services {
 
     public static final String JOB_SERVICE = "job-service";
 
-    // JobController's paths: /api/jobs, /api/jobs/filters and /api/jobs/{postingId}. top-matches
-    // shares the prefix but is matching's, and stays on the monolith, as in the gateway's routes.
+    // JobController's paths and the postings routes: /api/jobs, /api/jobs/filters, /api/jobs/{postingId},
+    // /internal/postings/batch and /internal/postings/shortlist. top-matches shares the prefix
+    // but is matching's, and stays on the monolith, as in the gateway's routes.
     private static final List<Service> SERVICES = List.of(
             new Service(JOB_SERVICE, path -> path.equals("/api/jobs")
-                    || path.matches("/api/jobs/[^/]+") && !path.equals("/api/jobs/top-matches")));
+                    || path.matches("/api/jobs/[^/]+") && !path.equals("/api/jobs/top-matches")
+                    || path.startsWith("/internal/postings/")));
 
     private record Service(String name, Predicate<String> owns) {
     }
@@ -34,10 +36,13 @@ public final class Services {
                 .findFirst();
     }
 
-    /** The override for this service if present, else the monolith. */
+    /** The override for this service if present, else its default: job-service's container, others the monolith. */
     public static String url(String service, int applicationPort, Map<String, String> overrides) {
         if (overrides.containsKey(service)) {
             return overrides.get(service);
+        }
+        if (JOB_SERVICE.equals(service)) {
+            return "http://localhost:" + JobService.port();
         }
         return "http://localhost:" + applicationPort;
     }

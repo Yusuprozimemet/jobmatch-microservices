@@ -37,7 +37,6 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 class ModuleBoundariesTest {
 
     private static final String IDENTITY = "..backend.identity..";
-    private static final String JOBS = "..backend.jobs..";
     private static final String APPLICATIONS = "..backend.applications..";
     private static final String MATCHING = "..backend.matching..";
     private static final String APP = "..backend.config..";
@@ -51,26 +50,20 @@ class ModuleBoundariesTest {
     @ArchTest
     static final ArchRule identityKeepsToItself = noClasses()
             .that().resideInAPackage(IDENTITY)
-            .should().dependOnClassesThat().resideInAnyPackage(JOBS, APPLICATIONS, MATCHING)
-            .because(WHY);
-
-    @ArchTest
-    static final ArchRule jobsKeepsToItself = noClasses()
-            .that().resideInAPackage(JOBS)
-            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY, APPLICATIONS, MATCHING)
+            .should().dependOnClassesThat().resideInAnyPackage(APPLICATIONS, MATCHING)
             .because(WHY);
 
     /** The one Day 09 will be tested by: applications must stop reading postings. */
     @ArchTest
     static final ArchRule applicationsKeepsToItself = noClasses()
             .that().resideInAPackage(APPLICATIONS)
-            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY, JOBS, MATCHING)
+            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY, MATCHING)
             .because(WHY);
 
     @ArchTest
     static final ArchRule matchingKeepsToItself = noClasses()
             .that().resideInAPackage(MATCHING)
-            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY, JOBS, APPLICATIONS)
+            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY, APPLICATIONS)
             .because(WHY);
 
     /**
@@ -82,7 +75,7 @@ class ModuleBoundariesTest {
     static final ArchRule sharedDependsOnNobody = noClasses()
             .that().resideInAPackage("..backend.shared..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage(IDENTITY, JOBS, APPLICATIONS, MATCHING, APP)
+            .resideInAnyPackage(IDENTITY, APPLICATIONS, MATCHING, APP)
             .because("shared is depended on by everything, so anything it depends on is shared too");
 
     /**
@@ -91,7 +84,7 @@ class ModuleBoundariesTest {
      */
     @ArchTest
     static final ArchRule nobodyDependsOnTheAssembly = noClasses()
-            .that().resideInAnyPackage(IDENTITY, JOBS, APPLICATIONS, MATCHING, "..backend.shared..")
+            .that().resideInAnyPackage(IDENTITY, APPLICATIONS, MATCHING, "..backend.shared..")
             .should().dependOnClassesThat().resideInAPackage(APP)
             .because("app assembles the modules; a module that knows about the assembly is not a module");
 

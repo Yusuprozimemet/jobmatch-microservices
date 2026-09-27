@@ -1,4 +1,4 @@
-package nl.hackyourfuture.project.backend.shared.mart;
+package nl.hackyourfuture.project.backend.jobs;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;

@@ -52,8 +52,10 @@ services:
       DB_APPLICATIONS_PASSWORD: ${APPLICATIONS_DB_PASSWORD:-password}
       DB_MATCHING_USER: matching_user
       DB_MATCHING_PASSWORD: ${MATCHING_DB_PASSWORD:-password}
-      DB_JOBS_USER: jobs_user
-      DB_JOBS_PASSWORD: ${JOBS_DB_PASSWORD:-password}
+      # Day 17: job search and the postings routes are job-service's; it calls back for saved counts.
+      INTERNAL_JOBS_URL: http://job-service:8080
+      APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-job-service
+      APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL: http://job-service:8080/.well-known/service-jwks.json
       # Tracing is opt-in: empty means no exporter, so the application still starts with
       # nowhere to send spans. Point it at the Tempo below to turn it on:
       #
@@ -75,10 +77,7 @@ services:
       jwt-key:
         condition: service_completed_successfully
 
-  # job-service (Day 17, Track C1): not yet routed to by anything (Track D routes to it). Reads the
-  # jobs mart directly as jobs_user, so does not depend on the monolith's jobs module. No published
-  # port: the gateway will reach it over the compose network once it routes to it. No healthcheck
-  # yet; that and the port come with Track D.
+  # job-service (Day 17): routed to by the gateway and the backend since Track D. No published port.
   job-service:
     build: ./services/job-service
     environment:
@@ -94,6 +93,13 @@ services:
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     volumes:
       - jwt-keys:/run/keys:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
     depends_on:
       db:
         condition: service_healthy
@@ -110,6 +116,7 @@ services:
     build: ./services/api-gateway
     environment:
       BACKEND_URL: http://backend:8080
+      JOB_SERVICE_URL: http://job-service:8080
       # Tracing as the backend's, above: off unless TRACING_EXPORT_ENABLED=true, to the same Tempo.
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
@@ -127,7 +134,10 @@ services:
       start_period: 30s
       start_interval: 1s
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+      job-service:
+        condition: service_healthy
 
   frontend:
     build: ./frontend

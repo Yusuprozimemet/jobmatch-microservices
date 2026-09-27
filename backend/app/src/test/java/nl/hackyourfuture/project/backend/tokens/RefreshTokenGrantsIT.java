@@ -27,8 +27,8 @@ class RefreshTokenGrantsIT extends IntegrationTest {
     private ApplicationContext context;
 
     @ParameterizedTest
-    @CsvSource({"applications, refresh_tokens", "matching, refresh_tokens", "jobs, refresh_tokens",
-        "applications, pending_google_links", "matching, pending_google_links", "jobs, pending_google_links"})
+    @CsvSource({"applications, refresh_tokens", "matching, refresh_tokens",
+        "applications, pending_google_links", "matching, pending_google_links"})
     void noOtherModuleCanReadThem(String module, String table) {
         DataSource dataSource = context.getBean(module + "DataSource", DataSource.class);
 

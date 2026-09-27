@@ -12,9 +12,9 @@ import java.net.http.HttpResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The job-service's public access rules. The GET routes are permitted but answer 404 today
- * (nothing serves them yet); Track D's controllers turn these into 200s. Anything else answers
- * 401 because there is no token. The key set answers 200: {@code ServiceJwksController} serves it.
+ * The job-service's public access rules. The GET routes for job search are permitted anonymously.
+ * Anything else answers 401 because there is no token. The key set answers 200:
+ * {@code ServiceJwksController} serves it.
  */
 class PublicAccessTest extends JobServiceTest {
 
@@ -24,18 +24,18 @@ class PublicAccessTest extends JobServiceTest {
     private int port;
 
     @Test
-    void getJobsAnswers404Anonymous() throws Exception {
-        assertThat(get("/api/jobs").statusCode()).isEqualTo(404);
+    void getJobsIsPermittedAnonymous() throws Exception {
+        assertThat(get("/api/jobs").statusCode()).isNotIn(401, 403);
     }
 
     @Test
-    void getJobsFiltersAnswers404Anonymous() throws Exception {
-        assertThat(get("/api/jobs/filters").statusCode()).isEqualTo(404);
+    void getJobsFiltersIsPermittedAnonymous() throws Exception {
+        assertThat(get("/api/jobs/filters").statusCode()).isNotIn(401, 403);
     }
 
     @Test
-    void getSingleJobAnswers404Anonymous() throws Exception {
-        assertThat(get("/api/jobs/seed-0001").statusCode()).isEqualTo(404);
+    void getSingleJobIsPermittedAnonymous() throws Exception {
+        assertThat(get("/api/jobs/seed-0001").statusCode()).isNotIn(401, 403);
     }
 
     @Test
@@ -44,15 +44,15 @@ class PublicAccessTest extends JobServiceTest {
     }
 
     @Test
-    void getJobsWithGarbageCookieAnswers404NotUnauthorized() throws Exception {
+    void getJobsWithGarbageCookieIsPermittedNotUnauthorized() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/jobs"))
                 .GET()
                 .header("Cookie", "access_token=garbage")
                 .build();
         HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
 
-        // The cookie is not read: it is ignored, not rejected. The route is permitted, so 404 not 401.
-        assertThat(response.statusCode()).isEqualTo(404);
+        // The cookie is not read: it is ignored, not rejected. The route is permitted, so not 401 or 403.
+        assertThat(response.statusCode()).isNotIn(401, 403);
     }
 
     @Test

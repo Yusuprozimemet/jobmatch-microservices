@@ -23,8 +23,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * and schemas are real in every environment; only the passwords differ. These go through the
  * application's own pools, not the harness's connection, because a role that holds in the
  * database proves nothing if the application logs in as someone else. The jobs role is checked
- * through the harness's own login as jobs_user, since that login leaves this process; what the
- * service itself connects as is checked where it runs.
+ * through the harness's own login as jobs_user, since that login leaves this process; job-service's
+ * own login is checked through pg_stat_statements, since the container logs in as its own.
  */
 class ModuleConnectionsIT extends IntegrationTest {
 
@@ -112,6 +112,22 @@ class ModuleConnectionsIT extends IntegrationTest {
                 .update())
                 .rootCause()
                 .hasMessageContaining("permission denied for table fct_postings");
+    }
+
+    @Test
+    void jobServiceReadsTheMartAsJobsUser() {
+        jdbc().sql("SELECT public.pg_stat_statements_reset()").query().singleRow();
+
+        assertThat(anonymous().get("/api/jobs").status()).isEqualTo(200);
+
+        var users = jdbc()
+                .sql("""
+                        SELECT DISTINCT userid::regrole::text FROM public.pg_stat_statements
+                        WHERE query ILIKE '%fct_postings%' AND query NOT ILIKE '%pg_stat_statements%'
+                        """)
+                .query(String.class)
+                .list();
+        assertThat(users).containsExactly("jobs_user");
     }
 
     private DataSource pool(String module) {

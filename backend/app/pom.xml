@@ -27,11 +27,6 @@
 		</dependency>
 		<dependency>
 			<groupId>nl.hackyourfuture.project</groupId>
-			<artifactId>jobs</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>nl.hackyourfuture.project</groupId>
 			<artifactId>applications</artifactId>
 			<version>${project.version}</version>
 		</dependency>
