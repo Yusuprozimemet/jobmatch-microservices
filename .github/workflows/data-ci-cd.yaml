@@ -227,7 +227,12 @@ jobs:
     # Never on a pull request. A PR, including one from a fork, cannot mint an
     # Azure token: the trust is pinned to a branch of this repository, so the
     # exchange fails rather than the push being blocked after the fact.
-    if: github.event_name != 'pull_request'
+    #
+    # Only where Azure trusts the repository: set the repository variable
+    # AZURE_PUSH_ENABLED to true there. Without it the push and both deploys
+    # (which need this job) are skipped instead of failing at sign-in, as they
+    # did on the first merge to touch data/ in the migration repository (#188).
+    if: github.event_name != 'pull_request' && vars.AZURE_PUSH_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       # Required for the token exchange. Without it, sign-in fails.
