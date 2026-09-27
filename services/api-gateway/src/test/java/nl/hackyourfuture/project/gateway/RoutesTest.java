@@ -90,7 +90,7 @@ class RoutesTest {
     }
 
     // With no job-service URL set, every job path reaches the backend, and that holds once job paths
-    // have a route of their own until Day 17 sets one. top-matches is matching's, and needs a token.
+    // have a route of their own, set in compose since Day 17. top-matches is matching's, and needs a token.
     @Test
     void everyJobPathReachesTheBackendUnchanged() throws Exception {
         assertThat(send(HttpRequest.newBuilder(at("/api/jobs?city=Amsterdam&page=2")).GET()).statusCode()).isEqualTo(200);

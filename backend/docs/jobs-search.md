@@ -5,7 +5,8 @@ a detail page with a way out to the employer. It is also the only feature that r
 pipeline's output directly, so most of its complexity is really the shape of the mart showing
 through.
 
-Backend: [`jobs/`](../src/main/java/nl/hackyourfuture/project/backend/jobs).
+Backend: job-service since Day 17,
+[`services/job-service/.../jobs/`](../../services/job-service/src/main/java/nl/hackyourfuture/project/backend/jobs).
 Frontend: [`app/jobs/`](../../frontend/src/app/jobs) and
 [`components/jobs/`](../../frontend/src/components/jobs). Endpoint contracts are in
 [`api.md`](api.md).
@@ -42,7 +43,7 @@ skill. Job display reads the bridge table and aggregates it back into a list wit
 `jsonb_array_elements_text`. Same data, two shapes, each chosen for its query — the display wants a
 list to render, the matcher wants an array to intersect.
 
-The `MartSkills` helper parses that aggregated JSON on the way back into Java, and falls back to
+job-service's `MartSkills` helper parses that aggregated JSON on the way back into Java, and falls back to
 splitting on commas if a posting's value is not valid JSON. It takes a `String` deliberately: if the
 mart ever changes that column's type, call sites break at compile time rather than silently
 returning nothing.

@@ -22,8 +22,8 @@ import java.util.function.Supplier;
 
 /**
  * The {@code PostingLookup} saved jobs uses (Day 19): {@code jobs}' {@code /internal/postings/batch}
- * over HTTP, in this process until Day 17 moves {@code jobs} out. {@code @Primary}, so it serves;
- * the route itself still answers from {@code JobsDirectory}.
+ * over HTTP, in job-service since Day 17 ({@code app.internal.jobs-url}). {@code @Primary}, so it
+ * serves; the route answers from job-service's {@code JobsDirectory}.
  *
  * <p>In chunks of {@value #CHUNK} distinct ids, one after another: the route refuses more, and saved
  * jobs asks for a user's whole list in one call, which nothing keeps under the cap.

@@ -2,25 +2,16 @@ package nl.hackyourfuture.project.backend.matching;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.context.Context;
-import io.opentelemetry.sdk.trace.ReadWriteSpan;
-import io.opentelemetry.sdk.trace.ReadableSpan;
-import io.opentelemetry.sdk.trace.SpanProcessor;
-import io.opentelemetry.sdk.trace.data.SpanData;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
+import nl.hackyourfuture.project.backend.support.EndedSpans;
 import nl.hackyourfuture.project.backend.support.MatchingTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfigureTracing;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalManagementPort;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * span processor that keeps what ends, so no collector is needed.
  */
 @AutoConfigureTracing
-@Import(LlmCallObservedIT.Spans.class)
+@Import(EndedSpans.Config.class)
 class LlmCallObservedIT extends MatchingTest {
 
     private static final String LLM_URI = "uri=\"/chat/completions\"";
@@ -79,46 +70,4 @@ class LlmCallObservedIT extends MatchingTest {
         assertThat(model().callCount()).isEqualTo(1);
     }
 
-    @TestConfiguration(proxyBeanMethods = false)
-    static class Spans {
-
-        // Spring Boot adds every SpanProcessor bean to the tracer provider it builds.
-        @Bean
-        EndedSpans endedSpans() {
-            return new EndedSpans();
-        }
-    }
-
-    /** Keeps every span that ends, in memory, for the test to read. */
-    static final class EndedSpans implements SpanProcessor {
-
-        private final List<SpanData> ended = new CopyOnWriteArrayList<>();
-
-        List<SpanData> all() {
-            return List.copyOf(ended);
-        }
-
-        void clear() {
-            ended.clear();
-        }
-
-        @Override
-        public void onStart(Context parentContext, ReadWriteSpan span) {
-        }
-
-        @Override
-        public boolean isStartRequired() {
-            return false;
-        }
-
-        @Override
-        public void onEnd(ReadableSpan span) {
-            ended.add(span.toSpanData());
-        }
-
-        @Override
-        public boolean isEndRequired() {
-            return true;
-        }
-    }
 }

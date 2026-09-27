@@ -21,8 +21,9 @@ import java.util.function.Supplier;
 
 /**
  * The {@code PostingShortlist} top matches uses (Day 19): {@code jobs}'
- * {@code /internal/postings/shortlist} over HTTP, in this process until Day 17 moves {@code jobs} out. {@code @Primary}, so it serves;
- * the route itself still answers from {@code JobsDirectory}.
+ * {@code /internal/postings/shortlist} over HTTP, in job-service since Day 17
+ * ({@code app.internal.jobs-url}). {@code @Primary}, so it serves; the route answers from
+ * job-service's {@code JobsDirectory}.
  *
  * <p>An outage (a connection or timeout error, a 5xx, the breaker open) throws a
  * {@code ResponseStatusException} with 503: matching without postings is meaningless, and the

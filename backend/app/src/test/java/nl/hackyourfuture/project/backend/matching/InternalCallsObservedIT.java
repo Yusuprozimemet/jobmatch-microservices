@@ -4,6 +4,7 @@ import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import nl.hackyourfuture.project.backend.support.ApiClient;
+import nl.hackyourfuture.project.backend.support.EndedSpans;
 import nl.hackyourfuture.project.backend.support.MatchingTest;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Annotated as {@link LlmCallObservedIT} is, so it shares that test's context.
  */
 @AutoConfigureTracing
-@Import(LlmCallObservedIT.Spans.class)
+@Import(EndedSpans.Config.class)
 class InternalCallsObservedIT extends MatchingTest {
 
     /** Each internal route, and the {@code /api} request whose client calls it. */
@@ -41,7 +42,7 @@ class InternalCallsObservedIT extends MatchingTest {
     private int managementPort;
 
     @Autowired
-    private LlmCallObservedIT.EndedSpans spans;
+    private EndedSpans spans;
 
     @BeforeEach
     void forgetEarlierSpans() {
