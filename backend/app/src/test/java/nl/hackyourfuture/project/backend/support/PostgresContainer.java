@@ -20,8 +20,9 @@ import java.util.List;
  * property creates - quietly starts a second database. This one is started once per JVM and
  * never stopped; Testcontainers' Ryuk sidecar removes it when the JVM exits.
  *
- * <p>The mart schema is created here, immediately after start and before Spring boots, because
- * the application queries {@code analytics.fct_postings} and Flyway does not create it. So are
+ * <p>The mart is created here, immediately after start and before Spring boots, in its own
+ * {@code jobs_db} beside {@code project_db}, where job-service reads it and nothing creates it
+ * but the publish. So are
  * the module roles and their schemas, which production gets from {@code scripts/db-setup.py}
  * and compose from {@code scripts/db-init/}: a precondition of the migrations, not their work.
  */
@@ -37,8 +38,8 @@ public final class PostgresContainer {
     /** Every schema a module's tables can be in, in the order unqualified names resolve. */
     public static final List<String> TABLE_SCHEMAS = List.of("identity", "applications", "matching", "app");
 
-    /** The database where job-service and the mart live; project_db until the harness creates jobs_db. */
-    public static final String JOBS_DATABASE = "project_db";
+    /** The database where job-service and the mart live. */
+    public static final String JOBS_DATABASE = "jobs_db";
 
     // The one password every module role has here. Test-only; compose and production set their own.
     private static final String ROLE_PASSWORD = "password";
@@ -63,8 +64,9 @@ public final class PostgresContainer {
         // In public, not a module schema: the connection's first schema would otherwise get the
         // extension's view inside the schema Flyway owns.
         execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA public");
-        execute(SqlScripts.read("fixtures/analytics-schema.sql"));
+        execute("CREATE SCHEMA IF NOT EXISTS app");
         createModuleRoles();
+        createJobsDatabase();
     }
 
     private PostgresContainer() {
@@ -124,6 +126,16 @@ public final class PostgresContainer {
         }
     }
 
+    /** The same, on the jobs database. */
+    public static void executeInJobs(String sql) {
+        try (Connection connection = JOBS_DATA_SOURCE.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to run SQL against the jobs database", e);
+        }
+    }
+
     /**
      * The module roles, and a schema owned by each: identity_user owns identity, and so on.
      * jobs_user owns nothing; it only ever reads.
@@ -140,6 +152,7 @@ public final class PostgresContainer {
             statements.add("CREATE ROLE " + schema + "_user LOGIN PASSWORD '" + ROLE_PASSWORD + "'");
         }
         statements.add("CREATE ROLE jobs_user LOGIN PASSWORD '" + ROLE_PASSWORD + "'");
+        statements.add("CREATE ROLE analytics_user LOGIN PASSWORD '" + ROLE_PASSWORD + "'");
         for (String schema : MODULE_SCHEMAS) {
             statements.add("CREATE SCHEMA " + schema + " AUTHORIZATION " + schema + "_user");
             statements.add("GRANT USAGE ON SCHEMA " + schema + " TO " + othersThan(schema));
@@ -148,10 +161,28 @@ public final class PostgresContainer {
                         + " GRANT SELECT ON " + objects + " TO " + othersThan(schema));
             }
         }
-        // jobs reads the mart; production gets this from db-setup.py's read-only rule.
-        statements.add("GRANT USAGE ON SCHEMA analytics TO jobs_user");
-        statements.add("GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO jobs_user");
         execute(String.join(";\n", statements));
+    }
+
+    /**
+     * job-service's own database, as compose and {@code db-setup.py} make it: only jobs_user and
+     * analytics_user may connect. analytics_user creates the mart's tables, so the default
+     * privilege gives jobs_user its read, as the publish's drop-and-recreate needs. The admin
+     * makes the schema: analytics_user has no CREATE on the database, and Postgres refuses it even
+     * {@code CREATE SCHEMA IF NOT EXISTS} without it.
+     */
+    private static void createJobsDatabase() {
+        // Alone: CREATE DATABASE cannot run inside a transaction, and a script runs in one.
+        execute("CREATE DATABASE " + JOBS_DATABASE);
+        execute("REVOKE CONNECT ON DATABASE " + JOBS_DATABASE + " FROM PUBLIC;\n"
+                + "GRANT CONNECT ON DATABASE " + JOBS_DATABASE + " TO jobs_user, analytics_user");
+        executeInJobs("CREATE SCHEMA analytics AUTHORIZATION analytics_user;\n"
+                + "GRANT USAGE ON SCHEMA analytics TO jobs_user;\n"
+                + "ALTER DEFAULT PRIVILEGES FOR ROLE analytics_user IN SCHEMA analytics"
+                + " GRANT SELECT ON TABLES TO jobs_user;\n"
+                + "SET ROLE analytics_user;\n"
+                + SqlScripts.read("fixtures/analytics-schema.sql") + "\n"
+                + "RESET ROLE");
     }
 
     private static String othersThan(String schema) {

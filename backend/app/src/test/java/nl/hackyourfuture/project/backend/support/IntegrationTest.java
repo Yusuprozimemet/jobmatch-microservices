@@ -102,7 +102,7 @@ public abstract class IntegrationTest {
     }
 
     protected PostingBuilder aPosting() {
-        return new PostingBuilder(jdbc());
+        return new PostingBuilder(jobsJdbc());
     }
 
     /**

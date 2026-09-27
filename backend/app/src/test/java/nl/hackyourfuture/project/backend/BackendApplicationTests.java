@@ -44,13 +44,18 @@ class BackendApplicationTests extends IntegrationTest {
 
     @Test
     void martTablesAreOutsideTheAppSchema() {
-        // The split has to keep working because these live in their own schema, not because
-        // nobody noticed they were in `app`.
+        // The split has to keep working because the mart lives in jobs_db, not in project_db,
+        // and neither database has the tables in `app`.
         assertThat(jobsJdbc()
                 .sql("SELECT tablename FROM pg_tables WHERE schemaname = 'analytics' ORDER BY tablename")
                 .query(String.class)
                 .list())
                 .containsExactly("fct_postings", "fct_postings_cities", "fct_postings_skills");
+        assertThat(jdbc()
+                .sql("SELECT count(*) FROM pg_namespace WHERE nspname = 'analytics'")
+                .query(Long.class)
+                .single())
+                .isZero();
     }
 
     // Each table with its owner, leaving out any Flyway history a module keeps for itself.

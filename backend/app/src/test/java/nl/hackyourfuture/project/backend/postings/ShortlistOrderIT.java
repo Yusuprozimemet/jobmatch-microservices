@@ -25,7 +25,7 @@ class ShortlistOrderIT extends IntegrationTest {
 
     @Test
     void ranksByMatchesThenDateThenIdOnePerRepostInTheCityUpToTheLimit() {
-        ShortlistFixture.create(jdbc());
+        ShortlistFixture.create(jobsJdbc());
 
         var response = inNetwork()
                 .withHeader("Authorization", "Bearer " + serviceToken.mint())

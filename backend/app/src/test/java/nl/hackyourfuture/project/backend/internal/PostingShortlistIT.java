@@ -43,7 +43,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @BeforeEach
     void createTheFixture() {
-        ShortlistFixture.create(jdbc());
+        ShortlistFixture.create(jobsJdbc());
     }
 
     @Test
