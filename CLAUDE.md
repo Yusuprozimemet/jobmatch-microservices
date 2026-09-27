@@ -43,6 +43,22 @@ maintainer, and nothing starts after a phase ends until they say so.
 Tracks may run in a different order from the spec's table when one depends on another; say so in
 the PR.
 
+## One session per step
+
+Every reply re-reads the whole conversation, and that re-reading is most of what the migration
+costs: up to Day 17, 64% of the main sessions' context tokens were read after a session had
+passed 300k (the Tokens panel on the dashboard, "context per reply"). So a step starts in a fresh
+session: after reporting the next step in step 5, suggest the maintainer start a new session for
+it (or `/compact` if they keep this one). Nothing is lost: the spec, `spec-drift.json`, this file
+and memory carry what the next step needs.
+
+Output that lands in the main session is re-read by every later reply. Keep it small:
+
+- Maven, surefire and CI logs: filter to the failures and the counts (`grep`, `tail`), or have a
+  subagent read them and return the summary. Never print a whole log or report.
+- Read the part of a file you need (`offset`/`limit`, `grep -n`), not the whole file, unless the
+  step changes all of it. Diffs: `--stat` first, then the files that matter.
+
 ## The auditors
 
 `.claude/agents/plan-auditor.md` and `.claude/agents/spec-auditor.md`. Separate agents with their

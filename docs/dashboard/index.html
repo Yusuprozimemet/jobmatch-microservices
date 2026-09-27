@@ -131,7 +131,7 @@
   <section class="panel" id="tokens">
     <div class="panel-head">
       <h2>Tokens spent</h2>
-      <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the migration day whose branch they ran on.</p>
+      <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the migration day whose branch they ran on. Under each bar, and in the table, is the context per reply: how much of the conversation each reply re-read. It falls when sessions are kept short, and it drives most of the cost.</p>
     </div>
     <div class="legend" id="token-legend"></div>
     <div id="token-bars"></div>
