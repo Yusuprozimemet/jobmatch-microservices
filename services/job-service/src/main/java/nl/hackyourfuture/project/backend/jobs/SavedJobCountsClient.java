@@ -19,9 +19,10 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * The {@code SavedJobCounts} job search and job detail use (Day 19): {@code applications}'
- * {@code /internal/saved-counts} over HTTP, in this process until Day 17 moves {@code jobs} out.
- * {@code @Primary}, so it serves; the route itself still answers from {@code ApplicationsDirectory}.
+ * The {@code SavedJobCounts} job search and job detail use: the monolith's
+ * {@code /internal/saved-counts} over HTTP at {@code app.internal.applications-url}.
+ * The only implementation here; {@code @Primary} is kept from the monolith, where
+ * {@code ApplicationsDirectory} is the other.
  *
  * <p>No chunking: its callers ask one page at a time, at most 100 postings ({@code JobController}
  * caps the page), under the route's 500.
