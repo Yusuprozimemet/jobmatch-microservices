@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
-"""Set up the Postgres database, its schemas, roles and permissions.
+"""Set up the Postgres databases, their schemas, roles and permissions.
 
-Creates the database, the 'app', 'analytics' and 'analytics_dev' schemas, and a
-login role per owner: 'app_user' owns 'app', 'analytics_user' owns 'analytics',
-'analytics_dev_user' owns 'analytics_dev'. Each role has full access to the
-schemas it owns and read-only access to the others, for both existing and future
-objects, except the module schemas below, which only their owner reads.
+Creates two databases. 'project_db' has the 'app' schema, owned by 'app_user'. 'jobs_db'
+(Day 20) has the marts: 'analytics', owned by 'analytics_user', and 'analytics_dev', owned
+by 'analytics_dev_user'. Only those two roles and 'jobs_user' may connect to 'jobs_db'.
+Each role has full access to the schemas it owns and read-only access to the others in
+the same database, for both existing and future objects, except the module schemas below,
+which only their owner reads.
 
 Each backend module has a schema and a role too (Day 11): 'identity_user' owns
 'identity', 'applications_user' 'applications', 'matching_user' 'matching', and
-'jobs_user' owns nothing and only reads. No other role reads a module's schema (Day 38):
+'jobs_user' owns nothing and only reads: job-service reads the mart as it, from 'jobs_db'.
+No other role reads a module's schema (Day 38):
 each module is to leave the process with its login. 'app_user' still runs the migrations that
 move the tables out of 'app', so it is made a member of the three module roles:
 moving a table into a schema and handing it to that schema's role needs both.
 
 The third role is the reason there are two analytics schemas. Trainees write
 'analytics_dev' by hand while they build a mart; the scheduled pipeline writes
-'analytics', which the backend reads. Giving both schemas to one role would mean
+'analytics', which job-service reads. Giving both schemas to one role would mean
 handing a trainee the credential that owns production, so they get their own.
 
 The script is idempotent: re-running it never changes existing state, so a
 failed run can simply be repeated. Existing roles keep their current password
-unless you confirm a reset when asked.
+unless you confirm a reset when asked. A 'project_db' set up before Day 20 keeps its
+analytics schemas; the runbook, docs/runbooks/jobs-db.md, drops them.
 
 Connection details come from CLI arguments or environment variables:
 
@@ -52,7 +55,8 @@ except ImportError:
 
 # --- Configuration ---------------------------------------------------------
 
-NEW_DATABASE = "project_db"  # the database this script creates
+NEW_DATABASE = "project_db"  # the primary database this script creates
+JOBS_DATABASE = "jobs_db"  # the analytics mart database
 MAINTENANCE_DATABASE = "postgres"  # the database connected to while creating it
 
 APP_SCHEMA = "app"
@@ -70,14 +74,21 @@ JOBS_ROLE = "jobs_user"
 
 ROLES = (APP_ROLE, ANALYTICS_ROLE, ANALYTICS_DEV_ROLE, *MODULE_ROLES, JOBS_ROLE)
 
-# Every schema, and the role that owns it. A role gets full access to the schemas
-# it owns and read-only access to all the others, so adding a schema here is the
-# only edit needed - there is no second list of read-only grants to keep in sync.
+# Roles that can connect to jobs_db (job-service, the pipeline and trainees).
+JOBS_ROLES = (ANALYTICS_ROLE, ANALYTICS_DEV_ROLE, JOBS_ROLE)
+
+# Schemas in project_db, and the role that owns each: app and the module schemas.
+# A role gets full access to schemas it owns and read-only access to the others,
+# so adding a schema here is the only edit needed.
 SCHEMA_OWNERS = {
     APP_SCHEMA: APP_ROLE,
+    **dict(zip(MODULE_SCHEMAS, MODULE_ROLES)),
+}
+
+# Schemas in jobs_db: the analytics marts. Same pattern as SCHEMA_OWNERS.
+JOBS_SCHEMA_OWNERS = {
     ANALYTICS_SCHEMA: ANALYTICS_ROLE,
     ANALYTICS_DEV_SCHEMA: ANALYTICS_DEV_ROLE,
-    **dict(zip(MODULE_SCHEMAS, MODULE_ROLES)),
 }
 
 
@@ -197,6 +208,13 @@ def create_database(conn: psycopg.Connection, database: str) -> None:
     done("Created database '%s'", database)
 
 
+def revoke_connect(conn: psycopg.Connection, database: str) -> None:
+    """Revoke CONNECT from PUBLIC, so only explicitly granted roles can connect."""
+    execute(conn, "REVOKE CONNECT ON DATABASE {database} FROM PUBLIC",
+            database=sql.Identifier(database))
+    done("Revoked CONNECT on database '%s' from PUBLIC", database)
+
+
 def grant_connect(conn: psycopg.Connection, database: str, roles: list[str]) -> None:
     execute(conn, "GRANT CONNECT ON DATABASE {database} TO {roles}",
             database=sql.Identifier(database),
@@ -310,15 +328,24 @@ def grant_access(conn: psycopg.Connection, schema: str, role: str,
 def report(args: argparse.Namespace, passwords: dict[str, str | None]) -> None:
     unchanged = "(unchanged)"
     print(f"\n✅ Setup complete on {args.host}:{args.port}\n")
-    print(f"  database : {NEW_DATABASE}")
-    print(f"  schemas  : {', '.join(SCHEMA_OWNERS)}\n")
+    print(f"  {NEW_DATABASE} : {', '.join(SCHEMA_OWNERS)}")
+    print(f"  {JOBS_DATABASE:<{len(NEW_DATABASE)}} : {', '.join(JOBS_SCHEMA_OWNERS)}\n")
     for role in ROLES:
-        owned = [s for s, owner in SCHEMA_OWNERS.items() if owner == role]
-        read_only = [s for s in SCHEMA_OWNERS if s not in owned and s not in MODULE_SCHEMAS]
+        full, read_only = [], []
+        for database, owners in ((NEW_DATABASE, SCHEMA_OWNERS),
+                                 (JOBS_DATABASE, JOBS_SCHEMA_OWNERS)):
+            if database == JOBS_DATABASE and role not in JOBS_ROLES:
+                continue
+            for schema, owner in owners.items():
+                if owner == role:
+                    full.append(f"{database}.{schema}")
+                elif schema not in MODULE_SCHEMAS:
+                    read_only.append(f"{database}.{schema}")
         print(f"  {role}")
         print(f"    password : {passwords[role] or unchanged}")
-        full = f"full on {', '.join(owned)} — " if owned else ""
-        print(f"    access   : {full}read-only on {', '.join(read_only)}")
+        access = [f"full on {', '.join(full)}"] if full else []
+        access += [f"read-only on {', '.join(read_only)}"] if read_only else []
+        print(f"    access   : {' — '.join(access)}")
 
 
 # --- Entry point -----------------------------------------------------------
@@ -333,6 +360,7 @@ def main() -> None:
              conn.execute("SHOW server_version").fetchone()[0])
 
         create_database(conn, NEW_DATABASE)
+        create_database(conn, JOBS_DATABASE)
 
         # Roles live in the cluster, not in the database, so create them here.
         step("Creating roles: %s", ", ".join(roles))
@@ -344,21 +372,40 @@ def main() -> None:
             execute(conn, "GRANT {role} TO {member}",
                     role=sql.Identifier(role), member=sql.Identifier(APP_ROLE))
         done("'%s' is a member of %s", APP_ROLE, ", ".join(MODULE_ROLES))
-        # A database-level grant, so it does not need the connection below.
+
+        # Database-level grants. project_db: all roles. jobs_db: only analytics roles and jobs_user.
         grant_connect(conn, NEW_DATABASE, roles)
+        revoke_connect(conn, JOBS_DATABASE)
+        grant_connect(conn, JOBS_DATABASE, list(JOBS_ROLES))
 
     with connect(args, NEW_DATABASE) as conn:
-        step("Creating schemas:")
+        step("Creating schemas in %s:", NEW_DATABASE)
         for schema, owner in SCHEMA_OWNERS.items():
             create_schema(conn, schema, owner)
 
-        step("Granting schema privileges")
+        step("Granting schema privileges in %s", NEW_DATABASE)
         creators = [args.admin_user, *roles]
         for schema, owner in SCHEMA_OWNERS.items():
             for role in roles:
                 if role == owner:
                     grant_access(conn, schema, role, FULL_ACCESS, creators)
                 elif schema not in MODULE_SCHEMAS:
+                    grant_access(conn, schema, role, READ_ONLY, creators)
+
+    with connect(args, JOBS_DATABASE) as conn:
+        step("Creating schemas in %s:", JOBS_DATABASE)
+        for schema, owner in JOBS_SCHEMA_OWNERS.items():
+            create_schema(conn, schema, owner)
+
+        step("Granting schema privileges in %s", JOBS_DATABASE)
+        # The admin and the analytics roles are the creators here.
+        creators = [args.admin_user, *JOBS_ROLES]
+        for schema, owner in JOBS_SCHEMA_OWNERS.items():
+            # The owner gets full access; jobs_user and the other analytics role get read-only.
+            for role in JOBS_ROLES:
+                if role == owner:
+                    grant_access(conn, schema, role, FULL_ACCESS, creators)
+                else:
                     grant_access(conn, schema, role, READ_ONLY, creators)
 
     report(args, passwords)

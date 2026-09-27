@@ -24,7 +24,7 @@ app:
   datasource:
     # jobs_user only reads (Day 11, Day 38).
     jobs:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=analytics
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:jobs_db}?currentSchema=analytics
       username: ${DB_JOBS_USER:jobs_user}
       password: ${DB_JOBS_PASSWORD:password}
 
