@@ -30,13 +30,28 @@ public final class StatementCounter {
      * a table name as a rule. Leaves out this class's own queries, which contain it too.
      */
     public static long statementsMentioning(String fragment) {
+        return mentioning(PostgresContainer.instance().getDatabaseName(), fragment);
+    }
+
+    /**
+     * Executions since the last {@link #reset()} of statements in the jobs database whose text
+     * contains {@code fragment}, a table name as a rule. Leaves out this class's own queries,
+     * which contain it too. {@code pg_stat_statements} is cluster-wide, so each count filters
+     * to one database.
+     */
+    public static long jobsStatementsMentioning(String fragment) {
+        return mentioning(PostgresContainer.JOBS_DATABASE, fragment);
+    }
+
+    private static long mentioning(String database, String fragment) {
         return TestDatabase.jdbc().sql("""
                         SELECT COALESCE(SUM(calls), 0)
                         FROM public.pg_stat_statements
-                        WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+                        WHERE dbid = (SELECT oid FROM pg_database WHERE datname = :database)
                           AND query ILIKE '%' || :fragment || '%'
                           AND query NOT ILIKE '%pg_stat_statements%'
                         """)
+                .param("database", database)
                 .param("fragment", fragment)
                 .query(Long.class)
                 .single();

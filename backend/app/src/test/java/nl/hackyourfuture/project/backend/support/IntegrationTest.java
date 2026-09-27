@@ -88,6 +88,11 @@ public abstract class IntegrationTest {
         return TestDatabase.jdbc();
     }
 
+    /** Direct database access to the jobs database, where the mart is. */
+    protected JdbcClient jobsJdbc() {
+        return TestDatabase.jobsJdbc();
+    }
+
     protected UserBuilder aUser() {
         return new UserBuilder(jdbc());
     }

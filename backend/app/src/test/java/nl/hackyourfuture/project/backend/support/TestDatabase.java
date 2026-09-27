@@ -25,6 +25,7 @@ public final class TestDatabase {
     private static final String FLYWAY_HISTORY = "flyway_schema_history";
 
     private static final JdbcClient JDBC = JdbcClient.create(PostgresContainer.dataSource());
+    private static final JdbcClient JOBS_JDBC = JdbcClient.create(PostgresContainer.jobsDataSource());
     private static final String SEED = SqlScripts.read("fixtures/analytics-seed.sql");
 
     private TestDatabase() {
@@ -33,6 +34,11 @@ public final class TestDatabase {
     /** A JdbcClient on the test container, for fixtures and for asserting on stored rows. */
     public static JdbcClient jdbc() {
         return JDBC;
+    }
+
+    /** A JdbcClient on the jobs database, where the mart is. */
+    public static JdbcClient jobsJdbc() {
+        return JOBS_JDBC;
     }
 
     public static void reset() {
