@@ -366,7 +366,8 @@ The three columns `V2` created that no form field feeds — `preferred_role`, `p
 
 # 6. Jobs
 
-All three are public: browsing does not need an account. Every row comes from the mart, so a
+All three are public: browsing does not need an account. job-service serves them since Day 17; the
+gateway routes them there, and the backend answers `401` anonymous and `404` logged in. Every row comes from the mart, so a
 database the pipeline has never published into answers `[]` rather than failing.
 
 > Why the location filter works the way it does, what the freshness fields mean, and how the pages
@@ -673,7 +674,8 @@ every browser shares the frontend's one bucket. Nothing yet throttles the model-
 # 13. Internal routes
 
 Service-to-service routes, service tokens only, not routed by the gateway, not in the public
-OpenAPI. The `/internal/**` chain and the tokens it trusts are in [auth.md](auth.md#service-tokens-and-internal).
+OpenAPI. The two postings routes are job-service's since Day 17, called by the backend's saved
+jobs and top matches; `/internal/saved-counts` is the backend's, called by job-service. The `/internal/**` chain and the tokens it trusts are in [auth.md](auth.md#service-tokens-and-internal).
 
 ### POST /internal/postings/batch
 Batch lookup of posting details by id.

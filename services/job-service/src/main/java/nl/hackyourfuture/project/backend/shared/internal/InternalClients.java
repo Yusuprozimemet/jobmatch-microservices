@@ -15,8 +15,8 @@ import java.util.function.Supplier;
  * {@code SavedJobCounts} clients.
  *
  * <p>The URL is read on the first call, not when the bean is made: the server's port is known only
- * once it has started, and Day 17's harness sets the property from a container started after the
- * context. Empty means this process.
+ * once it has started, and the harness sets it from a container started after the context (Day 17).
+ * Empty means this process.
  *
  * <p>Connect 1 s and read 2 s, so top-matches fits under the gateway's 30 s read after the LLM's
  * 5 + 20 s. A read timeout must surface as a {@code ResourceAccessException}, the exception the

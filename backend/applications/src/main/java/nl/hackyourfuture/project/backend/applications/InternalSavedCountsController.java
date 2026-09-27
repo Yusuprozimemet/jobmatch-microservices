@@ -14,7 +14,7 @@ import java.util.Set;
 
 /**
  * What {@code applications} answers other services over HTTP (Day 18): saved counts by posting,
- * the call job search needs once {@code jobs} leaves on Day 17 (Day 19's client calls it). Behind
+ * the call job search makes from job-service since Day 17 (its {@code SavedJobCountsClient}). Behind
  * the {@code /internal/**} chain, so service tokens only (Day 39); the gateway does not route it
  * and the public OpenAPI does not list it.
  *

@@ -51,11 +51,14 @@ flowchart LR
     B(["browser :3000"]) --> FE["frontend<br/>Next standalone server"]
     FE -->|"/api/* rewritten to<br/>BACKEND_API_URL"| GW["api-gateway<br/>:8080 on the host"]
     GW --> BE["backend<br/>Spring Boot, no published port"]
+    GW -->|"/api/jobs/**"| JS["job-service<br/>no published port"]
+    JS <-->|"/internal/**,<br/>service tokens"| BE
     BE --> DB[("postgres :5432<br/>module + analytics schemas")]
+    JS -->|"as jobs_user"| DB
     PIPE["pipeline<br/>profile: data, run-once"] -.->|"publishes marts"| DB
 
     classDef s fill:#e8eef7,stroke:#4a6080
-    class FE,GW,BE s
+    class FE,GW,BE,JS s
 ```
 
 ```bash
@@ -68,6 +71,7 @@ scripts/dev-up.sh          # docker compose up -d db backend api-gateway fronten
 | `db` | 5432 | `postgres:18.4-alpine`, volume `db-data`, `pg_isready` healthcheck |
 | `jwt-key` | — | Runs and exits. Writes the token signing key into the `jwt-keys` volume on the first start, then keeps it until `down -v` |
 | `backend` | — | Built from `./backend`. Listens on 8080 inside the network only (Day 16). Waits for the database to be healthy and for `jwt-key` to finish |
+| `job-service` | — | Built from `./services/job-service` (Day 17). Job search and the postings routes. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Needs its image built first when the harness runs it: `docker build -t jobmatch-job-service:harness services/job-service` |
 | `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. Healthcheck on `/actuator/health/readiness` (management port 9090, inside the network). `depends_on: backend` |
 | `frontend` | 3000 | Built from `./frontend`. Waits for the gateway to be healthy (`condition: service_healthy`), so `up --wait` returns once the gateway is ready |
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
@@ -82,11 +86,24 @@ The gateway's settings, all with defaults that suit compose:
 | Variable | Default | |
 | --- | --- | --- |
 | `BACKEND_URL` | `http://localhost:8080` — `http://backend:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
-| `JOB_SERVICE_URL` | `BACKEND_URL`'s value | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. Unset until job-service is extracted (Day 17) |
+| `JOB_SERVICE_URL` | `BACKEND_URL`'s value — `http://job-service:8080` in compose | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. The backend no longer serves these (Day 17), so outside compose it must be set |
 | `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login, register and the two password-reset steps, per client |
 | `GATEWAY_TRUSTED_PROXIES` | empty | A regex of proxy addresses whose `X-Forwarded-For` is believed. Leave it empty behind the frontend, which passes a client's own header through; set it only for a proxy that overwrites it |
 | `GATEWAY_CONNECT_TIMEOUT` / `GATEWAY_READ_TIMEOUT` | `5s` / `30s` | Past them the gateway answers 502 / 504 |
 | `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT` | `false`, local Tempo | As the backend's |
+
+job-service's settings (Day 17), as compose sets them:
+
+| Variable | Default | |
+| --- | --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `project_db` | The same database as the backend; it reads the `analytics` mart |
+| `DB_JOBS_USER` / `DB_JOBS_PASSWORD` | `jobs_user` / `password` | The read-only role ([§6](#6-the-database-schemas-and-roles)); compose passes `JOBS_DB_PASSWORD` |
+| `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-job-service`. **Required**; compose's `jwt-key` service writes it |
+| `BACKEND_KEY_SET_URL` | empty | The monolith's service key set, so `jobmatch-backend` may call its `/internal/**` routes. Compose: `http://backend:8080/.well-known/service-jwks.json` |
+| `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` / `..._0_KEYSETURL` | none | Further trusted issuers, as the backend's ([auth.md](auth.md#service-tokens-and-internal)) |
+| `INTERNAL_APPLICATIONS_URL` | empty | Where it asks for saved counts (`/internal/saved-counts`): the backend, `http://backend:8080` in compose. Empty would mean itself, which has no such route |
+| `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
+| `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |
 
 **The gateway's healthcheck makes `up --wait` wait until it is ready.** The backend has actuator on
 its management port but compose has no healthcheck for it. The gateway's check is the one compose
@@ -119,8 +136,7 @@ module's Flyway migrates its own schema as its own login.
 | Variable | Default | |
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** |
-| `INTERNAL_JOBS_URL` | empty | Where saved jobs and top matches send their internal calls for postings (`/internal/postings/**`, Day 19). Empty means this process, `http://localhost:<the server's port>`, read on the first call. Day 17 sets it to job-service |
-| `INTERNAL_APPLICATIONS_URL` | empty | Where job search sends its internal call for saved counts (`/internal/saved-counts`). Empty means this process. Day 17 sets it, in job-service, to the monolith |
+| `INTERNAL_JOBS_URL` | empty | Where saved jobs and top matches send their internal calls for postings (`/internal/postings/**`, Day 19). Empty means this process, `http://localhost:<the server's port>`, read on the first call, which no longer serves them (Day 17): set it to job-service, `http://job-service:8080` in compose |
 | `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the two token cookies and the Google flow's two, `google_auth_request` and `pending_google_link`. Must be `true` on HTTPS |
 | `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with: a PEM, PKCS#8 file of at least 2048 bits. **Required**, in every profile; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/private.pem` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | The monolith's key for service tokens (Day 39): a PEM, PKCS#8 file of at least 2048 bits. **Required**, separate from the user key; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/service.pem` |

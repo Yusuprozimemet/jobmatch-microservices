@@ -76,6 +76,12 @@ public final class JobService {
         return container.getMappedPort(PORT);
     }
 
+    /** The container's mapped management port. */
+    public static int managementPort() {
+        ensureStarted();
+        return container.getMappedPort(MANAGEMENT_PORT);
+    }
+
     /** Where a client reaches job-service: its own base URL, container host and mapped port. */
     public static String baseUrl() {
         ensureStarted();

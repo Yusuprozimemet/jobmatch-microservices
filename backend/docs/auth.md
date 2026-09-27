@@ -306,8 +306,11 @@ the key set it is verified with from the trusted issuers
 ([`InternalCallers`](../app/src/main/java/nl/hackyourfuture/project/backend/config/InternalCallers.java)):
 the monolith's own, `jobmatch-backend`, trusted in process, and whatever
 `app.internal.trusted-issuers` lists as `{name, key-set-url}` entries, empty by default. Set via
-environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and `APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`.
-An issuer not on the list gets `401`. The monolith signs its own tokens with
+environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and `APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`;
+compose lists `jobmatch-job-service` at job-service's `/.well-known/service-jwks.json` (Day 17).
+An issuer not on the list gets `401`. job-service keeps the same rules in its own copy: it trusts
+`jobmatch-backend` at `BACKEND_KEY_SET_URL`, and signs with a key of its own
+([`configuration.md`](configuration.md#2-the-local-stack)). The monolith signs its own tokens with
 `SERVICE_JWT_PRIVATE_KEY_FILE`
 ([`ServiceTokens`](../app/src/main/java/nl/hackyourfuture/project/backend/config/ServiceTokens.java)),
 never the user key, and publishes the public half at `GET /.well-known/service-jwks.json`.

@@ -27,7 +27,10 @@ flowchart LR
     FE -->|"/api/* to api-gateway:8081"| GW["api-gateway<br/>published on :8080"]
     GW -->|"verified requests,<br/>X-User-Id from the token"| BE["backend :8080<br/>no published port"]
     GW -.->|"GET /.well-known/jwks.json,<br/>fetched once and cached"| BE
+    GW -->|"/api/jobs/**"| JS["job-service :8080<br/>no published port"]
+    JS <-->|"/internal/**, service tokens"| BE
     BE --> DB[("postgres<br/>a schema per module,<br/>analytics")]
+    JS -->|"analytics, as jobs_user"| DB
 ```
 
 - **Tokens, not a session.** Login sets an RS256 `access_token` (15 minutes) and a `refresh_token`
@@ -45,5 +48,10 @@ flowchart LR
 - **Only the gateway is published.** The backend is reachable at `backend:8080` inside the compose
   network and nowhere else; the frontend's `BACKEND_API_URL` names the gateway.
 
-Settings for each box are in [`configuration.md`](configuration.md). What comes next — extracting
-job-service behind the same gateway — is Phase 3 in [`plan.md`](../../plan.md).
+- **job-service is the first service out (Day 17).** It serves job search and the postings routes
+  behind the same gateway, and the backend's saved jobs and top matches call it over `/internal/**`
+  with a service token. It calls back for saved counts. Its metrics are on its own management port,
+  and a trace crosses both ways (`JobServiceObservedIT`).
+
+Settings for each box are in [`configuration.md`](configuration.md). The rest of Phase 3 is in
+[`plan.md`](../../plan.md).
