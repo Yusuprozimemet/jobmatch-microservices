@@ -63,11 +63,16 @@ public abstract class IntegrationTest {
         // Register the test caller as a trusted issuer for /internal tests (Day 39, Day 17 list form).
         registry.add("app.internal.trusted-issuers[0].name", () -> TestServiceCaller.ISSUER);
         registry.add("app.internal.trusted-issuers[0].key-set-url", () -> TestServiceCaller.instance().jwksUrl());
+        // job-service (Day 17). A supplier: its container is up before a context needs its key set.
+        registry.add("app.internal.trusted-issuers[1].name", () -> "jobmatch-job-service");
+        registry.add("app.internal.trusted-issuers[1].key-set-url", () -> JobService.baseUrl() + "/.well-known/service-jwks.json");
     }
 
     @BeforeEach
     void resetDatabase() {
         TestDatabase.reset();
+        // job-service's counts calls go through one relay; point it at this test's context.
+        JobService.relayTo(port);
     }
 
     /**

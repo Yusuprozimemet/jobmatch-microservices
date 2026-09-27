@@ -763,6 +763,7 @@ says how to add them.
 Run the contract test suite that Phase 0 is building:
 
 ```bash
+docker build -t jobmatch-job-service:harness services/job-service   # the suite starts it (Day 17)
 cd backend && ./mvnw verify
 ```
 

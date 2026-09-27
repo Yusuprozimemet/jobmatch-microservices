@@ -7,12 +7,16 @@ on:
       - "backend/**"
       # The suite also runs through the gateway, so a gateway change runs it too (Day 15).
       - "services/api-gateway/**"
+      # Every run starts job-service from its image (Day 17), so a change to it runs the suite.
+      - "services/job-service/**"
       - ".github/workflows/backend-ci-cd.yaml"
   pull_request:
     paths:
       - "backend/**"
       # The suite also runs through the gateway, so a gateway change runs it too (Day 15).
       - "services/api-gateway/**"
+      # Every run starts job-service from its image (Day 17), so a change to it runs the suite.
+      - "services/job-service/**"
       - ".github/workflows/backend-ci-cd.yaml"
 
 # Cancel previous runs on new pushes
@@ -42,6 +46,11 @@ jobs:
         working-directory: ./backend
         run: ./mvnw -B checkstyle:check
 
+      # Every integration test's context trusts job-service at its container's key set (Day 17),
+      # so the harness starts it from this image, built here: never pulled.
+      - name: Build the job-service image
+        run: docker build -t jobmatch-job-service:harness services/job-service
+
       # `verify`, not `test`: the integration tests are the safety net for the microservices
       # split, so a pull request that breaks one has to fail here. They need a Docker daemon
       # for Testcontainers, which ubuntu-latest has.
@@ -60,7 +69,7 @@ jobs:
         working-directory: ./backend
         run: >-
           ./mvnw -B verify -pl app -am -Dharness.gateway=true
-          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT'
+          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
   build:

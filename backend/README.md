@@ -66,15 +66,18 @@ Run it:
 java -jar target/backend-1.0.0-SNAPSHOT.jar
 ```
 
-Run the tests:
+Run the tests, after building job-service's image (again after any
+change to `services/job-service`, since a stale image passes silently):
 
 ```bash
+docker build -t jobmatch-job-service:harness ../services/job-service
 ./mvnw verify
 ```
 
 > The tests never touch your own database: they start one throwaway `postgres:18.4-alpine`
-> container for the whole run, so Docker has to be running and the `DB_*` variables are ignored
-> here. See [Integration tests](#integration-tests).
+> container for the whole run, and one job-service container from that image (Day 17), so Docker
+> has to be running and the `DB_*` variables are ignored here. See
+> [Integration tests](#integration-tests).
 
 Check code style with Checkstyle ([`checkstyle.xml`](checkstyle.xml)):
 
@@ -278,7 +281,7 @@ Do not add a second `@TestConfiguration` with its own container, and do not put 
 
 Every pull request touching `backend/**` runs [`backend-ci-cd.yaml`](../.github/workflows/backend-ci-cd.yaml), and so does every push to `main` that touches it:
 
-1. **`lint-and-test`** — `./mvnw checkstyle:check` then `./mvnw verify`. Both must pass.
+1. **`lint-and-test`** — `./mvnw checkstyle:check`, builds job-service's harness image, then `./mvnw verify`. Both must pass.
 2. **`build`** — builds the Docker image; only pushes to GHCR when the change lands on `main`.
 
 Images are tagged `latest`, `1.0.<run number>`, and `main-sha-<short sha>`.
@@ -311,7 +314,7 @@ The `user` package is your reference — deliberately small and complete.
 - **Keep classes under `nl.hackyourfuture.project.backend`.** Spring only scans below the package holding `BackendApplication`; anything outside is silently ignored.
 - **Use correct status codes** — `200` read/update, `201` create (see `@ResponseStatus(HttpStatus.CREATED)`), `400` invalid input, `404` not found — then document them with `@ApiResponse`.
 - **Validate at the edge:** constraints on the request DTO, `@Valid` on the controller parameter.
-- **Before opening a PR,** run `./mvnw checkstyle:check` and `./mvnw verify` locally — CI runs the same checks and blocks the PR if either fails.
+- **Before opening a PR,** build job-service's image (`docker build -t jobmatch-job-service:harness ../services/job-service`), then run `./mvnw checkstyle:check` and `./mvnw verify` locally — CI runs the same checks and blocks the PR if either fails.
 
 ### Troubleshooting
 
@@ -324,6 +327,7 @@ The `user` package is your reference — deliberately small and complete.
 | Flyway stops at V12 with `Day 11 moves identity's tables into schema identity ...` | The module roles and schemas do not exist in this database. Run `db-setup.py` against it, or for compose recreate the volume: `docker compose down -v` |
 | `permission denied for table ...` from the application | A module's login reached another module's table. Each module writes only its own schema; that is Postgres enforcing the boundary, not a grant to add |
 | `Could not find a valid Docker environment` while running `./mvnw verify` | Docker isn't running — the tests start their own database container |
+| `job-service's harness image did not start from jobmatch-job-service:harness` | The image is not built: `docker build -t jobmatch-job-service:harness ../services/job-service` (the harness never pulls it) |
 | `Migration checksum mismatch` | An applied migration was edited. Revert it and add a new `V…` file |
 | `403 Forbidden` on your new endpoint | Not listed in `SecurityConfig`; anything unlisted requires authentication |
 | Endpoint missing from `/api/docs` | Not annotated `@RestController`, or outside the base package |
