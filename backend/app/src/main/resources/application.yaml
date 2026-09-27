@@ -53,10 +53,6 @@ app:
       url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=matching
       username: ${DB_MATCHING_USER:matching_user}
       password: ${DB_MATCHING_PASSWORD:password}
-    jobs:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=analytics
-      username: ${DB_JOBS_USER:jobs_user}
-      password: ${DB_JOBS_PASSWORD:password}
   base-url: ${APP_BASE_URL:http://localhost:3000}
   # The RSA key identity signs tokens with (Day 12): a PEM, PKCS#8 file. No default on purpose,
   # since the application never generates one; without it, it does not start. Compose writes one
@@ -80,11 +76,10 @@ app:
     # First Google sign-in lands here instead of home, since Google skips our terms screen.
     terms-required-redirect: ${OAUTH2_TERMS_REDIRECT:${app.base-url}/accept-terms}
 
-  # Where the internal clients send their calls (Day 19): empty is this process. Day 17 points
-  # jobs-url at job-service.
+  # Where the internal clients send their calls (Day 19): empty is this process; compose points
+  # jobs-url at job-service (Day 17).
   internal:
     jobs-url: ${INTERNAL_JOBS_URL:}
-    applications-url: ${INTERNAL_APPLICATIONS_URL:}
 
   llm:
     api-key: ${LLM_API_KEY:}
@@ -197,6 +192,4 @@ resilience4j:
       postingLookup:
         base-config: internal
       postingShortlist:
-        base-config: internal
-      savedJobCounts:
         base-config: internal
