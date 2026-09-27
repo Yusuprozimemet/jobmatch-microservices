@@ -62,6 +62,10 @@ def read_mart(
 def read_backend_table(dsn: str, table: str, schema: str = "app") -> list[dict]:
     """Read one of the backend's own tables.
 
+    The `app` schema is in `project_db`, a different database from the one
+    publish writes to (`jobs_db`, Day 20), so `dsn` must name `project_db`:
+    dsn_from_env() points at the mart's database and will not find `app`.
+
     `analytics_user` has read and nothing else on the `app` schema, so the
     worst a mistake here can do is return the wrong rows.
     """

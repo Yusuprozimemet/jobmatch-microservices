@@ -96,7 +96,7 @@ job-service's settings (Day 17), as compose sets them:
 
 | Variable | Default | |
 | --- | --- | --- |
-| `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `project_db` | The same database as the backend; it reads the `analytics` mart |
+| `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `jobs_db` | Its own database, holding the analytics mart (Day 20); compose passes `JOBS_DB_NAME` |
 | `DB_JOBS_USER` / `DB_JOBS_PASSWORD` | `jobs_user` / `password` | The read-only role ([§6](#6-the-database-schemas-and-roles)); compose passes `JOBS_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-job-service`. **Required**; compose's `jwt-key` service writes it |
 | `BACKEND_KEY_SET_URL` | empty | The monolith's service key set, so `jobmatch-backend` may call its `/internal/**` routes. Compose: `http://backend:8080/.well-known/service-jwks.json` |
@@ -122,7 +122,7 @@ All of it in [`application.yaml`](../src/main/resources/application.yaml).
 | --- | --- | --- |
 | `DB_HOST` | `localhost` | `db` under compose |
 | `DB_PORT` | `5432` | |
-| `DB_NAME` | `project_db` | |
+| `DB_NAME` | `project_db` | The mart is not here: it is in `jobs_db`, job-service's (Day 20) |
 | `DB_USER` | `admin` | The owner of the migrations; only Flyway logs in as it. `app_user` in a production-like setup |
 | `DB_PASSWORD` | `password` | |
 | `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_MATCHING_USER`, `DB_JOBS_USER` | `identity_user`, … | Each module's own login, with its own schema as the search path (Day 11). `jobs_user` only reads the mart |
