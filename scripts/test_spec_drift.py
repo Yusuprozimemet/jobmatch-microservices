@@ -150,6 +150,29 @@ class EvidenceTest(unittest.TestCase):
             self.assertTrue(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
         self.assertFalse(sd.criteria("- [x] **new** — X. Red today: the route does not exist.\n")[0]["red"])
 
+    def test_every_phrasing_the_specs_record_a_break_in_is_seen_red(self):
+        # From Days 08-40: the template's own "Broken on purpose: <what the check reported>", and
+        # the ways the days wrote it without "Red with".
+        seen = ["Red again with the migration's revoke removed", "Seen red on Day 15 (#100, #101)",
+                "Red, 2 of 4, with `redeem` ignoring `revoked_at`", "#174: 3 of 10 red, expected 200",
+                "81 of 190 contract tests red", "the `USAGE` grant turned `noModuleCanReadAnothersSchema[2]` red",
+                "`InternalCallersTest.theListBindsFromEnvironmentVariables` (#168), red with the list bound",
+                "Red in the full direct run with that request removed",
+                "Broken\n      on purpose in #63: an uppercased principal email failed `ProfileIT` (8)",
+                "Broken on purpose in #66 by dropping the foreign key: 2 rows left",
+                "Broken on purpose in #75: the backend exited naming `JWT_PRIVATE_KEY_FILE`",
+                "Broken on purpose in #51: a lookup per posting gave 2, 3 and 7 statements",
+                "Broken on purpose in #68: an edit to a comment in V1 showed at once",
+                "Broken on purpose in #74: the auth tests reported `Tests run: 49, Failures: 8`",
+                "Broken as named: the application did not start (`permission denied`), 293 of 306 errors"]
+        for text in seen:
+            self.assertTrue(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
+        # A baseline, or a break the spec plans but no one has reported yet, is not a break seen red.
+        unseen = ["Red before the work: 9 lines in 5 files", "Red before #69",
+                  "Broken on purpose in Track C's PR: the request removed, so the metric test goes red"]
+        for text in unseen:
+            self.assertFalse(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
+
     def test_a_name_not_in_the_tree_when_the_day_ended_is_not_evidence(self):
         self.assertEqual(self.state()[1]["tests"], {"FooIT": "present", "FooIT.saves": "present"})
 

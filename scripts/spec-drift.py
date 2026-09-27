@@ -36,10 +36,17 @@ COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*|--|<!--|#(\s|!|$))")
 COMMENT_TAIL = re.compile(r"/\*.*?\*/|\s(//|--|#)\s.*$")
 CRITERION = re.compile(r"^- \[( |x)\]", re.M)
 # A criterion's evidence: the PRs it cites, the tests it names (a class, or Class.member) and a
-# break it was seen to fail under ("Red with the permitAll line removed", "expected: 404 but was").
+# break it was seen to fail under ("Red with the permitAll line removed", "expected: 404 but was",
+# the template's "Broken on purpose: <what the check reported>"). "Red today" and "Red before" are
+# the baseline a new criterion starts from, and a break with nothing reported is only planned.
 CITED_PR = re.compile(r"(?<![\w&])#(\d+)\b")
 EVIDENCE_TEST = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Test|IT|Tests))(?:\.([a-z][A-Za-z0-9_]*))?\b")
-SEEN_RED = re.compile(r"\bRed (?:with|as|without|when|on)\b|went red|turned\b[^.]{0,30}\bred\b|but was")
+SEEN_RED = re.compile(
+    r"\b[Rr]ed (?:with|as|without|when|on|again|in)\b|\b[Ss]een red\b|\bRed, (?:\d+ of \d+|all)\b"
+    r"|\b\d+ of \d+(?: [\w-]+){0,3} red\b|` red\b|went red|turned\b[^.]{0,80}\bred\b|but was"
+    r"|Broken\s+(?:on\s+purpose|as\s+named)\b[^.]*?(?:\bfail(?:ed|s\s+with)\b|\berror(?:ed|s)?\b"
+    r"|Failures: [1-9]|\bgave \d|\bshowed\b|\bstops with\b|\bexited\b|\bprinted\b|\b\d+ of \d+"
+    r"|\b\d+\s+(?:rows?|statements?)\b)")
 SKIPPABLE = re.compile(r"@Disabled\b|@(?:Enabled|Disabled)If")
 # A removal check: a grep a criterion says prints nothing ("`grep ...` returns nothing", "gives 0"),
 # or a Verify line that echoes when it does (`grep ... || echo "clean"`).
