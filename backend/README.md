@@ -267,13 +267,13 @@ Two rules keep these tests usable as the safety net for the [microservices split
 
 ### The mart fixture
 
-`analytics.fct_postings`, `fct_postings_cities` and `fct_postings_skills` are built by the data pipeline and copied in by [`sync.py`](../data/src/publishing/sync.py). **Flyway does not create them**, so the tests do, in [`fixtures/analytics-schema.sql`](src/test/resources/fixtures/analytics-schema.sql) — column for column from [`data/sql/job_schema.sql`](../data/sql/job_schema.sql), including `skills` and `cities` being `text` holding a JSON array rather than a nicer type.
+`analytics.fct_postings`, `fct_postings_cities` and `fct_postings_skills` are built by the data pipeline and copied in by [`sync.py`](../data/src/publishing/sync.py) into `jobs_db`, job-service's own database. **Flyway does not create them**, so the tests do: [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) creates `jobs_db` in the same container and runs [`fixtures/analytics-schema.sql`](src/test/resources/fixtures/analytics-schema.sql) there as `analytics_user` — column for column from [`data/sql/job_schema.sql`](../data/sql/job_schema.sql), including `skills` and `cities` being `text` holding a JSON array rather than a nicer type.
 
-[`fixtures/analytics-seed.sql`](src/test/resources/fixtures/analytics-seed.sql) loads 24 postings before each test, with the edge cases mart queries trip over: a repost, a posting in two cities, a country in the city bridge, an empty skills array, and a closed posting. Add to the seed when a case is generally useful; use `aPosting()` when it belongs to one test.
+[`fixtures/analytics-seed.sql`](src/test/resources/fixtures/analytics-seed.sql) loads 24 postings before each test, with the edge cases mart queries trip over: a repost, a posting in two cities, a country in the city bridge, an empty skills array, and a closed posting. Add to the seed when a case is generally useful; use `aPosting()` when it belongs to one test, and `jobsJdbc()` to read the mart back.
 
 ### The database
 
-One container per run, started by [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) and never restarted. Between tests, [`TestDatabase`](src/test/java/nl/hackyourfuture/project/backend/support/TestDatabase.java) truncates every `app` table — read from the catalogue, so a table a future migration adds is cleaned up without anyone editing that class — and re-seeds the mart.
+One container per run, started by [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) and never restarted. Between tests, [`TestDatabase`](src/test/java/nl/hackyourfuture/project/backend/support/TestDatabase.java) truncates every `app` table in `project_db` — read from the catalogue, so a table a future migration adds is cleaned up without anyone editing that class — and reseeds the mart in `jobs_db`.
 
 Do not add a second `@TestConfiguration` with its own container, and do not put `@MockitoBean` on a test that extends `IntegrationTest`: either one makes Spring build a second context, which boots the application again and costs more than the whole suite.
 

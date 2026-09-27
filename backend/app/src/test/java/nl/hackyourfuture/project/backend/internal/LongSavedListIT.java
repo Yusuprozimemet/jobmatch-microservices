@@ -48,7 +48,7 @@ class LongSavedListIT extends IntegrationTest {
      */
     private void savePostings(TestUser user) {
         aPosting().id("long-template").title("Long template").create();
-        jdbc().sql("""
+        jobsJdbc().sql("""
                         INSERT INTO analytics.fct_postings
                         SELECT (jsonb_populate_record(p, jsonb_build_object(
                                    'posting_id', 'long-' || n,

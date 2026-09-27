@@ -9,9 +9,9 @@
 -- than production has tells you nothing. In particular `skills` and `cities` are text
 -- holding a JSON array, not jsonb and not text[], because that is what sync.py writes
 -- for a Databricks ARRAY<STRING>.
-
-CREATE SCHEMA IF NOT EXISTS app;
-CREATE SCHEMA IF NOT EXISTS analytics;
+--
+-- The analytics schema is created by the harness (as admin) before this script runs,
+-- which then executes as analytics_user.
 
 DROP TABLE IF EXISTS analytics.fct_postings;
 CREATE TABLE analytics.fct_postings (

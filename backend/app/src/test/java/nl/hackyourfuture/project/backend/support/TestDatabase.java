@@ -2,12 +2,11 @@ package nl.hackyourfuture.project.backend.support;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Puts the database back to its starting state between tests: empty module schemas and the
- * baseline mart.
+ * Puts the database back to its starting state between tests: empty module schemas in project_db
+ * and the baseline mart in jobs_db.
  *
  * <p>Truncate rather than roll back a transaction. The tests drive the application over HTTP,
  * so the writes happen on the server's own connections and there is no test-side transaction
@@ -42,14 +41,14 @@ public final class TestDatabase {
     }
 
     public static void reset() {
-        List<String> tables = new ArrayList<>(applicationTables());
-        tables.addAll(MART_TABLES);
+        List<String> tables = applicationTables();
         if (!tables.isEmpty()) {
             // One statement: TRUNCATE takes a table list, and CASCADE follows the foreign keys
             // so the order the tables come back in does not matter.
             JDBC.sql("TRUNCATE TABLE " + String.join(", ", tables) + " RESTART IDENTITY CASCADE").update();
         }
-        PostgresContainer.execute(SEED);
+        JOBS_JDBC.sql("TRUNCATE TABLE " + String.join(", ", MART_TABLES)).update();
+        PostgresContainer.executeInJobs(SEED);
     }
 
     /**

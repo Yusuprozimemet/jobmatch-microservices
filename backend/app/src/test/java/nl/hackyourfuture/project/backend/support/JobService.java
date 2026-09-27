@@ -161,7 +161,7 @@ public final class JobService {
                 .withEnv("SERVICE_JWT_PRIVATE_KEY_FILE", "/run/keys/job-service.pem")
                 .withEnv("DB_HOST", "host.testcontainers.internal")
                 .withEnv("DB_PORT", String.valueOf(postgresPort))
-                .withEnv("DB_NAME", PostgresContainer.instance().getDatabaseName())
+                .withEnv("DB_NAME", PostgresContainer.JOBS_DATABASE)
                 .withEnv("DB_JOBS_USER", "jobs_user")
                 .withEnv("DB_JOBS_PASSWORD", PostgresContainer.rolePassword())
                 .withEnv("BACKEND_KEY_SET_URL",
