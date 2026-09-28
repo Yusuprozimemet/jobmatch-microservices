@@ -131,9 +131,9 @@ through anyway; that was used on #1, #2 and #3 and never since. Until after Phas
 reported without blocking: `main` had no branch protection.
 
 **Changing a spec is normal.** It happens in a pull request *before* the work, not as a
-retroactive edit afterwards. Days 17–37 are marked `provisional` precisely because they were
+retroactive edit afterwards. Days 21–37 are marked `provisional` precisely because they were
 written from the plan rather than from experience, and must be re-read and revised before their
-phase begins.
+phase begins. Days 17–20 were, until Phase 3 rewrote them against the code.
 
 ## The migration plan
 
@@ -145,7 +145,8 @@ anything that requires a network.
 | **0 — Make the split safe** | 1–5 | Integration tests over the five public API surfaces, asserting the HTTP contract only, so they survive the split unchanged. Actuator, Micrometer, OpenTelemetry. | done |
 | **1 — Modularise in place** | 6–11 | Maven modules that may only call each other through published interfaces; the three cross-module reads replaced by interfaces; migrations split per module. No network yet. | done |
 | **2 — Gateway + JWT** | 12–16 | Spring Cloud Gateway in front; session auth rewritten to RS256 JWT with JWKS, refresh tokens in the database, Google sign-in without a session. | done (tag `phase-2`) |
-| **3 — Extract job-service** | 17–20 | First independent service: read-only, no user data, own database and image. | provisional |
+| **Platform step** | 38–40 | Each module's login reads only its own schema, the LLM call is traced, internal calls need a short-lived service token, and the harness and gateway can route to a service outside the monolith. Added by the course correction after Phase 2; runs before Phase 3's extractions. | done |
+| **3 — Extract job-service** | 17–20 | First independent service: read-only, no user data, own database and image. | done |
 | **4 — Extract matching-service** | 21–24 | Isolates the 20-second LLM timeout from job search; match scores move to NoSQL with a native TTL. | provisional |
 | **5 — Extract application-service** | 25–28 | Message bus with a transactional outbox and the `user.deleted` cascade first, then saved jobs to its own store. Ends at Day 28, where the work stops to be evaluated. | provisional |
 | **6 — Functions + uploads** | 29–31 | CV parsing and mail off the request path; direct-to-blob uploads via short-lived SAS URLs. | provisional |

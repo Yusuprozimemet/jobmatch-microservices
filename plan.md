@@ -224,19 +224,21 @@ did on Day 16.
 | 6 functions | small |
 | 7 Kubernetes + IaC | large, mostly new skills |
 
-Measured so far: 1.5× the estimated track PRs in each of Phases 0–2.
+Measured so far: 1.5× the estimated track PRs in each of Phases 0–2. From the platform step on,
+the README's Day entries record two estimates, the provisional spec's and the rewritten one's
+(Day 20: 3 and 5; took 5).
 
 ---
 
 ## Day-by-day specs
 
-All seven phases are broken into 37 day specs in [`specs/`](specs/). Read
+All seven phases and the platform step are broken into 40 day specs in [`specs/`](specs/). Read
 [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-16 (Phases 0-2) are done. Days 17-37 are **provisional**: written from this plan
-before the course correction, so each is rewritten against the code, with the spec-auditor,
-when it is reached, not before. Days keep their numbers, so history and links hold; they run
-in this order, and the dashboard follows it:
+Days 1-20 (Phases 0-3) and 38-40 (the platform step) are done. Days 21-37 are **provisional**:
+written from this plan before the course correction, so each is rewritten against the code,
+with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
+links hold; they run in this order, and the dashboard follows it:
 
 1. The record fix and the platform step (new day specs, numbered from 38).
 2. Phase 3: Days 18, 19, 17, 20.
