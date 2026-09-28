@@ -105,6 +105,26 @@ class SpecDriftTest(unittest.TestCase):
         rows = self.repo.inside(lambda blobs: sd.trajectory([dict(s) for s in self.repo.snaps], blobs, [1, 38, 17])[0])
         self.assertEqual(rows[-1]["day"], 17)  # after 38 in the run order, though lower in number
 
+    def test_code_in_the_spec_proportions_sits_below_chance(self):
+        rows = self.repo.merge({"src/Foo.java": "class FooService { FooService f; bar_table b; }\n"}).rows()
+        self.assertEqual((rows[0]["gap_full"], rows[0]["gap_chance"]), (90.0, 90.0))
+        self.assertEqual(rows[1]["gap_full"], 0.0)  # FooService twice and bar_table once, as the specs
+        self.assertGreater(rows[1]["gap_chance"], 10.0)
+        rows = self.repo.merge({"src/Foo.java": "class FooService { bar_table a; bar_table b; }\n"}).rows()
+        self.assertGreater(rows[2]["gap_full"], rows[1]["gap_full"])
+        self.assertEqual(rows[2]["gap_chance"], rows[1]["gap_chance"])  # the same counts, shuffled
+
+    def test_the_drift_reference_splits_the_first_files_in_two(self):
+        ref = lambda repo: repo.inside(lambda blobs: sd.trajectory([dict(s) for s in repo.snaps], blobs)[5])
+        self.assertEqual(ref(self.repo), 90.0)  # two files: a word in both weighs nothing
+        three = Repo().merge({"plan.md": "alpha\n", "specs/day-01-x.md": "beta gamma\n",
+                              "specs/day-02-x.md": "beta delta\n"})
+        try:
+            self.assertLess(ref(three), 90.0)  # plan.md and day 02 against day 01: both halves have beta
+            self.assertGreater(ref(three), 0.0)
+        finally:
+            three.close()
+
     def test_drift_ignores_words_every_file_uses_and_sees_new_ones(self):
         rows = self.repo.merge({"specs/day-01-x.md": DAY + "the " * 200 + "\n"}).rows()
         self.assertEqual(rows[1]["drift"], 0.0)
