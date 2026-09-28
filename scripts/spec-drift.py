@@ -13,6 +13,13 @@ names the specs put in backticks, counted in the specs and in the code (Markdown
 screenshots, this dashboard and comment lines left out: a comment naming a thing is not the
 thing). Each merge's gap uses only the names the specs had used by then, so a later spec does
 not move an earlier point.
+
+Both angles need a reference to be read. Two vectors of counts are never negative, so they sit
+well under 90° even when they have nothing to do with each other. Gap chance is the gap to the
+same code counts shuffled across the names (the mean of CHANCE_DRAWS, seeded): a gap near it says
+the code uses the spec's names in no particular proportion. Drift reference is the angle between
+the Sep 20 files split in two (even and odd by name): how far one part of the spec as written
+sits from another.
 """
 import argparse
 import collections
@@ -58,6 +65,7 @@ PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Re
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
 FINISHED = ("done", "closed")
+CHANCE_DRAWS = 50
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
 
 
@@ -121,6 +129,30 @@ def word_angle(a, b, idf):
     w = np.array([idf(k) for k in keys])
     return angle(w * np.array([math.log1p(a.get(k, 0)) for k in keys]),
                  w * np.array([math.log1p(b.get(k, 0)) for k in keys]))
+
+
+def chance_angle(x, y, keep):
+    """The mean angle between x and y with y's entries in keep shuffled among themselves. Seeded
+    per call, so the same counts give the same chance at every merge."""
+    idx, rng = np.flatnonzero(keep), np.random.default_rng(0)
+    if len(idx) < 2:
+        return angle(x, y)
+    out = []
+    for _ in range(CHANCE_DRAWS):
+        z = y.copy()
+        z[idx] = rng.permutation(np.sort(y[idx]))  # sorted first: only the counts matter, not their order
+        out.append(angle(x, z))
+    return float(np.mean(out))
+
+
+def split_angle(texts, idf):
+    """The drift reference: the angle between one snapshot's files split in two, even and odd by name.
+    With two files it is 90° by construction: a word in both weighs nothing."""
+    names = sorted(texts)
+    if len(names) < 2:
+        return None
+    words = [collections.Counter(w for n in names[k::2] for w in WORD.findall(texts[n].lower())) for k in (0, 1)]
+    return round(word_angle(words[0], words[1], idf), 2)
 
 
 def rarity(texts):
@@ -226,6 +258,7 @@ def trajectory(snaps, blobs, order=()):
                          day=day if s["pr"] else 0, drift=round(word_angle(words, origin, idf), 2),
                          step=round(word_angle(words, prev, idf), 2), added=added, deleted=deleted,
                          gap_full=round(angle(spec_v, code_v), 2),
+                         gap_chance=round(chance_angle(spec_v, code_v, known), 2),
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
                          spec_files=spec_files, code_churn=churn))
         prev = words
@@ -240,7 +273,8 @@ def trajectory(snaps, blobs, order=()):
     files = sorted({f for s in snaps for f in s["texts"] if f == "plan.md" or day_of(f)},
                    key=lambda f: (rank(day_of(f)), f))
     lines = sum(t.count("\n") for t in snaps[0]["texts"].values())
-    return rows, files, len(vocab), [round(float(v), 3) for v in (S ** 2 / (S ** 2).sum())[:2]], lines
+    return (rows, files, len(vocab), [round(float(v), 3) for v in (S ** 2 / (S ** 2).sum())[:2]], lines,
+            split_angle(snaps[0]["texts"], idf))
 
 
 def section(text, heading):
@@ -633,7 +667,7 @@ def main():
     snaps = snapshots(prs)
     head = snaps[-1]["sha"]
     spec_days = [d for d in map(day_of, run("git", "ls-tree", "--name-only", head, "specs/").split()) if d]
-    rows, files, vocab, pca, lines = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
+    rows, files, vocab, pca, lines, drift_ref = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
     days, order, stop = roadmap(snaps, prs, blobs)
     evidence_history(rows, days, snaps, blobs)
     now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
@@ -641,7 +675,7 @@ def main():
                current_day=next((d["day"] for d in days if d["status"] == "active"), None),
                next_step=next_step(days, open_prs, order, stop), stop_after=stop,
                open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
-    data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
+    data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines, drift_ref=drift_ref,
                            order=[d for d in order if d != PLATFORM],
                            out_of_order=out_of_order(order),
                            removals=removal_history(days, snaps, blobs),

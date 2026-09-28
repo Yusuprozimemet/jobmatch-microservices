@@ -49,6 +49,7 @@ function rowTip(r) {
   <div class="row"><span>day reached</span><span>${r.day || "–"}</span></div>
   <div class="row"><span>drift</span><span>${fmt(r.drift)}°</span></div>
   <div class="row"><span>gap</span><span>${fmt(r.gap_full)}°</span></div>
+  <div class="row"><span>gap by chance</span><span>${r.gap_chance == null ? "–" : fmt(r.gap_chance) + "°"}</span></div>
   <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>`;
 }
 
@@ -77,7 +78,7 @@ document.getElementById("stats").innerHTML = `
     <span class="n">0° on Sep 20. ${bigStep < 10 ? "It rises by small steps and never jumps." : `Its biggest single step was ${fmt(bigStep, 2)}° (${prLabel(R.find(r => r.step === bigStep))}).`}</span></div>
   <div class="stat"><span class="k">Gap between spec and code</span>
     <span class="v num">${fmt(first.gap_full)}° → ${fmt(last.gap_full)}°</span>
-    <span class="n">${fmt(gapClosed)}° closed across ${N - 1} merges</span></div>
+    <span class="n">${fmt(gapClosed)}° closed across ${N - 1} merges. By chance it would be ${fmt(last.gap_chance)}° now; ${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
   <div class="stat"><span class="k">Share of the gap closed by the spec</span>
     <span class="v num">${Math.round(specShare * 100)}%</span>
     <span class="n"><span class="sw" style="background:var(--spec)"></span>${nKind("spec")} spec-change PRs ${specShare >= 0 ? "moved the spec toward the code" : "widened the gap, naming what was not built yet"}; <span class="sw" style="background:var(--code)"></span>${nKind("code")} code PRs closed ${Math.round(-byKind.code / gapClosed * 100)}%</span></div>
@@ -92,6 +93,9 @@ const merged = R.filter(r => r.pr).map(r => r.pr);
 document.getElementById("pr-range").textContent = `${N - 1} merges, #${Math.min(...merged)}–#${Math.max(...merged)}`;
 document.getElementById("pc1").textContent = Math.round(DATA.pca_var[0] * 100) + "%";
 document.getElementById("pc2").textContent = Math.round(DATA.pca_var[1] * 100) + "%";
+document.getElementById("pc-rest").textContent = (100 - Math.round(DATA.pca_var[0] * 100) - Math.round(DATA.pca_var[1] * 100)) + "%";
+document.querySelectorAll(".drift-ref").forEach(e => { e.textContent = DATA.drift_ref == null ? "–" : fmt(DATA.drift_ref) + "°"; });
+document.getElementById("gap-chance").textContent = fmt(last.gap_chance) + "°";
 
 /* ---------- scrubber ---------- */
 const scrub = document.getElementById("pr-scrub");
@@ -226,9 +230,9 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digi
   const cross = el("line", { x1: 0, x2: 0, y1: LP.t, y2: H - LP.b, stroke: "var(--muted)", "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
   series.forEach(s => {
     const pts = R.map((r, i) => [i, s.get(r)]).filter(p => p[1] != null);
-    el("polyline", { points: pts.map(([i, v]) => `${lx(i)},${ly(v)}`).join(" "), fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    el("polyline", { points: pts.map(([i, v]) => `${lx(i)},${ly(v)}`).join(" "), fill: "none", stroke: s.color, "stroke-width": s.dash ? 1.5 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", ...(s.dash ? { "stroke-dasharray": "5 4" } : {}) }, svg);
     const v = s.get(R[sel]);
-    if (v != null) el("circle", { cx: lx(sel), cy: ly(v), r: 5, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }, svg);
+    if (v != null && !s.dash) el("circle", { cx: lx(sel), cy: ly(v), r: 5, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }, svg);
     const end = pts[pts.length - 1];
     el("text", { x: lx(end[0]) + 10, y: ly(end[1]) + 4, class: "lbl" }, svg).textContent = `${s.name} ${fmt(end[1], digits)}${unit}`;
   });
@@ -243,7 +247,7 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digi
   hit.addEventListener("click", ev => setSel(idxAt(ev)));
 }
 // The axes follow the data, so a later phase that pushes drift or coverage past today's range stays on the chart.
-const degMax = Math.ceil(Math.max(...R.map(r => Math.max(r.drift, r.gap_full))) / 15) * 15;
+const degMax = Math.ceil(Math.max(DATA.drift_ref || 0, ...R.map(r => Math.max(r.drift, r.gap_full, r.gap_chance || 0))) / 15) * 15;
 const covMin = Math.min(92, Math.floor(Math.min(...R.filter(r => r.coverage != null).map(r => r.coverage * 100)) / 2) * 2);
 function drawLines() {
   lineChart(document.getElementById("lines"), {
@@ -251,7 +255,9 @@ function drawLines() {
     label: "Drift and gap in degrees across merges",
     series: [
       { name: "gap", color: "var(--gap)", get: r => r.gap_full },
+      { name: "chance", color: "var(--gap)", dash: true, get: r => r.gap_chance ?? null },
       { name: "drift", color: "var(--spec)", get: r => r.drift },
+      ...(DATA.drift_ref == null ? [] : [{ name: "halves", color: "var(--spec)", dash: true, get: () => DATA.drift_ref }]),
     ],
   });
   lineChart(document.getElementById("cover"), {
