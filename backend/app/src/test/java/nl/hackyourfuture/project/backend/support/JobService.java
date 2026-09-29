@@ -82,6 +82,12 @@ public final class JobService {
         return container.getMappedPort(MANAGEMENT_PORT);
     }
 
+    /** Everything the container has logged this run, for what a request arrived with. */
+    public static String logs() {
+        ensureStarted();
+        return container.getLogs();
+    }
+
     /** Where a client reaches job-service: its own base URL, container host and mapped port. */
     public static String baseUrl() {
         ensureStarted();
@@ -170,6 +176,12 @@ public final class JobService {
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL",
                         "http://host.testcontainers.internal:" + testCallerPort() + "/.well-known/service-jwks.json")
                 .withEnv("INTERNAL_APPLICATIONS_URL", "http://host.testcontainers.internal:" + relay.getAddress().getPort())
+                // One line per request, method and path, which job-service's log pattern prefixes
+                // with [traceId,spanId]: what a test reads to see which trace a request arrived under.
+                // As JSON, not LOGGING_LEVEL_*: an environment variable's name is lowercased, and
+                // logger names are not, so that one matched no logger at all.
+                .withEnv("SPRING_APPLICATION_JSON",
+                        "{\"logging.level.org.springframework.web.servlet.DispatcherServlet\":\"DEBUG\"}")
                 .withExposedPorts(PORT, MANAGEMENT_PORT)
                 .waitingFor(Wait.forHttp("/actuator/health/readiness").forPort(MANAGEMENT_PORT));
         try {

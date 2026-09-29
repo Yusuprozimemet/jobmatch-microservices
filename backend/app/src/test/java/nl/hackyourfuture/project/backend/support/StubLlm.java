@@ -12,6 +12,10 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -27,6 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * application put in the prompt and answers about those. That is what a model does, and it
  * keeps the tests from having to restate {@code MatchScorer}'s id-shortening rule.
  *
+ * <p>{@link #hang()} holds calls, for what a model that never answers does to the rest of the
+ * application; {@link #traceparents()} is what a trace looks like from the model's side.
+ *
  * <p>One instance per JVM, mutated by the {@code will*} methods. Tests in a class run one at a
  * time, so that is safe here; running these classes in parallel would not be.
  */
@@ -37,15 +44,20 @@ public final class StubLlm {
 
     private final HttpServer server;
     private final AtomicInteger calls = new AtomicInteger();
+    private final List<String> traceparents = new CopyOnWriteArrayList<>();
 
     private volatile int[] scoresInPromptOrder = new int[0];
     private volatile String rawContent;
     private volatile int failWithStatus;
     private volatile String lastPrompt;
+    private final AtomicInteger hanging = new AtomicInteger();
+    private volatile CountDownLatch release;
 
     private StubLlm() {
         try {
             this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            // Virtual threads: a hung call must not hold up the others.
+            server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         } catch (IOException e) {
             throw new IllegalStateException("Could not start the stub language model", e);
         }
@@ -69,6 +81,12 @@ public final class StubLlm {
         rawContent = null;
         failWithStatus = 0;
         lastPrompt = null;
+        traceparents.clear();
+        CountDownLatch hung = release;
+        release = null;
+        if (hung != null) {
+            hung.countDown();
+        }
     }
 
     /** How many times the application actually called a model. Zero means it never tried. */
@@ -99,8 +117,57 @@ public final class StubLlm {
         this.failWithStatus = status;
     }
 
+    /**
+     * Hold every call until {@link #reset()}, then answer 503: a provider that accepts the
+     * connection and never answers. Held at most 90 s, so a test that forgets to release cannot
+     * hold the run; longer than any read timeout a test breaks the application with.
+     */
+    public void hang() {
+        this.release = new CountDownLatch(1);
+    }
+
+    /** Wait until at least {@code calls} calls are being held, up to 10 s. */
+    public void awaitHanging(int calls) {
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        while (hanging.get() < calls && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        if (hanging.get() < calls) {
+            throw new AssertionError("Expected " + calls + " calls held by the model, found " + hanging.get());
+        }
+    }
+
+    /** The {@code traceparent} header of each call since the last reset, in arrival order. */
+    public List<String> traceparents() {
+        return traceparents;
+    }
+
     private void handleCompletion(HttpExchange exchange) throws IOException {
         calls.incrementAndGet();
+        String traceparent = exchange.getRequestHeaders().getFirst("traceparent");
+        if (traceparent != null) {
+            traceparents.add(traceparent);
+        }
+
+        CountDownLatch hung = release;
+        if (hung != null) {
+            hanging.incrementAndGet();
+            try {
+                hung.await(90, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                hanging.decrementAndGet();
+            }
+            respond(exchange, 503, "{\"error\":{\"message\":\"stubbed hang\"}}");
+            return;
+        }
+
         String prompt = readPrompt(exchange);
         lastPrompt = prompt;
 
