@@ -196,3 +196,5 @@ resilience4j:
         base-config: internal
       profileDirectory:
         base-config: internal
+      userExistence:
+        base-config: internal

@@ -14,9 +14,11 @@ import java.util.UUID;
  *
  * <p>Package-private on purpose: nothing outside {@code identity} names this class, only the
  * interface it implements. {@code applications} and {@code matching} used to read the
- * {@code users} and {@code user_profiles} tables themselves. Since Day 10 they receive the user's
- * id from {@link CurrentUserIdResolver} and ask nothing about users at all; the profile is the
- * one question left, and this is where it is answered.
+ * {@code users} and {@code user_profiles} tables themselves. {@code applications} receives the
+ * user's id from {@link CurrentUserIdResolver}. {@code matching}, since Day 41, takes it from
+ * the token's {@code sub} and asks identity whether the user exists through a separate call. The
+ * profile is the one remaining question, and this class answers it through
+ * {@code /internal/profiles/{userId}}.
  */
 @Component
 @RequiredArgsConstructor

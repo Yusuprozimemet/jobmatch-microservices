@@ -5,14 +5,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import nl.hackyourfuture.project.backend.matching.dto.JobMatchResponse;
-import nl.hackyourfuture.project.backend.shared.web.CurrentUserId;
+import nl.hackyourfuture.project.backend.shared.web.TokenSubject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 
@@ -23,6 +22,7 @@ import java.util.UUID;
 public class JobMatchController {
 
     private final JobMatchService jobMatchService;
+    private final UserExistenceClient users;
 
     @GetMapping("/top-matches")
     @Operation(summary = "Jobs ranked against the logged-in user's skills",
@@ -37,9 +37,10 @@ public class JobMatchController {
     @ApiResponse(responseCode = "200", description = "Up to 25 matching jobs, best first")
     @ApiResponse(responseCode = "401", description = "Not logged in")
     @ApiResponse(responseCode = "422", description = "No profile, or fewer than 5 skills on it")
-    public ResponseEntity<List<JobMatchResponse>> getTopMatches(@CurrentUserId Optional<UUID> userId) {
+    @ApiResponse(responseCode = "503", description = "Identity could not be reached")
+    public ResponseEntity<List<JobMatchResponse>> getTopMatches() {
         // No account is answered like no profile: there is nothing to rank against.
-        UUID id = userId.orElseThrow(JobMatchService::noProfile);
+        UUID id = TokenSubject.current().filter(users::exists).orElseThrow(JobMatchService::noProfile);
         return ResponseEntity.ok(jobMatchService.getTopMatches(id));
     }
 }
