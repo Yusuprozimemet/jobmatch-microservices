@@ -1,39 +1,38 @@
-# Day 24 — matching-service talks to identity over HTTP
+# Day 24 — matching-service stands alone
 
 **Phase:** 4 · **Depends on:** Day 23 · **Expected PRs:** 3
 **Status:** provisional — re-read and revise before starting.
+
+On Day 21 the profile endpoint, its client, the 503 fallback, the user id from `sub` and the
+existence call moved to Day 41, which runs first in Phase 4 (`plan.md`). What is left here is
+what makes matching-service independent once its scores have left Postgres (Day 23).
 
 ## Goal
 `matching-service` has no database and no shared code path with the monolith. It is
 fully independent.
 
 ## In scope
-- `identity` exposes `GET /internal/profiles/{userId}/skills`, returning the
-  `ProfileSnapshot` shape (`ProfileDirectory`, Day 07). Service-token auth, same as Day 18.
-- `matching-service` uses it through a Day 19-style client with timeout and circuit breaker.
-  Retry is decided here: Day 19's clients have none, since their calls never left the process.
-- Fallback: identity unreachable → 503 with a clear message. Matching without a profile
-  is meaningless, so do not degrade silently.
 - Short-lived local cache of profile skills (seconds), keyed by user, to avoid one call
-  per request. Measure before adding it.
+  per request. Measure before adding it. The existence answer is not cached
+  (`InternalUserController`: a cached answer lets a deleted user in for as long).
 - `matching-service` removes every remaining dependency on `shared` persistence code.
+- The end-of-phase checks below, against compose, with every hop a network hop.
 
 ## Out of scope
 - Caching postings. Measure first.
+- The profile endpoint and client, their fallback, retry, and the user id — Day 41.
 
 ## Tracks
 
 | Track | Owner | Work |
 |---|---|---|
-| A | | Identity internal endpoint + tests |
-| B | | Client, resilience, fallback |
-| C | | Dependency cleanup + failure tests |
+| A | | Measure; the profile cache if the measurement asks for it |
+| B | | Dependency cleanup + failure tests |
 
 ## Acceptance criteria
 - [ ] `matching-service` has no datasource and no Flyway configuration.
 - [ ] With `identity` stopped, top-matches returns 503 promptly, not a hang.
 - [ ] The 422 too-few-skills behaviour is unchanged (Day 04's test, unedited).
-- [ ] A user token is rejected on `/internal/profiles/**`.
 - [ ] A top-matches trace spans four hops: gateway, matching, identity, jobs.
 
 ## Verify
@@ -45,6 +44,3 @@ curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/jobs/top-matches   # 5
 ## Notes
 - **End of Phase 4.** Two services are fully independent, and the highest-latency code
   path is isolated from everything else.
-- Service-token auth is Day 39's (each service's own key; `/internal/**` takes only service
-  tokens), not Day 18's. Before acting for a user, matching-service asks identity
-  `GET /internal/users/{id}` (Day 39's deleted-user rule).
