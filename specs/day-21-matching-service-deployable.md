@@ -146,8 +146,8 @@ it; E2 follows E1 directly.
 - [ ] **hold** — with `StubLlm` hanging and 10 top-matches requests in flight, `GET /api/jobs`
       (job-service) and `GET /api/profile` (the monolith) answer within 1 s. Isolated since Day
       17 for job search and by virtual threads for the rest; this keeps it so. Broken on
-      purpose: <Track 0: the model call made on a one-thread executor shared with the profile
-      read; what it reported>.
+      purpose: the model call and the profile read on one shared ten-thread executor (Track 0,
+      #209): the ten hung calls fill it and `GET /api/profile` took 19.7 s against 1 s.
 - [ ] **hold** — top-matches answers within 30 s with `StubLlm` hanging, the gateway's read.
       Broken on purpose: <Track 0: the model's read timeout at 40 s; what it reported>.
 - [ ] **hold** — a request sent to the gateway with a `traceparent` reaches `StubLlm` and job-
@@ -201,6 +201,14 @@ test ! -d backend/matching && echo gone
 - Expected PRs: 15 is the 13 tracks, this spec change and the closing PR. Day 17 estimated 10
   and took 14 track PRs, 18 in all (`day-17-...md:378`); this day has a user, a model and a
   schema that job-service had not.
+- **Defect** — found: break on purpose · cause: spec · criterion 5's break named a one-thread
+  executor shared with the profile read. One thread cannot hold ten model calls, so the test
+  failed at its setup ("Expected 10 calls held by the model, found 1") and the 1 s check never
+  ran. At ten threads the break reaches the check (19.7 s). Both results are in #209; the
+  criterion now names the ten-thread break.
+- **Beyond the plan (Track 0, #209):** CI's gateway run now includes `HungModelIT` and
+  `TopMatchesTracedIT`, since criteria 6 and 7 are about a request sent to the gateway and CI
+  had run them only direct.
 - **Defect** — found: auditor · cause: spec · the draft dropped Day 41's only test of the
   existence call with the classes that stub matching's clients, named none of what removing
   `backend/matching` breaks (datasource, migrations, config, compose, POMs, four database tests,
