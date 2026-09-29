@@ -24,6 +24,10 @@ app:
   # identity's public key set for user tokens (Day 12), at identity's URL unless set.
   identity:
     jwks-url: ${IDENTITY_JWKS_URL:${app.internal.identity-url}/.well-known/jwks.json}
+  # The key matching-service signs its service tokens with (Day 39, ServiceSigningKey): required,
+  # no default; it does not start without one.
+  service-jwt:
+    private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
   # The model's read; the rest of app.llm.* comes with the code that reads it (Track E1). The
   # gateway reads for 30 s; top-matches makes three internal calls in a row (existence, profile,
   # shortlist), each 1 s connect and 2 s read, then the model call, 5 s connect and this read:
