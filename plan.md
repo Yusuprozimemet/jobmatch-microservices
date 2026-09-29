@@ -73,6 +73,41 @@ than the one it replaces.
 
 ---
 
+## Target cloud: AWS, decided before Phase 4
+
+Until Phase 3 the plan named Azure where it named anything (Cosmos DB, SAS URLs, blob
+triggers, Key Vault), because the data platform runs there. No code depends on it: Phases 0–3
+built nothing cloud-specific, and Day 22 is the first day that would. The maintainer chose
+AWS for the application runtime, to learn it; this is recorded here so the change of target
+is part of what the repository measures, not a silent drift.
+
+- **The application runtime moves to AWS; the data platform stays on Azure.** Python, dbt,
+  Airflow and Databricks are out of scope and keep publishing the mart as they do today.
+- **ECS on Fargate, not Kubernetes.** Phase 7 shrinks: no Helm, no Argo CD, no External
+  Secrets, no cluster add-ons.
+- **Emulators for tests, one real deployment at the end.** Compose and CI run DynamoDB, SQS,
+  SNS, S3 and Lambda against local emulators; no test needs an AWS account. ECS, the load
+  balancer, IAM and CloudWatch need a real one: Phase 7 deploys once, under a budget alarm,
+  and tears down. The teardown is a criterion, not a courtesy.
+
+| Plan needs | AWS | Local and CI | Day |
+|---|---|---|---|
+| Score store with a TTL | DynamoDB | `amazon/dynamodb-local` | 22–23 |
+| `user.deleted` to two consumers | SNS topic → one SQS queue per consumer | emulator | 26–27 |
+| Uploads bucket, direct browser upload | S3, presigned PUT URLs | emulator | 29 |
+| `cv-parse`, `mailer` | Lambda (S3 event, SQS), SES | emulator | 30–31 |
+| Postgres | RDS for PostgreSQL | the compose Postgres | 37 |
+| Services | ECS on Fargate behind an ALB, images in ECR | compose | 34–37 |
+| Secrets | Secrets Manager, ECS task roles | environment variables | 36 |
+| Metrics, logs, traces | ADOT collector → CloudWatch, X-Ray | the Grafana stack | 37 |
+| Infrastructure | Terraform, one state in S3 | Terraform against the emulator | 32 |
+
+Observability needs no code change: Day 5 made the services export OTLP, and only the
+collector's destination differs. Day numbers are where the provisional specs sit today;
+Days 29–37 are rewritten after Day 28, as before, now for AWS.
+
+---
+
 ## Target repo structure
 
 ```
@@ -83,12 +118,9 @@ services/
   application-service/  saved jobs + tracker
   matching-service/     shortlist + LLM scorer
 functions/
-  cv-parse/  mailer/
-charts/
-  common/               Helm library chart, shared templates
-  (one thin chart per service)
-deploy/argocd/
-infra/terraform/
+  cv-parse/  mailer/    Lambda
+infra/terraform/        network, ECS services and task definitions, RDS, DynamoDB,
+                        S3, SNS/SQS, ECR, ALB, Secrets Manager, CloudWatch
 frontend/               unchanged
 data/                   unchanged
 ```
@@ -150,16 +182,17 @@ Easiest extraction: read-only, no user data, the data pipeline already owns its 
 Highest payoff: isolates the 20s LLM timeout from job search.
 **Seam first:** identity's profile endpoint and client (Day 24's) come before Day 21, and so
 does how matching gets the user id without identity's resolver.
-- Move `job_match_scores` to NoSQL — the key is already `(skills_hash, posting_id,
+- Move `job_match_scores` to DynamoDB — the key is already `(skills_hash, posting_id,
   scorer_version)` and the only non-key query is the purge.
-- Set a TTL attribute. **Delete `JobMatchScoreCleanup` and `SchedulingConfig`.**
+- Set a TTL attribute; DynamoDB deletes expired items itself. **Delete `JobMatchScoreCleanup` and `SchedulingConfig`.**
 - Calls identity-service for skills, job-service for the shortlist.
 
 ### Phase 5 — Extract application-service + events
 **Deletion first:** Days 26 → 27 → 25 → 28. The events and their consumers run while the
 foreign key that deletes saved jobs with their user still exists; then the table moves.
-- Add the message bus. `identity-service` emits `user.deleted` via a transactional outbox;
-  application- and matching-service consume it. (`user.registered` has no consumer; it is
+- Add the message bus: an SNS topic with one SQS queue per consumer. `identity-service`
+  emits `user.deleted` via a transactional outbox; application- and matching-service
+  consume it. (`user.registered` has no consumer; it is
   added when one needs it.)
 - `saved_jobs` to its own database; uses the Phase 1 interfaces over HTTP.
 - A service that trusts the token's `sub` refuses a deleted user; an access token outlives
@@ -169,34 +202,40 @@ foreign key that deletes saved jobs with their user still exists; then the table
 - **Day 28 (identity-service) is the stopping point.** Evaluate before Phase 6.
 
 ### Phase 6 — Functions + uploads bucket
-- New private `uploads` container, separate from the pipeline's `prod`/`dev` landing zone.
-- `identity-service` issues short-lived SAS URLs; the browser uploads directly.
-- `cv-parse` function: blob-triggered, extracts skills, PUTs them to identity-service.
-- `mailer` function: queue-triggered. There is no notification container to replace, and
-  reset mail is already sent after commit and asynchronously; shrink or cut this when the
-  phase is reached.
+- New private S3 `uploads` bucket. The pipeline's landing zone stays on Azure.
+- `identity-service` issues short-lived presigned PUT URLs; the browser uploads directly.
+- `cv-parse` Lambda: triggered by the S3 upload, extracts skills, PUTs them to identity-service.
+- `mailer` Lambda: SQS-triggered, sends through SES. There is no notification service to
+  replace, and reset mail is already sent after commit and asynchronously; shrink or cut
+  this when the phase is reached.
 
-### Phase 7 — Kubernetes
-- **One IaC tool**, chosen when the phase is written: cluster, Postgres, NoSQL, storage,
-  Key Vault, and the cluster add-ons (ingress-nginx, cert-manager, External Secrets,
-  Argo CD, Alloy).
-- Helm: `charts/common` library chart + one thin chart per service.
-  Flyway runs as a `pre-upgrade` hook Job, not at startup.
-- Secrets via External Secrets + workload identity — no connection strings in values.
-- matching-service scales on CPU or request rate (an HPA): top-matches is a synchronous
-  request, so there is no queue to scale on.
-- More than one gateway replica needs a shared rate-limit store (Day 15's limit is in
-  memory); the ingress overwrites `X-Forwarded-For` and `GATEWAY_TRUSTED_PROXIES` names it.
+### Phase 7 — ECS on Fargate
+- **Terraform** for everything long-lived: network, ECS cluster and services, RDS, DynamoDB,
+  S3, SNS/SQS, ECR, the ALB, Secrets Manager and CloudWatch.
+- One task definition per service, generated from one Terraform module.
+  Flyway runs as a one-off ECS task before the deploy, not at startup.
+- Secrets from Secrets Manager into the task definition, AWS access through task roles —
+  no connection strings or access keys in variables or images.
+- matching-service scales on CPU or ALB request count (ECS service auto scaling):
+  top-matches is a synchronous request, so there is no queue to scale on.
+- More than one gateway task needs a shared rate-limit store (Day 15's limit is in
+  memory); the ALB sets `X-Forwarded-For` and `GATEWAY_TRUSTED_PROXIES` names it.
+- An ADOT collector sidecar sends the services' OTLP to CloudWatch and X-Ray.
 - Criteria are written for one maintainer and an agent: no contributor counts, on-call
   rotas or alert owners. The secret sweep checks for secrets, not for the word `password`.
-- Functions stay **outside** the cluster; `cv-parse` re-enters via the Ingress with a
-  service token, because it cannot reach a ClusterIP.
+- The Lambdas re-enter through the ALB with a service token; the services are not public
+  otherwise.
+- **Done when:** one real deployment serves the five public API surfaces under a budget
+  alarm, and `terraform destroy` leaves nothing billable behind.
 
 ---
 
 ## What we are not doing
 
-- **No Postgres in Kubernetes.** Databases stay managed.
+- **No self-run Postgres.** Databases stay managed: RDS.
+- **No Kubernetes.** ECS on Fargate runs five services without a cluster to operate.
+- **No move of the data platform.** It stays on Azure; only the application runtime moves.
+- **No AWS account in tests.** Everything a test touches runs locally.
 - **No separate profile-service.** Profile stays in identity-service — same key, no
   independent scaling need.
 - **No managed API gateway.** Spring Cloud Gateway is code we can test locally.
@@ -222,7 +261,7 @@ did on Day 16.
 | platform step | medium: harness, service credential, grants, compose |
 | 3–5 extractions | medium each, low risk only seam-first |
 | 6 functions | small |
-| 7 Kubernetes + IaC | large, mostly new skills |
+| 7 ECS + Terraform | large, mostly new skills; smaller than the Kubernetes phase it replaces |
 
 Measured so far: 1.5× the estimated track PRs in each of Phases 0–2. From the platform step on,
 the README's Day entries record two estimates, the provisional spec's and the rewritten one's
@@ -245,4 +284,4 @@ links hold; they run in this order, and the dashboard follows it:
 3. Phase 4: the profile endpoint and user id out of Day 24 first, then Days 21, 22 (no dual
    write), 23, the rest of 24.
 4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
-5. Phases 6–7 (Days 29–37): rewritten after the evaluation, or not started.
+5. Phases 6–7 (Days 29–37): rewritten for AWS after the evaluation, or not started.
