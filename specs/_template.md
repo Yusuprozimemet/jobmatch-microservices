@@ -31,3 +31,7 @@
 
 ## Notes
 - <risks, gotchas, decisions deferred>
+- **Defect** — found: <auditor | spec-change PR | review | break on purpose | after merge> ·
+  cause: <spec | implementation | environment> · <what was wrong, and the PR that fixed it>.
+- **Rewrite** — Track <X>: <what the main session rewrote in the implementer's code beyond
+  review fixes, and why>.
