@@ -32,6 +32,12 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
     already, the track's PR if a track adds it (a Track 0). The closing PR links it when it
     ticks the box.
 - **Tracks inside a day run in parallel. Days run in order.** Day N assumes N-1 is merged.
+- **Record every defect in the day's *Notes* when it is found**, from Day 21 on, one `Defect`
+  line each: where it was found and its cause, exactly one of `spec` (wrong, missing a case, or
+  not meetable as written), `implementation` (the spec was right, the code did not do it) or
+  `environment` (tooling, CI, the machine, a library). A track whose code the main session
+  rewrote beyond review fixes gets a `Rewrite` line. These are the counts
+  [`docs/paper/success-criteria.md`](../docs/paper/success-criteria.md) judges H1–H3 by.
 - Changing a spec is normal. Change it in a PR *before* the work, not after.
 - Specs written before the `new`/`hold` rule get their criteria tagged in that day's
   spec-change PR, when the spec is read against the code.
