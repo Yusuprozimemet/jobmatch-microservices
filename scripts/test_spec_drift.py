@@ -353,8 +353,10 @@ Days keep their numbers; they run in this order:
 
     def test_the_repositorys_plan_parses(self):
         with open(os.path.join(HERE, os.pardir, "plan.md"), encoding="utf-8") as f:
-            order, stop = sd.run_order(f.read(), list(range(1, 38)))
-        self.assertEqual(sorted(d for d in order if d != sd.PLATFORM), list(range(1, 38)))
+            plan = f.read()
+        days = sorted({sd.day_of(n) for n in os.listdir(os.path.join(HERE, os.pardir, "specs")) if sd.day_of(n)})
+        order, stop = sd.run_order(plan, days)
+        self.assertEqual(sorted(d for d in order if d != sd.PLATFORM), days)
         self.assertEqual(stop, 28)
 
     def test_a_higher_number_does_not_finish_a_day_that_runs_later(self):
