@@ -36,7 +36,8 @@ class InternalCallsObservedIT extends MatchingTest {
     /** Each internal route, and the {@code /api} request whose client calls it. */
     private static final Map<String, String> CALLED_BY = Map.of(
             "/internal/postings/batch", "/api/saved-jobs",
-            "/internal/postings/shortlist", "/api/jobs/top-matches");
+            "/internal/postings/shortlist", "/api/jobs/top-matches",
+            "/internal/profiles/{userId}", "/api/jobs/top-matches");
 
     @LocalManagementPort
     private int managementPort;

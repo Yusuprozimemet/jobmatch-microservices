@@ -77,9 +77,10 @@ app:
     terms-required-redirect: ${OAUTH2_TERMS_REDIRECT:${app.base-url}/accept-terms}
 
   # Where the internal clients send their calls (Day 19): empty is this process; compose points
-  # jobs-url at job-service (Day 17).
+  # jobs-url at job-service (Day 17), and Day 21 points identity-url at identity.
   internal:
     jobs-url: ${INTERNAL_JOBS_URL:}
+    identity-url: ${INTERNAL_IDENTITY_URL:}
 
   llm:
     api-key: ${LLM_API_KEY:}
@@ -192,4 +193,6 @@ resilience4j:
       postingLookup:
         base-config: internal
       postingShortlist:
+        base-config: internal
+      profileDirectory:
         base-config: internal

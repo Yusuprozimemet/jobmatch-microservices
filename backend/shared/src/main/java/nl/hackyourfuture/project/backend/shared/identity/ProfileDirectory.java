@@ -7,8 +7,8 @@ import java.util.UUID;
  * Reads the ranking-relevant part of a user's profile.
  *
  * <p>How {@code matching} learns a user's skills and city without reading {@code identity}'s
- * {@code user_profiles} table. Two fields, not the row. Day 24 puts it behind HTTP when
- * {@code matching} runs as its own service; the shape stays.
+ * {@code user_profiles} table. Two fields, not the row. Since Day 41 {@code matching} reads it
+ * over HTTP, from identity's {@code /internal/profiles/{userId}}; the shape stayed.
  */
 public interface ProfileDirectory {
 
