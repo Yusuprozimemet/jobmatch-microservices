@@ -65,6 +65,12 @@ contract classes pass unedited against the container, directly and through the g
   container for postings, and at `StubLlm`; `ObservedContainers` collects its spans as it does
   job-service's. `StubLlm` gains `hang()`. CI builds the image before the suite, and the backend
   workflow's path filters add `services/matching-service/**` (`backend-ci-cd.yaml:6-19,51`).
+  **Two places in `support/` route by service, and both need matching-service**, or runs keep
+  sending top-matches to the monolith after it stops serving it: `Services.url` defaults every
+  service but job-service to the monolith (`Services.java:40-48`), so matching-service's default
+  becomes its container; and `Gateway` starts the gateway with `BACKEND_URL` and
+  `JOB_SERVICE_URL` only (`Gateway.java:65-66`), so it adds `MATCHING_SERVICE_URL` from the same
+  route table, or the gateway falls back to the backend's URL.
 - **The tests that stub matching's clients move into the service's module.**
   `internal/ProfileDirectoryUnavailableIT` (7 tests, among them `aUserIdentityDoesNotKnowIsA422`,
   the only test of Day 41's existence call) and `internal/PostingShortlistUnavailableIT` (3)
@@ -115,7 +121,7 @@ contract classes pass unedited against the container, directly and through the g
 | B3 | | The service's test base: Postgres, `StubUpstream`, stub model, test key | 200–300 |
 | C1 | | Trust lists (monolith, job-service, harness); compose adds matching-service unrouted | 150–250 |
 | C2 | | The harness container, `ObservedContainers`; CI builds the image, path filters; a harness self-test | 250–380 |
-| E1 | | The move and the switch: `git mv` of matching's code, `db/matching`, `SchedulingConfig` and the stubbed tests; the build fallout above; the `Services` entry | 350–400 |
+| E1 | | The move and the switch: `git mv` of matching's code, `db/matching`, `SchedulingConfig` and the stubbed tests; the build fallout above; the `Services` entry and its container default; `Gateway`'s `MATCHING_SERVICE_URL` | 350–400 |
 | E2 | | Compose switch: `MATCHING_SERVICE_URL`, the LLM key to matching-service only, root `.env.example` | 50–100 |
 | E3 | | The bulkhead and criterion 3's test | 150–250 |
 | F | | Dead config (`app.llm.*`, `identity-url`, `LLM_*`), boundaries rules, job-service's `RestClient` rule, docs | 150–300 |
@@ -198,6 +204,13 @@ test ! -d backend/matching && echo gone
   Track 0's red test, a Verify that could not fail, the `TokenSubject` hand-off), 6 to fix (the
   `RestClient` rule, the 34 s worst case, track order, CI and trust lists, required URLs, the
   estimate) and 2 notes (who owns scheduling and the datasource; `.env.example`).
+- **Spec change after Track D (#210): the harness's gateway was given to no track.** Track D
+  gave the gateway `MATCHING_SERVICE_URL`, but the harness's `Gateway` never passes it, and
+  `Services.url` sends matching-service to the monolith by default. The maintainer found the
+  first in D's review; the second turned up checking it. Both go to E1, not C2: before E1 the
+  container has no matching code to serve top-matches, and after it the monolith has none.
+  Criterion 2's gateway run fails without them: top-matches reaches the monolith, which no
+  longer serves it.
 - Expected PRs: 15 is the 13 tracks, this spec change and the closing PR. Day 17 estimated 10
   and took 14 track PRs, 18 in all (`day-17-...md:378`); this day has a user, a model and a
   schema that job-service had not.
