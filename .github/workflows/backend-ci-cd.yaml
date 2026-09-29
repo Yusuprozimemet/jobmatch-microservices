@@ -9,6 +9,8 @@ on:
       - "services/api-gateway/**"
       # Every run starts job-service from its image (Day 17), so a change to it runs the suite.
       - "services/job-service/**"
+      # The harness starts matching-service from its image (Day 21), so a change to it runs the suite.
+      - "services/matching-service/**"
       - ".github/workflows/backend-ci-cd.yaml"
   pull_request:
     paths:
@@ -17,6 +19,8 @@ on:
       - "services/api-gateway/**"
       # Every run starts job-service from its image (Day 17), so a change to it runs the suite.
       - "services/job-service/**"
+      # The harness starts matching-service from its image (Day 21), so a change to it runs the suite.
+      - "services/matching-service/**"
       - ".github/workflows/backend-ci-cd.yaml"
 
 # Cancel previous runs on new pushes
@@ -50,6 +54,10 @@ jobs:
       # so the harness starts it from this image, built here: never pulled.
       - name: Build the job-service image
         run: docker build -t jobmatch-job-service:harness services/job-service
+
+      # The harness starts matching-service from this image (Day 21), never pulled.
+      - name: Build the matching-service image
+        run: docker build -t jobmatch-matching-service:harness services/matching-service
 
       # `verify`, not `test`: the integration tests are the safety net for the microservices
       # split, so a pull request that breaks one has to fail here. They need a Docker daemon

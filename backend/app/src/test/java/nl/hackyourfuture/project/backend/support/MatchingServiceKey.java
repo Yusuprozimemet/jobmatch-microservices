@@ -26,8 +26,9 @@ import java.util.concurrent.Executors;
 
 /**
  * matching-service's test key (Day 21), trusted by the monolith ({@link IntegrationTest}) and the
- * job-service container ({@link JobService}). It serves the public key set at
- * /.well-known/service-jwks.json from this JVM until Track C2 starts the container with this PEM.
+ * job-service container ({@link JobService}). The key set is served from this JVM, so a context
+ * can trust matching-service without starting its container, and the container ({@link MatchingService})
+ * signs with this same key from {@link #pemPath()}.
  *
  * <p>One key per JVM, lazily started and synchronized like {@link JobService#ensureStarted()};
  * the key is generated with its RFC 7638 thumbprint as the key id, as the real service publishes
@@ -78,7 +79,7 @@ public final class MatchingServiceKey {
         return token.serialize();
     }
 
-    /** The private key as a PEM file, written once, for Track C2 to copy into the container. */
+    /** The private key as a PEM file, written once, which MatchingService copies into the container. */
     public static Path pemPath() {
         ensureStarted();
         return pemFile;
