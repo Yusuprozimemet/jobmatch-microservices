@@ -97,6 +97,11 @@
     </div>
     <div id="lines"></div>
     <div class="panel-head" style="margin-top:6px">
+      <h2 style="font-size:17px">What each merge did to the gap</h2>
+      <p>The step each merge took on the gap line above, one dot per merge, grouped by kind of pull request. Below zero, the spec and the code moved closer; above it, they moved apart, as when a spec names what is not built yet. A merge that left the gap exactly where it was is counted under its column, not drawn. The dashed bar is each kind's median; the net is the sum of its steps.</p>
+    </div>
+    <div id="deltas"></div>
+    <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">The sawtooth, up close</h2>
       <p>The share of code names in the specs for days already reached that exist in the code. It dips when a day starts, because the spec names things not built yet, and climbs back as that day's tracks land.</p>
     </div>
@@ -115,6 +120,20 @@
       <p>Imports in main source where one service's packages reach into another's (<code>shared</code> and <code>config</code> belong to no service). The ArchUnit rules in <code>ModuleBoundariesTest</code> hold this at zero from Day 07; a rise means a rule no longer covers a crossing.</p>
     </div>
     <div id="crossings"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Where the work went</h2>
+      <p>Lines changed so far in the specs (<code>plan.md</code> and <code>specs/</code>) and in everything else except Markdown, each as a share of its own total: code lines outnumber spec lines several times over, so on one scale the spec line would hug the axis. When the spec line rises ahead of the code line, the plan is being written before it is built.</p>
+    </div>
+    <div class="legend" id="churn-legend"></div>
+    <div id="churn"></div>
+    <div class="panel-head" style="margin-top:6px">
+      <h2 style="font-size:17px">Pull requests per day</h2>
+      <p>Each day's merged pull requests by kind, in run order, counted from the <code>day-NN/</code> branches; tooling and docs PRs belong to no day and are not here. A tall bar is a day that took more tracks, or more spec changes, than it was written for: hover for the estimate.</p>
+    </div>
+    <div id="perday"></div>
   </section>
 
   <section class="panel">
