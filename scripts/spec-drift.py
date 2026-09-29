@@ -20,6 +20,10 @@ same code counts shuffled across the names (the mean of CHANCE_DRAWS, seeded): a
 the code uses the spec's names in no particular proportion. Drift reference is the angle between
 the Sep 20 files split in two (even and odd by name): how far one part of the spec as written
 sits from another.
+
+Boundaries: for plan.md's four services, how much of their main source has left the monolith for
+services/, and how many imports still cross from one service's packages into another's. Both are
+read from the tree, like the gap; neither depends on what a day ticked.
 """
 import argparse
 import collections
@@ -64,6 +68,13 @@ DAY_REF = re.compile(r"\bDays? (\d+)((?:\s*(?:[–-]|,|and|or)\s*\d+)*)")
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
+# plan.md's target services ("Target repo structure"), by the monolith packages each one takes.
+# shared, config and the gateway are no service's, so depending on them crosses nothing.
+SERVICE = dict(auth="identity", user="identity", profile="identity", identity="identity",
+               jobs="jobs", mart="jobs", savedjobs="applications", applications="applications",
+               matching="matching")
+OWN_PACKAGE = re.compile(r"(?:^|/)src/main/java/nl/hackyourfuture/project/backend/([a-z]+)/")
+IMPORT = re.compile(r"^import\s+(?:static\s+)?nl\.hackyourfuture\.project\.backend\.([a-z]+)\.", re.M)
 FINISHED = ("done", "closed")
 CHANCE_DRAWS = 50
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
@@ -275,6 +286,30 @@ def trajectory(snaps, blobs, order=()):
     lines = sum(t.count("\n") for t in snaps[0]["texts"].values())
     return (rows, files, len(vocab), [round(float(v), 3) for v in (S ** 2 / (S ** 2).sum())[:2]], lines,
             split_angle(snaps[0]["texts"], idf))
+
+
+def boundaries(rows, snaps, blobs):
+    """At each merge, for plan.md's four services: the lines of main source still in the monolith
+    and in the service's own directory under services/, and the imports where one service's
+    package reaches into another's ("matching>identity"). Tests are left out, as a test may
+    assemble modules; a fully qualified name used without an import is not seen."""
+    seen = {}
+    for r, s in zip(rows, snaps):
+        placed, crossed = {}, collections.Counter()
+        for line in run("git", "ls-tree", "-r", s["sha"]).splitlines():
+            meta, path = line.split("\t", 1)
+            m = OWN_PACKAGE.search(path)
+            if not path.endswith(".java") or not m or m.group(1) not in SERVICE:
+                continue
+            blob = meta.split()[2]
+            if blob not in seen:
+                text = blobs.read(s["sha"], path)
+                seen[blob] = (text.count("\n"), IMPORT.findall(text))
+            n, imports = seen[blob]
+            owner = SERVICE[m.group(1)]
+            placed.setdefault(owner, [0, 0])[path.startswith("services/")] += n
+            crossed.update(f"{owner}>{SERVICE[p]}" for p in imports if SERVICE.get(p, owner) != owner)
+        r["placed"], r["crossings"] = placed, dict(crossed)
 
 
 def section(text, heading):
@@ -670,6 +705,7 @@ def main():
     rows, files, vocab, pca, lines, drift_ref = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
     days, order, stop = roadmap(snaps, prs, blobs)
     evidence_history(rows, days, snaps, blobs)
+    boundaries(rows, snaps, blobs)
     now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
                head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
                current_day=next((d["day"] for d in days if d["status"] == "active"), None),

@@ -50,7 +50,9 @@ function rowTip(r) {
   <div class="row"><span>drift</span><span>${fmt(r.drift)}°</span></div>
   <div class="row"><span>gap</span><span>${fmt(r.gap_full)}°</span></div>
   <div class="row"><span>gap by chance</span><span>${r.gap_chance == null ? "–" : fmt(r.gap_chance) + "°"}</span></div>
-  <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>`;
+  <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>
+  <div class="row"><span>service code out</span><span>${movedShare(r) == null ? "–" : fmt(movedShare(r)) + "%"}</span></div>
+  <div class="row"><span>imports crossing</span><span>${crossCount(r) ?? "–"}</span></div>`;
 }
 
 /* ---------- derived numbers ---------- */
@@ -273,7 +275,27 @@ function drawLines() {
       { name: "not running", color: "var(--code)", get: r => r.evidence && r.evidence.skippable + r.evidence.missing },
     ],
   });
+  lineChart(document.getElementById("moved"), {
+    H: 190, yMin: 0, yMax: 100, ticks: steps(0, 100, 4), unit: "%", strip: false,
+    label: "Share of the four services' main source lines under services/",
+    series: [{ name: "out", color: "var(--close)", get: r => movedShare(r) }],
+  });
+  lineChart(document.getElementById("crossings"), {
+    H: 190, yMin: 0, yMax: crossMax, ticks: steps(0, crossMax, 4), unit: "", strip: false, digits: 0,
+    label: "Imports crossing from one service's packages into another's",
+    series: [{ name: "crossing", color: "var(--code)", get: r => crossCount(r) }],
+  });
+  const p = R[sel].placed || {};
+  document.getElementById("placed").innerHTML = `<p>At ${prLabel(R[sel])}: ` + Object.keys(p).sort().map(s =>
+    `<b>${s}</b> ${p[s][1] ? (p[s][0] ? `${p[s][1]} lines out, ${p[s][0]} still in the monolith` : `out (${p[s][1]} lines)`) : `in the monolith (${p[s][0]} lines)`}`).join(" · ")
+    + (crossCount(R[sel]) ? ` · crossing: ${Object.entries(R[sel].crossings).map(([k, v]) => `${esc(k.replace(">", " → "))} ${v}`).join(", ")}` : "") + "</p>";
 }
+const movedShare = r => {
+  const v = Object.values(r.placed || {}), all = v.reduce((a, [i, o]) => a + i + o, 0);
+  return all ? +(v.reduce((a, [, o]) => a + o, 0) / all * 100).toFixed(1) : null;
+};
+const crossCount = r => r.crossings ? Object.values(r.crossings).reduce((a, b) => a + b, 0) : null;
+const crossMax = Math.max(4, Math.ceil(Math.max(0, ...R.map(r => crossCount(r) || 0)) / 4) * 4);
 const evMax = Math.max(4, Math.ceil(Math.max(0, ...R.map(r => r.evidence ? r.evidence.present : 0)) / 20) * 20);
 
 /* ---------- heatmap ---------- */
