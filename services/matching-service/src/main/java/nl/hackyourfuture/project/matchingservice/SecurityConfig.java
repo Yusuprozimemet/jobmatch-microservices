@@ -4,6 +4,7 @@ import org.springframework.boot.security.autoconfigure.actuate.web.servlet.Endpo
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -13,9 +14,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
 /**
- * Who may call matching-service (Day 21): the scraper for actuator, and logged-in users for
- * top-matches. The {@code /internal/**} chain, for service tokens, comes with the service's
- * identity (Track B1) as {@code @Order(2)}.
+ * Who may call matching-service (Day 21): the scraper for actuator, other services for its service
+ * key set, and logged-in users for top-matches. No {@code /internal/**} chain: matching-service serves
+ * no internal route, and nothing calls it but the gateway.
  */
 @Configuration
 @EnableWebSecurity
@@ -38,13 +39,15 @@ public class SecurityConfig {
 
     /**
      * The user chain. Every route needs the user's access token (the cookie, verified by {@code UserTokens})
-     * except {@code /error}, without which a 400 or 500 would reach the caller as 401.
+     * except the service key set and {@code /error}, without which a 400 or 500 would reach the caller as 401.
+     * The key set is fetched by identity and job-service to verify matching-service's tokens.
      */
     @Bean
-    @Order(3)
+    @Order(2)
     public SecurityFilterChain userFilterChain(HttpSecurity http, UserTokens tokens) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/.well-known/service-jwks.json").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
