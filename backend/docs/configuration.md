@@ -87,6 +87,7 @@ The gateway's settings, all with defaults that suit compose:
 | --- | --- | --- |
 | `BACKEND_URL` | `http://localhost:8080` — `http://backend:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
 | `JOB_SERVICE_URL` | `BACKEND_URL`'s value — `http://job-service:8080` in compose | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. The backend no longer serves these (Day 17), so outside compose it must be set |
+| `MATCHING_SERVICE_URL` | `BACKEND_URL`'s value | Where `/api/jobs/top-matches` goes: matching-service, `http://matching-service:8080` in compose once it runs there (Day 21). The backend serves it until then |
 | `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login, register and the two password-reset steps, per client |
 | `GATEWAY_TRUSTED_PROXIES` | empty | A regex of proxy addresses whose `X-Forwarded-For` is believed. Leave it empty behind the frontend, which passes a client's own header through; set it only for a proxy that overwrites it |
 | `GATEWAY_CONNECT_TIMEOUT` / `GATEWAY_READ_TIMEOUT` | `5s` / `30s` | Past them the gateway answers 502 / 504 |

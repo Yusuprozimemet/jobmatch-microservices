@@ -26,11 +26,11 @@ import static org.springframework.web.servlet.function.RequestPredicates.POST;
 import static org.springframework.web.servlet.function.RequestPredicates.path;
 
 /**
- * Where requests go. Job search (JobController's paths) has an upstream of its own,
- * {@code gateway.job-service-url}, which is the backend until it is set. Everything else is the
- * backend's. The credential routes are rate limited ahead of the rest. Nothing else is routed, the
- * backend's actuator included; a path outside these is the gateway's own answer: 401 without a
- * token, 404 with one.
+ * Where requests go. Job search and top-matches each have an upstream of their own,
+ * {@code gateway.job-service-url} and {@code gateway.matching-service-url}, both the backend until
+ * set. Everything else is the backend's. The credential routes are rate limited ahead of the rest.
+ * Nothing else is routed, the backend's actuator included; a path outside these is the gateway's
+ * own answer: 401 without a token, 404 with one.
  */
 @Configuration(proxyBeanMethods = false)
 class Routes {
@@ -41,6 +41,7 @@ class Routes {
     @Bean
     RouterFunction<ServerResponse> backend(@Value("${gateway.backend-url}") String backendUrl,
                                            @Value("${gateway.job-service-url}") String jobServiceUrl,
+                                           @Value("${gateway.matching-service-url}") String matchingServiceUrl,
                                            @Value("${gateway.rate-limit.auth-per-minute}") long perMinute,
                                            @Value("${gateway.trusted-proxies}") String trustedProxies) {
         // Where a password is guessed or an account made; not refresh, logout or the password change.
@@ -56,16 +57,23 @@ class Routes {
                 .before(userId())
                 .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build();
-        // Job search paths: /api/jobs, /api/jobs/filters, /api/jobs/{postingId} excluding top-matches,
-        // which is matching's and stays on the backend route. Ahead of /api/**, which would take them.
+        // top-matches is matching's (Day 21); ahead of the job-service route, whose /api/jobs/{postingId}
+        // would take it.
+        RouterFunction<ServerResponse> matching = route("matching-service")
+                .route(path("/api/jobs/top-matches"), http())
+                .before(uri(matchingServiceUrl))
+                .before(userId())
+                .onError(ResourceAccessException.class, Routes::backendFailed)
+                .build();
+        // Job search paths: /api/jobs, /api/jobs/filters, /api/jobs/{postingId}. Ahead of /api/**,
+        // which would take them.
         RouterFunction<ServerResponse> jobs = route("job-service")
-                .route(path("/api/jobs").or(path("/api/jobs/filters"))
-                        .or(path("/api/jobs/{postingId}").and(path("/api/jobs/top-matches").negate())), http())
+                .route(path("/api/jobs").or(path("/api/jobs/filters")).or(path("/api/jobs/{postingId}")), http())
                 .before(uri(jobServiceUrl))
                 .before(userId())
                 .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build();
-        return credentials.and(jobs).and(route("backend")
+        return credentials.and(matching).and(jobs).and(route("backend")
                 .route(path("/api/**").or(path("/.well-known/jwks.json")), http())
                 .before(uri(backendUrl))
                 .before(userId())
