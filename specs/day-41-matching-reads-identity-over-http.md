@@ -79,46 +79,85 @@ of a closed port: every URL override is another cached Spring context, and each 
 module pools. C is the largest track; if it passes 400 lines, the docs go in a PR of their own.
 
 ## Acceptance criteria
-- [ ] **new** — `GET /internal/profiles/{id}` with a service token answers 200 and the user's
+- [x] **new** — `GET /internal/profiles/{id}` with a service token answers 200 and the user's
       skills and city for a user with a profile, and 404 for one without; the cookie and a user
       token in the header are 401 (`InternalProfilesIT`, modelled on `tokens/InternalUsersIT`,
       identity's other internal route). Red today: 404 for a user with a profile, no handler.
-- [ ] **new** — with `app.internal.identity-url` pointed at a closed port, top-matches answers 503
+      #202: `tokens/InternalProfilesIT`, 6 cases. Without the controller,
+      `aUserWithAProfileIs200WithSkillsAndCity` expected 200 but was 404. The two 404 cases pass
+      with no handler at all, so they were broken on their own: the controller answering 200 and
+      an empty snapshot for a missing profile, and `aUserWithoutAProfileIs404` and
+      `anIdNeverSeenIs404` failed, expected 404 but was 200.
+- [x] **new** — with `app.internal.identity-url` pointed at a closed port, top-matches answers 503
       within 5 s, not 500 and not a hang. Red today: 200, the profile is read in-process.
-- [ ] **new** — with `app.internal.identity-url` pointed at a `StubUpstream` that answers 404 to
+      #203: `internal/ProfileDirectoryUnavailableIT.anUnreachableProfileIsA503`, with
+      `StubUpstream.refuse(..., 503)` in place of a closed port as the Tracks note allows, and
+      `aHangingProfileIsA503WithinTheReadTimeout` for "not a hang". #204 added
+      `anUnreachableIdentityIsA503` for the existence call. #203's `@Primary` break failed the
+      context, not the status, so the spec's own red was first run at the close, on 1146a2e:
+      without `@Component` on `ProfileDirectoryClient`, so the profile is read in-process,
+      `anUnreachableProfileIsA503` and the hang case failed, expected 503 but was 422, not the
+      200 the spec said: the test's user has no profile in the database. 5 of 7 red. Reverted.
+- [x] **new** — with `app.internal.identity-url` pointed at a `StubUpstream` that answers 404 to
       `/internal/users/{id}` and 200 with a five-skill profile to `/internal/profiles/{id}`,
       top-matches answers 422, its `detail` says "Fill in your profile", and the stub saw
       exactly one call to `/internal/users/{id}`. The last two are there because 422 is also
       the answer for too few skills (`JobMatchService.java:51-54`): a client that misreads the
       profile passes on the status alone. Red today: 200, the user is looked up in-process by
       email.
-- [ ] **new** — with a user token whose `sub` is user A (five skills in their profile) and
+      #204: `internal/ProfileDirectoryUnavailableIT.aUserIdentityDoesNotKnowIsA422`, which also
+      asserts no call to `/internal/profiles/{id}`: existence is asked first. With a 404 read as
+      "exists", expected 422 but was 200.
+- [x] **new** — with a user token whose `sub` is user A (five skills in their profile) and
       whose `email` is user B's (no profile), top-matches answers 200: the id is the `sub`, not
       an email lookup. The token comes from a `TestTokens` helper beside `expired` (`support/`
       may change). Red today: 422, `CurrentUserIdResolver` finds B by email
       (`CurrentUserIdResolver.java:55-57`).
-- [ ] **new** — `InternalCallsObservedIT` passes with `/internal/profiles/{userId}` and
+      #204: `matching/TopMatchesTrustTheSubjectIT.theIdIsTheTokensSubNotAnEmailLookup`. The
+      token is `AccessTokens.mint(A's id, B's email)`, not a new `TestTokens` helper: `mint`
+      already signs any pair, so a helper would have copied it (a departure, recorded in #204).
+      With the controller back on `@CurrentUserId`, expected 200 but was 422.
+- [x] **new** — `InternalCallsObservedIT` passes with `/internal/profiles/{userId}` and
       `/internal/users/{id}` in `CALLED_BY`, each called by `/api/jobs/top-matches`: one
       client span and one `http.client.requests` timer, tagged with the template. Red today:
       nothing calls either route, so no span.
-- [ ] **new** — `grep -rn "CurrentUserId" backend/matching/src/main` finds nothing. Red today:
+      #203 added the profiles route, #204 the users route, and widened the status check from
+      200 to any 2xx: the users route answers 204. With either URI concatenated instead of
+      templated, both tests went red, `no client span for /internal/profiles/{userId}` (#203) and
+      `no client span for /internal/users/{id}` (#204); the controller back on `@CurrentUserId`
+      failed both on the users route.
+- [x] **new** — `grep -rn "CurrentUserId" backend/matching/src/main` finds nothing. Red today:
       finds 2, both in `JobMatchController.java`.
-- [ ] **hold** — the Day 04 matching and session contract classes pass unedited:
+      #204. At the close, on 1146a2e: nothing. Seen red on 2e9623b, before #204: 2 lines,
+      `JobMatchController.java:8` and `:40`.
+- [x] **hold** — the Day 04 matching and session contract classes pass unedited:
       `MatchTopMatchesIT`, `MatchRankingIT`, `MatchScoreCacheIT`, `SessionWithoutAUserIT`.
       Broken on purpose in the spec-change PR: `JobMatchController` answering 200 and an empty
       list for a missing user. `SessionWithoutAUserIT.topMatchesAsksForAProfile` failed,
       expected 422 but was 200; the three `Match*IT` classes stayed green, 22 of 22.
-- [ ] **hold** — `CurrentUserQueriesIT.topMatchesLooksTheUserUpOnce` stays at one statement on
+      At the close: `git diff e859e00 1146a2e -- backend/app/src/test/**/contract/` is empty, and
+      all four pass on 1146a2e (`MatchTopMatchesIT` 8, `MatchRankingIT` 8, `MatchScoreCacheIT` 6,
+      `SessionWithoutAUserIT` 3). #204 found this hold does not guard the existence call: with a
+      404 from `/internal/users` read as "exists", `SessionWithoutAUserIT` stayed green, because
+      the deleted user has no profile either and 422 comes anyway. Criterion 3's test alone
+      caught it, expected 422 but was 200.
+- [x] **hold** — `CurrentUserQueriesIT.topMatchesLooksTheUserUpOnce` stays at one statement on
       `users`: the existence call replaces the resolver's lookup, it does not add a second.
       Broken on purpose in the spec-change PR: `CurrentUserIdResolver` reading the user twice.
       Both tests failed, expected 1 but was 2. After Track C top-matches no longer goes
       through the resolver, so Track C breaks it again on the new path, the existence call made
       twice, and records what it reported.
-- [ ] **hold** — `ModuleBoundariesTest` passes: `matching` depends on nothing in `identity`.
+      #204: with `users.exists` called twice, `topMatchesLooksTheUserUpOnce` expected 1 but was
+      2. The class's saved-jobs test still goes through the resolver (`applications`, Day 25)
+      and stayed green.
+- [x] **hold** — `ModuleBoundariesTest` passes: `matching` depends on nothing in `identity`.
       The Maven graph refuses it first (`matching`'s pom has no `identity`), so the break is a
       class in `matching`'s package inside `app`. Broken on purpose in the spec-change PR: such a
       class calling `PrincipalEmail.of`. `matchingKeepsToItself` failed, naming
       `BreakBoundary.anyone()` and `PrincipalEmail.of`.
+      The break went red in the spec-change PR (#201); at the close it passes on 1146a2e, 6 of 6.
+      The `sub` reader Track C added, `TokenSubject`, is in
+      `shared.web`; the one writer is identity's `AccessTokenAuthentication`.
 
 ## Verify
 ```bash
@@ -147,3 +186,53 @@ grep -rn "CurrentUserId" matching/src/main        # nothing
   on `identity` classes the IDE's compiler had written into `target/classes` ("Unresolved
   compilation problems"), and every request answered 500. Run without `clean`, against
   `CLAUDE.md`; the baseline with `clean` was green, 33 of 33, and the breaks were rerun on it.
+- **Defect** — found: break · cause: spec · criterion 1's red was only the 200 case; its two 404
+  cases pass with no handler at all, so nothing in the spec could see them fail. #202 broke them
+  on their own (200 and an empty snapshot for a missing profile).
+- **Defect** — found: review · cause: implementation · the implementer's
+  `ProfileDirectoryUnavailableIT.noProfileIsA422` passed with no client at all: the test user has
+  no profile in this process either. Review added the check that the stub was called once (#203).
+- **Defect** — found: review · cause: environment · Track B's implementer reported 4 of 5 tests
+  red and blamed `@Primary`. An orphaned Maven JVM and its surefire fork held `shared`'s jar, so
+  `clean` failed and the tests ran on an old `matching` jar with no client. Both stopped, rebuilt,
+  5 of 5 green (#203).
+- **Defect** — found: review · cause: implementation · Track A's test Javadoc claimed "never
+  cached" and "404 once they clear it", neither tested; Track C's said the old code "would return
+  B's profile", where it answered 422. Both rewritten in review (#202, #204).
+- **Defect** — found: break · cause: spec · criterion 7 and In scope name
+  `SessionWithoutAUserIT.topMatchesAsksForAProfile` for the "no user" answer, but it cannot see
+  the existence call: a 404 read as "exists" left it green, since the deleted user has no profile
+  either. Only criterion 3's test guards the call (#204).
+- **Defect** — found: review · cause: spec · criterion 5 read as adding two entries to
+  `CALLED_BY`, but the test asserted status 200 and the users route answers 204. #204 widened it
+  to any 2xx.
+- **Defect** — found: review · cause: spec · the Tracks table let B land before C without saying
+  C's existence call goes first: every stub test in #203's `ProfileDirectoryUnavailableIT` then
+  hit a 404 on `/internal/users/{id}`, and #204 had to edit them (`known(user)`).
+- **Defect** — found: review · cause: spec · criterion 4 asked for a `TestTokens` helper;
+  `AccessTokens.mint` already signs any `sub` and email, so #204 used it. A departure, recorded.
+- **Defect** — found: break · cause: spec · criterion 2's "red today: 200" was written from the
+  code, not run, and #203's `@Primary` break failed the context instead, so it was first run at
+  the close. It reports 422: the stub-backed test's user has no profile in the database. The
+  check still fails without the client; the spec named the wrong status, as Day 20's hold did.
+- **No track was rewritten.** All three were written by the implementer agent on Haiku, and
+  review changed something in each: an unused field and a false Javadoc (A), a check that could
+  not fail (B), fully-qualified names and a false Javadoc (C).
+- **Closed on Day 41.** Estimated 5 pull requests from the first draft (#200); took 3 track
+  PRs (#202, #203, #204), none split, 600 changed lines (137, 210, 253). With the spec change
+  (#201) and this close it is 5; the dashboard counts tracks, so it reads 5→3. C stayed under the
+  gate with its docs, so the docs PR the Tracks note allowed was not needed.
+- **Verify, rerun at the close on 1146a2e:** `clean verify` 426 tests, 0 failures, 1 skipped,
+  counted from the reports after deleting them (412 at the spec change, +6 A, +5 B, +3 C); `checkstyle:check` 0
+  violations; the grep prints nothing; `contract/` and `support/` unchanged since e859e00. The
+  gateway harness was not run: nothing in the gateway or its routes changed.
+- **Hand-offs this day leaves:**
+  - **Day 21:** matching-service's own user-token verification has to put `TokenSubject` in the
+    authentication's details. Day 21 copies the reader (`shared.web`); the one writer today is
+    identity's `AccessTokenAuthentication.emailPrincipal`, which it does not. Without it
+    `TokenSubject.current()` is empty and top-matches answers 422 to everyone.
+  - **Day 21:** the existence call is guarded by one test, `aUserIdentityDoesNotKnowIsA422`, in
+    the monolith against a stub (above). It has to go with matching, or run through the service.
+  - **Day 24:** the profile cache, and whether no retry still holds across the network.
+  - **Day 25:** `applications`' id and existence call; `CurrentUserQueriesIT`'s saved-jobs test
+    still goes through the resolver.
