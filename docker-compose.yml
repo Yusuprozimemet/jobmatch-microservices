@@ -23,14 +23,15 @@ services:
       timeout: 5s
       retries: 10
 
-  # Writes identity's user key, the monolith's service key, and job-service's key (Day 39, Day 17).
+  # Writes identity's user key, the monolith's service key, job-service's key and matching-service's
+  # (Day 39, Day 17, Day 21).
   # Runs and exits: it writes keys into the jwt-keys volume on the first start and keeps them after
   # that, until `docker compose down -v`. Never in git, and never made by the services, which do not
   # start without them. The backend's own runtime image, because it already has openssl and is already
   # pulled.
   jwt-key:
     image: eclipse-temurin:25-jre
-    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem && sh /jwt-key.sh /keys/job-service.pem"]
+    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem && sh /jwt-key.sh /keys/job-service.pem && sh /jwt-key.sh /keys/matching-service.pem"]
     volumes:
       - jwt-keys:/keys
       - ./scripts/jwt-key.sh:/jwt-key.sh:ro
@@ -58,6 +59,9 @@ services:
       INTERNAL_JOBS_URL: http://job-service:8080
       APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-job-service
       APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL: http://job-service:8080/.well-known/service-jwks.json
+      # Day 21: matching-service calls identity's /internal/users and /internal/profiles.
+      APP_INTERNAL_TRUSTEDISSUERS_1_NAME: jobmatch-matching-service
+      APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL: http://matching-service:8080/.well-known/service-jwks.json
       # Tracing is opt-in: empty means no exporter, so the application still starts with
       # nowhere to send spans. Point it at the Tempo below to turn it on:
       #
@@ -91,6 +95,41 @@ services:
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/job-service.pem
       BACKEND_KEY_SET_URL: http://backend:8080/.well-known/service-jwks.json
       INTERNAL_APPLICATIONS_URL: http://backend:8080
+      # Day 21: matching-service calls the shortlist route.
+      APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-matching-service
+      APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL: http://matching-service:8080/.well-known/service-jwks.json
+      TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
+      OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
+    volumes:
+      - jwt-keys:/run/keys:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
+    depends_on:
+      db:
+        condition: service_healthy
+      jwt-key:
+        condition: service_completed_successfully
+
+  # matching-service (Day 21). No published port, and not routed to yet: the gateway still sends
+  # top-matches to the backend until Track E2 sets MATCHING_SERVICE_URL there. DB_MATCHING_* is read
+  # from Track E1, when matching's code and migrations move here; LLM_* comes with the key in E2.
+  matching-service:
+    build: ./services/matching-service
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_MATCHING_USER: matching_user
+      DB_MATCHING_PASSWORD: ${MATCHING_DB_PASSWORD:-password}
+      SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/matching-service.pem
+      # identity is still the monolith's; user tokens are checked against its key set there.
+      INTERNAL_IDENTITY_URL: http://backend:8080
+      INTERNAL_JOBS_URL: http://job-service:8080
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     volumes:
