@@ -307,7 +307,8 @@ the key set it is verified with from the trusted issuers
 the monolith's own, `jobmatch-backend`, trusted in process, and whatever
 `app.internal.trusted-issuers` lists as `{name, key-set-url}` entries, empty by default. Set via
 environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and `APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`;
-compose lists `jobmatch-job-service` at job-service's `/.well-known/service-jwks.json` (Day 17).
+compose lists `jobmatch-job-service` (Day 17) and `jobmatch-matching-service` (Day 21), each at its
+service's `/.well-known/service-jwks.json`, and job-service's list names matching-service.
 An issuer not on the list gets `401`. job-service keeps the same rules in its own copy: it trusts
 `jobmatch-backend` at `BACKEND_KEY_SET_URL`, and signs with a key of its own
 ([`configuration.md`](configuration.md#2-the-local-stack)). The monolith signs its own tokens with
