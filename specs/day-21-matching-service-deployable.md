@@ -38,7 +38,7 @@ contract classes pass unedited against the container, directly and through the g
     monolith (`application.yaml:79-83`), and this process has no `/internal/**` routes.
   - **Its schema stays until Day 23.** `matching_user` on the `matching` schema, and the
     service's own Flyway applying `db/matching` (baseline 0, as `app/.../config/Migrations.java`
-    does today). From Track E1 the monolith stops applying it; in the harness the container
+    does today). From Track E1a the monolith stops applying it; in the harness the container
     applies it when it starts, against the test Postgres, where `PostgresContainer` still creates
     the role and schema.
   - **Scheduling moves with it.** `SchedulingConfig` goes to the service with
@@ -118,21 +118,26 @@ contract classes pass unedited against the container, directly and through the g
 | A2 | | Dockerfile and `matching-service-ci-cd.yaml` | 100–150 |
 | B1 | | Service identity: key, minter, key set, `InternalCallers`, the `/internal/**` chain; tests | 300–380 |
 | B2 | | The `shared` copies and the breaker config | 250–350 |
-| B3 | | The service's test base: Postgres, `StubUpstream`, stub model, test key | 200–300 |
+| B3a | | The service's test base, first half: Postgres | 200 |
+| B3b | | The service's test base, second half: `StubUpstream` and the stub model, with self-tests (the test key came with B1) | 200–300 |
 | C1 | | Trust lists (monolith, job-service, harness); compose adds matching-service unrouted | 150–250 |
 | C2 | | The harness container, `ObservedContainers`; CI builds the image, path filters; a harness self-test | 250–380 |
-| E1 | | The move and the switch: `git mv` of matching's code, `db/matching`, `SchedulingConfig` and the stubbed tests; the build fallout above; the `Services` entry and its container default; `Gateway`'s `MATCHING_SERVICE_URL` | 350–400 |
+| E1a | | The move and the switch: `git mv` of matching's code, `db/matching` and `SchedulingConfig`; the service's pom and `application.yaml` for them; the build fallout above, the database tests and `MODULE_SCHEMAS` among it; the `Services` entry and its container default; `Gateway`'s `MATCHING_SERVICE_URL`; `ProfileDirectoryUnavailableIT` and `PostingShortlistUnavailableIT` on the service's test base | 350–450 |
+| E1b | | `LlmCallObservedIT` and the top-matches half of `InternalCallsObservedIT` on the service's test base | 150–250 |
 | E2 | | Compose switch: `MATCHING_SERVICE_URL`, the LLM key to matching-service only, root `.env.example` | 50–100 |
 | E3 | | The bulkhead and criterion 3's test | 150–250 |
 | F | | Dead config (`app.llm.*`, `identity-url`, `LLM_*`), boundaries rules, job-service's `RestClient` rule, docs | 150–300 |
 
-In order: 0, D, A1, A2, B1, B2, B3, C1, C2, E1, E2, E3, F. D comes early because the gateway
-harness cannot route to matching-service before it, and its default changes nothing. Criterion 3
+In order: 0, D, A1, A2, B1, B2, B3a, B3b, C1, C2, E1a, E1b, E2, E3, F. D comes early because
+the gateway harness cannot route to matching-service before it, and its default changes nothing. Criterion 3
 is red today and `main` is protected, so its test lands with the bulkhead (E3), not in Track 0.
-E1 is a move, so `git diff --numstat` counts renames by their edits; if it still passes 400, the
-database tests and `MODULE_SCHEMAS` split off into an E1b merged straight after, and the PR says
-so. Between E1 and E2, compose still routes top-matches to the backend, which no longer serves
-it; E2 follows E1 directly.
+B3b goes before E1a, which needs its stubs; C1 and C2 need neither and have landed. E1a cannot be
+split further and stay green: once matching's code leaves, the database tests fail and the harness
+must route top-matches to the container, in the same PR. `LlmCallObservedIT` and the top-matches
+entries of `InternalCallsObservedIT` read metrics and spans in-process, so E1a deletes them from
+the monolith and E1b, merged straight after, brings them back in the service; E1a's PR says so.
+If E1a passes 400 it carries an `Oversized:` line with the reason. Between E1a and E2, compose
+still routes top-matches to the backend, which no longer serves it; E2 follows E1b directly.
 
 ## Acceptance criteria
 - [ ] **new** — in the harness, `/api/jobs/top-matches` is served by the matching-service
@@ -141,13 +146,13 @@ it; E2 follows E1 directly.
 - [ ] **hold** — `MatchTopMatchesIT`, `MatchRankingIT`, `MatchScoreCacheIT`,
       `SessionWithoutAUserIT` and `JobRoutesIT` pass unedited, directly and through the gateway
       (`-Dharness.gateway=true`), with top-matches in the container. Broken on purpose: <Track
-      E1: the container's jobs URL at a closed port; what failed>.
+      E1a: the container's jobs URL at a closed port; what failed>.
 - [ ] **new** — with `StubLlm` hanging and 10 top-matches requests in flight, an 11th answers
       within 1 s with `aiScored` false on every row. Red today: the auditor's run at f776017
       took 20.2 s. The test lands in E3 with the bulkhead.
 - [ ] **hold** — a user whose `sub` identity does not know gets 422 from top-matches, and the
       existence call was made: `aUserIdentityDoesNotKnowIsA422` passes, in the service's module
-      after E1. Broken on purpose: <Track E1: `UserExistenceClient` answering true for every id;
+      after E1a. Broken on purpose: <Track E1a: `UserExistenceClient` answering true for every id;
       what it reported>.
 - [ ] **hold** — with `StubLlm` hanging and 10 top-matches requests in flight, `GET /api/jobs`
       (job-service) and `GET /api/profile` (the monolith) answer within 1 s. Isolated since Day
@@ -160,7 +165,7 @@ it; E2 follows E1 directly.
       service's shortlist route with the same trace id. Broken on purpose: <Track 0: the
       propagator removed; what it reported>.
 - [ ] **hold** — `TopMatchesTrustTheSubjectIT` passes unedited against the container. Broken on
-      purpose: <Track E1: the service's token check leaving the details unset; what it
+      purpose: <Track E1a: the service's token check leaving the details unset; what it
       reported>.
 - [ ] **new** — `git grep -n "LLM_" -- backend/app/src/main backend/.env.example
       services/api-gateway/src/main services/job-service/src/main` finds nothing. Red today:
@@ -211,6 +216,17 @@ test ! -d backend/matching && echo gone
   container has no matching code to serve top-matches, and after it the monolith has none.
   Criterion 2's gateway run fails without them: top-matches reaches the monolith, which no
   longer serves it.
+- **Spec change after Track C2 (#221): B3 half-landed, and E1 could not be one PR.** #219 was
+  B3a and named a B3b (`StubUpstream`, the stub model) that no PR took; the dashboard counted B3
+  as merged and reported E1 next, which needs those stubs. The table now lists B3a and B3b. E1
+  estimated 350–400, but the stubbed tests extend the monolith's `MatchingTest` (`aUser()`,
+  `posting(...)`, `authenticatedAs(...)`), so they are rewritten, not renamed, and `numstat`
+  counts them in full; the "E1b merged straight after" could not hold the database tests either,
+  since `main` is protected and they fail the moment the code leaves. E1 is now E1a and E1b, as
+  the tracks section says. Found starting E1, before any code.
+- **Defect** — found: spec-change PR · cause: spec · the E1 estimate counted the stubbed
+  tests as a move, and the fallback split named a part that could not merge green. Fixed in this
+  PR.
 - Expected PRs: 15 is the 13 tracks, this spec change and the closing PR. Day 17 estimated 10
   and took 14 track PRs, 18 in all (`day-17-...md:378`); this day has a user, a model and a
   schema that job-service had not.
