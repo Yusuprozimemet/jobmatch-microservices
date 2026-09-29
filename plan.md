@@ -180,8 +180,9 @@ Easiest extraction: read-only, no user data, the data pipeline already owns its 
 
 ### Phase 4 — Extract matching-service
 Highest payoff: isolates the 20s LLM timeout from job search.
-**Seam first:** identity's profile endpoint and client (Day 24's) come before Day 21, and so
-does how matching gets the user id without identity's resolver.
+**Seam first:** Days 41 → 21 → 22 → 23 → 24. Identity's profile endpoint and client, and how
+matching gets the user id without identity's resolver, come before Day 21 (Day 41, split out of
+Day 24).
 - Move `job_match_scores` to DynamoDB — the key is already `(skills_hash, posting_id,
   scorer_version)` and the only non-key query is the purge.
 - Set a TTL attribute; DynamoDB deletes expired items itself. **Delete `JobMatchScoreCleanup` and `SchedulingConfig`.**
@@ -274,14 +275,14 @@ the README's Day entries record two estimates, the provisional spec's and the re
 All seven phases and the platform step are broken into 40 day specs in [`specs/`](specs/). Read
 [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-20 (Phases 0-3) and 38-40 (the platform step) are done. Days 21-37 are **provisional**:
+Days 1-20 (Phases 0-3) and 38-40 (the platform step) are done. Days 21-37 and 41 are **provisional**:
 written from this plan before the course correction, so each is rewritten against the code,
 with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
 links hold; they run in this order, and the dashboard follows it:
 
 1. The record fix and the platform step (new day specs, numbered from 38).
 2. Phase 3: Days 18, 19, 17, 20.
-3. Phase 4: the profile endpoint and user id out of Day 24 first, then Days 21, 22 (no dual
-   write), 23, the rest of 24.
+3. Phase 4: Day 41 (the profile endpoint and user id, split out of Day 24) first, then Days 21,
+   22 (no dual write), 23, 24.
 4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
 5. Phases 6–7 (Days 29–37): rewritten for AWS after the evaluation, or not started.
