@@ -21,6 +21,9 @@ app:
   internal:
     identity-url: ${INTERNAL_IDENTITY_URL:}
     jobs-url: ${INTERNAL_JOBS_URL:}
+  # identity's public key set for user tokens (Day 12), at identity's URL unless set.
+  identity:
+    jwks-url: ${IDENTITY_JWKS_URL:${app.internal.identity-url}/.well-known/jwks.json}
   # The model's read; the rest of app.llm.* comes with the code that reads it (Track E1). The
   # gateway reads for 30 s; top-matches makes three internal calls in a row (existence, profile,
   # shortlist), each 1 s connect and 2 s read, then the model call, 5 s connect and this read:

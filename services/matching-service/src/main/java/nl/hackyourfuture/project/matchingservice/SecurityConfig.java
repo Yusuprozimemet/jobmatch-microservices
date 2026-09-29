@@ -37,13 +37,12 @@ public class SecurityConfig {
     }
 
     /**
-     * The user chain. Every route needs a login except {@code /error}, without which a 400 or 500
-     * would reach the caller as 401. The user token is not read yet (Track A1b), so nothing
-     * authenticates and every route answers 401.
+     * The user chain. Every route needs the user's access token (the cookie, verified by {@code UserTokens})
+     * except {@code /error}, without which a 400 or 500 would reach the caller as 401.
      */
     @Bean
     @Order(3)
-    public SecurityFilterChain userFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain userFilterChain(HttpSecurity http, UserTokens tokens) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
@@ -53,6 +52,10 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
+                .oauth2ResourceServer(rs -> rs
+                        .bearerTokenResolver(tokens.cookieResolver())
+                        .jwt(jwt -> jwt.decoder(tokens.decoder()).jwtAuthenticationConverter(UserTokens::subjectPrincipal))
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
         return http.build();
     }
