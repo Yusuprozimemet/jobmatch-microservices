@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: jobmatch-matching-service
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+  error:
+    include-stacktrace: never
+    include-message: never
+
+logging:
+  pattern:
+    correlation: "[%X{traceId:-},%X{spanId:-}] "
+
+app:
+  # Required, no default on purpose (InternalUrls): empty meant "this process" in the monolith,
+  # and this process serves none of identity's or job-service's routes.
+  internal:
+    identity-url: ${INTERNAL_IDENTITY_URL:}
+    jobs-url: ${INTERNAL_JOBS_URL:}
+  # The model's read; the rest of app.llm.* comes with the code that reads it (Track E1). The
+  # gateway reads for 30 s; top-matches makes three internal calls in a row (existence, profile,
+  # shortlist), each 1 s connect and 2 s read, then the model call, 5 s connect and this read:
+  # 9 + 5 + 15 = 29 s. The monolith's 20 made 34 s.
+  llm:
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:15}
+
+# Observability. Actuator listens on its own port, which compose does not publish, so nothing
+# here is reachable from the internet.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      show-components: always
+  tracing:
+    sampling:
+      probability: ${TRACING_PROBABILITY:1.0}
+    export:
+      enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  otlp:
+    metrics:
+      export:
+        enabled: ${OTEL_METRICS_ENABLED:false}
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
