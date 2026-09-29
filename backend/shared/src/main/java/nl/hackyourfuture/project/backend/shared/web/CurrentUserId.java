@@ -10,14 +10,15 @@ import java.lang.annotation.Target;
  * The id of the user making the request, resolved once, at the edge, by {@code identity}.
  *
  * <p>Goes on an {@code Optional<UUID>} controller parameter. It is empty when the request's
- * principal has no user behind it, which happens when a session outlives its account. What that
- * means is the controller's call, not the resolver's: {@code applications} answers 404 and
- * {@code matching} answers 422, and {@code SessionWithoutAUserIT} pins both. A request with no
- * principal at all never gets this far; Spring Security answers it with 401 first.
+ * principal has no user behind it, which happens when a session outlives its account.
+ * {@code applications} answers 404 for an empty value. {@code matching}, since Day 41, takes
+ * the token's {@code sub} ({@code TokenSubject}) and asks identity whether the user exists.
+ * {@code SessionWithoutAUserIT} pins both. A request with no principal at all never gets this
+ * far; Spring Security answers it with 401 first.
  *
  * <p>Only {@code identity} knows how a principal becomes an id. It is one query by the token's
  * email. Day 13 put the id in the token and kept the lookup on purpose: it is what refuses a
- * user deleted while their token is still valid ({@code SessionWithoutAUserIT}).
+ * user deleted while their token is still valid.
  */
 @Documented
 @Target(ElementType.PARAMETER)

@@ -3,6 +3,7 @@ package nl.hackyourfuture.project.backend.identity.token;
 import com.nimbusds.jose.JOSEException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import nl.hackyourfuture.project.backend.shared.web.TokenSubject;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * How a request authenticates from Day 13: the {@code access_token} cookie, verified against the
@@ -67,10 +69,13 @@ public class AccessTokenAuthentication {
 
     /**
      * The token's email as the principal, the plain string the session put there before, so
-     * {@code PrincipalEmail} and every controller that reads it are unchanged.
+     * {@code PrincipalEmail} and every controller that reads it are unchanged. The verified
+     * {@code sub} rides along as the details, in a {@code TokenSubject}.
      */
     public static AbstractAuthenticationToken emailPrincipal(Jwt jwt) {
-        return UsernamePasswordAuthenticationToken.authenticated(jwt.getClaimAsString("email"), null, List.of());
+        var token = UsernamePasswordAuthenticationToken.authenticated(jwt.getClaimAsString("email"), null, List.of());
+        token.setDetails(new TokenSubject(UUID.fromString(jwt.getSubject())));
+        return token;
     }
 
     private static String cookie(HttpServletRequest request) {

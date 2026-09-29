@@ -37,7 +37,8 @@ class InternalCallsObservedIT extends MatchingTest {
     private static final Map<String, String> CALLED_BY = Map.of(
             "/internal/postings/batch", "/api/saved-jobs",
             "/internal/postings/shortlist", "/api/jobs/top-matches",
-            "/internal/profiles/{userId}", "/api/jobs/top-matches");
+            "/internal/profiles/{userId}", "/api/jobs/top-matches",
+            "/internal/users/{id}", "/api/jobs/top-matches");
 
     @LocalManagementPort
     private int managementPort;
@@ -59,7 +60,7 @@ class InternalCallsObservedIT extends MatchingTest {
                 .toList();
         CALLED_BY.keySet().forEach(route -> assertThat(counts)
                 .as(route)
-                .anyMatch(line -> line.contains("uri=\"" + route + "\"") && line.contains("status=\"200\"")));
+                .anyMatch(line -> line.contains("uri=\"" + route + "\"") && line.contains("status=\"2")));
     }
 
     @Test

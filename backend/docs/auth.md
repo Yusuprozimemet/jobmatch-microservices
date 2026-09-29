@@ -319,15 +319,15 @@ The gateway routes neither `/internal/**` nor the service key set, and the publi
 neither (`springdoc.paths-to-exclude`).
 
 **The deleted-user rule.** An access token outlives its user by up to 15 minutes (section 8). The
-monolith refuses that user because
-[`CurrentUserIdResolver`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/CurrentUserIdResolver.java)
-looks the user up by the token's email on every request (`SessionWithoutAUserIT`: 404 on saved
-jobs, 422 on matches). A service that trusts `sub` has no `users` table to look in, so before it
-acts for a user it asks identity, with its service token, `GET /internal/users/{id}`: `204` while
-the user exists, `404` once deleted. Every service that trusts `sub` does this. The answer is not
-cached: cached for N seconds, it lets a deleted user in for N seconds, and Phase 4 decides that
-with a measurement. Days 26–27 may replace the call with a record of deleted ids fed by
-`user.deleted`, once the bus exists.
+monolith refuses that user because `applications` reads it through
+[`CurrentUserIdResolver`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/CurrentUserIdResolver.java),
+which looks the user up by the token's email on every request (404 on saved jobs), and `matching`,
+since Day 41, through the existence call `GET /internal/users/{id}` (422 on matches). A service
+that trusts `sub` has no `users` table to look in, so before it acts for a user it asks identity,
+with its service token: `204` while the user exists, `404` once deleted. Every service that trusts
+`sub` does this. The answer is not cached: cached for N seconds, it lets a deleted user in for N
+seconds, and Phase 4 decides that with a measurement. Days 26–27 may replace the call with a
+record of deleted ids fed by `user.deleted`, once the bus exists.
 
 ## Logout
 
