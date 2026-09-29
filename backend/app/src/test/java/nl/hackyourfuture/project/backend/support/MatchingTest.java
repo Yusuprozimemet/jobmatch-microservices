@@ -1,5 +1,6 @@
 package nl.hackyourfuture.project.backend.support;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -40,6 +41,11 @@ public abstract class MatchingTest extends IntegrationTest {
 
     @BeforeEach
     void resetTheModel() {
+        StubLlm.instance().reset();
+    }
+
+    @AfterEach
+    void releaseTheModel() {
         StubLlm.instance().reset();
     }
 

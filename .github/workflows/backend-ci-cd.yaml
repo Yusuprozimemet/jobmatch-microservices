@@ -60,8 +60,9 @@ jobs:
 
       # The Day 1-4 suite, and the stale-cookie and refresh tests, again through the API gateway
       # (Day 15): the harness starts this image in front of the application and sends every
-      # request through it. The route-table self-test runs here too. In addition to the run above,
-      # never instead: only that one shows the backend still checks tokens itself.
+      # request through it. The route-table self-test runs here too, and Day 21's hung-model and
+      # tracing holds, which are about a request sent to the gateway. In addition to the run
+      # above, never instead: only that one shows the backend still checks tokens itself.
       - name: Build the gateway image
         run: docker build -t jobmatch-api-gateway:harness services/api-gateway
 
@@ -69,7 +70,7 @@ jobs:
         working-directory: ./backend
         run: >-
           ./mvnw -B verify -pl app -am -Dharness.gateway=true
-          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT'
+          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
   build:
