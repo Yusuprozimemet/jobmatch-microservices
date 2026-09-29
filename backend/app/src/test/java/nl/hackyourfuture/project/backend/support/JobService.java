@@ -49,7 +49,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>Its counts calls go to a relay in this JVM: one container serves every context, so its
  * applications URL names the relay, and {@link IntegrationTest} points the relay at the running
  * test's context. The relay only forwards: a failing stub behind it would open job-service's one
- * breaker for the rest of the run.
+ * breaker for the rest of the run. matching-service's container reaches identity through the same
+ * relay.
  */
 public final class JobService {
 
@@ -120,6 +121,12 @@ public final class JobService {
             throw new IllegalStateException("Could not sign a token as job-service", e);
         }
         return token.serialize();
+    }
+
+    /** The relay's port from this JVM, for exposing to containers that reach identity through it. */
+    static int relayPort() {
+        ensureStarted();
+        return relay.getAddress().getPort();
     }
 
     /**
