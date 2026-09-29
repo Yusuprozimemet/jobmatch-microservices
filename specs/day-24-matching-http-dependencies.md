@@ -26,7 +26,7 @@ fully independent.
 
 | Track | Owner | Work |
 |---|---|---|
-| A | | Measure; the profile cache if the measurement asks for it |
+| A | | Measure; the profile cache if the measurement asks for it; whether Day 41's "no retry" still holds over the network |
 | B | | Dependency cleanup + failure tests |
 
 ## Acceptance criteria
