@@ -105,6 +105,20 @@
 
   <section class="panel">
     <div class="panel-head">
+      <h2>Service boundaries</h2>
+      <p>The gap reads names; this reads the tree. For the four services in <code>plan.md</code> (identity, jobs, applications, matching, each with the monolith packages it takes over): the share of their main source lines that sits in its own directory under <code>services/</code> rather than in the monolith. It reaches 100% when the last service leaves.</p>
+    </div>
+    <div id="moved"></div>
+    <div class="finding" id="placed" style="margin-top:14px"></div>
+    <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Imports that cross a service</h2>
+      <p>Imports in main source where one service's packages reach into another's (<code>shared</code> and <code>config</code> belong to no service). The ArchUnit rules in <code>ModuleBoundariesTest</code> hold this at zero from Day 07; a rise means a rule no longer covers a crossing.</p>
+    </div>
+    <div id="crossings"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
       <h2>Where the corrections landed</h2>
       <p>Lines edited in each spec file (rows) by each merge (columns). The stepped line marks the day being worked on. Cells <em>below</em> it are edits to days not reached yet: what was learned today, rewriting the path ahead.</p>
     </div>
