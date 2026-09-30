@@ -20,3 +20,8 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["job-service:9090"]
+  # matching-service's actuator (Day 22; missing since Day 21 extracted it), on the same port number inside its container.
+  - job_name: jobmatch-matching-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["matching-service:9090"]

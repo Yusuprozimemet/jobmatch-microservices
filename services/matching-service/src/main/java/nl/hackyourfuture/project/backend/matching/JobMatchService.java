@@ -2,7 +2,8 @@ package nl.hackyourfuture.project.backend.matching;
 
 import nl.hackyourfuture.project.backend.shared.jobs.PostingShortlist;
 import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import nl.hackyourfuture.project.backend.matching.dto.JobMatchResponse;
 import nl.hackyourfuture.project.backend.shared.identity.ProfileDirectory;
 import nl.hackyourfuture.project.backend.shared.identity.ProfileSnapshot;
@@ -24,9 +25,8 @@ import java.util.UUID;
 // Ranks open postings against the user's profile in two steps:
 // 1. SQL narrows the mart down to a shortlist by city and exact skill overlap.
 // 2. The model re-ranks that shortlist, catching synonyms and seniority SQL can't.
-// Scores are saved to job_match_scores, so a restart doesn't lose them.
+// Scores are kept in the score store (DynamoDB), so a restart doesn't lose them.
 @Service
-@RequiredArgsConstructor
 public class JobMatchService {
 
     // The same floor the profile form enforces when saving, defined once in shared.
@@ -43,6 +43,24 @@ public class JobMatchService {
     private final JobMatchScoreRepository jobMatchScoreRepository;
     private final ProfileDirectory profileDirectory;
     private final MatchScorer matchScorer;
+    private final Counter hits;
+    private final Counter misses;
+
+    public JobMatchService(PostingShortlist postingShortlist, JobMatchScoreRepository jobMatchScoreRepository,
+                           ProfileDirectory profileDirectory, MatchScorer matchScorer, MeterRegistry registry) {
+        this.postingShortlist = postingShortlist;
+        this.jobMatchScoreRepository = jobMatchScoreRepository;
+        this.profileDirectory = profileDirectory;
+        this.matchScorer = matchScorer;
+        this.hits = Counter.builder("jobmatch.scores.lookups")
+                .description("Postings looked up in the score store, by whether a fresh score was found")
+                .tag("result", "hit")
+                .register(registry);
+        this.misses = Counter.builder("jobmatch.scores.lookups")
+                .description("Postings looked up in the score store, by whether a fresh score was found")
+                .tag("result", "miss")
+                .register(registry);
+    }
 
     public List<JobMatchResponse> getTopMatches(UUID userId) {
         ProfileSnapshot profile = profileDirectory.forUser(userId).orElseThrow(JobMatchService::noProfile);
@@ -84,6 +102,9 @@ public class JobMatchService {
         List<ShortlistedPosting> unscored = shortlist.stream()
                 .filter(row -> !scores.containsKey(row.postingId()))
                 .toList();
+        // One per posting looked up; a read that failed returned nothing, so it counts as misses.
+        hits.increment(scores.size());
+        misses.increment(unscored.size());
         if (unscored.isEmpty()) {
             return scores;
         }
