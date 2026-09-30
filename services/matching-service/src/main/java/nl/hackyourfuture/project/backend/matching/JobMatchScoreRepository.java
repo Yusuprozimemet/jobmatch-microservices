@@ -13,8 +13,7 @@ import java.util.stream.Collectors;
 
 // Stores what the model scored for a (skill set, posting) pair, so it's only asked once.
 // One row per posting, so a mostly-known shortlist only costs the new postings.
-// A stored score expires after the retention window - checked on every read, not just by
-// the cleanup job, so an old score is never served even if that job is late or not running.
+// A stored score expires after the retention window; every read checks freshness.
 @Slf4j
 @Repository
 public class JobMatchScoreRepository {
@@ -96,15 +95,5 @@ public class JobMatchScoreRepository {
             // Log the full exception, not just its message, so the real cause is visible later.
             log.warn("Could not store {} job match scores, they will be rescored later", scores.size(), e);
         }
-    }
-
-    // Deletes expired scores to free up space - findScores already skips them either way.
-    public int deleteExpired() {
-        return jdbcClient.sql("""
-                        DELETE FROM job_match_scores
-                        WHERE scored_at <= now() - make_interval(days => :retentionDays)
-                        """)
-                .param("retentionDays", retentionDays)
-                .update();
     }
 }
