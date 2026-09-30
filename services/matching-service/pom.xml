@@ -95,6 +95,12 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- @SpringBootTest swaps the tracer for a no-op one; the observed tests need the real one. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-micrometer-tracing-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<!-- The RestClient rule (Day 38), at the backend's version. -->
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
