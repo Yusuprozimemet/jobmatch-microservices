@@ -1,6 +1,8 @@
 package nl.hackyourfuture.project.backend.database;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.MatchingService;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -16,6 +18,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Day 12's {@code identity.refresh_tokens}, is recorded where only that module's login can write.
  */
 class ModuleMigrationsIT extends IntegrationTest {
+
+    // matching's history is written by matching-service's container since Day 21, into the same
+    // table: started here, so it exists whichever test ran first.
+    @BeforeAll
+    static void matchingServiceHasMigratedItsSchema() {
+        MatchingService.port();
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"identity", "applications", "matching"})

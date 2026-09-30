@@ -64,6 +64,7 @@ public final class Gateway {
                 .withImagePullPolicy(name -> false)
                 .withEnv("BACKEND_URL", "http://host.testcontainers.internal:" + applicationPort)
                 .withEnv("JOB_SERVICE_URL", insideContainer(Services.url(Services.JOB_SERVICE, applicationPort, serviceUrls)))
+                .withEnv("MATCHING_SERVICE_URL", insideContainer(Services.url(Services.MATCHING_SERVICE, applicationPort, serviceUrls)))
                 // The suite logs in from one address far more than ten times a minute.
                 .withEnv("RATE_LIMIT_AUTH_PER_MINUTE", "1000000")
                 .withExposedPorts(PORT, MANAGEMENT_PORT)

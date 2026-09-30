@@ -18,7 +18,6 @@ COPY pom.xml .
 COPY shared/pom.xml shared/
 COPY identity/pom.xml identity/
 COPY applications/pom.xml applications/
-COPY matching/pom.xml matching/
 COPY app/pom.xml app/
 RUN mvn -B -e dependency:go-offline
 

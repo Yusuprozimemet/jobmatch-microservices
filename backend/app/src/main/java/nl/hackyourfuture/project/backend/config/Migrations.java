@@ -19,7 +19,8 @@ import javax.sql.DataSource;
  *
  * <p>Each module instance baselines at version 0 on its first run, since its schema already holds
  * the tables the moves brought in, so the module's own V1 still runs. Day 12's
- * {@code identity.refresh_tokens} is the first. jobs has none: it owns no tables.
+ * {@code identity.refresh_tokens} is the first. jobs has none: it owns no tables. matching's
+ * migrations are applied by matching-service since Day 21.
  */
 @Configuration(proxyBeanMethods = false)
 class Migrations {
@@ -27,13 +28,11 @@ class Migrations {
     @Bean
     FlywayMigrationStrategy ownerThenModules(
             @Qualifier("identityDataSource") DataSource identity,
-            @Qualifier("applicationsDataSource") DataSource applications,
-            @Qualifier("matchingDataSource") DataSource matching) {
+            @Qualifier("applicationsDataSource") DataSource applications) {
         return owner -> {
             owner.migrate();
             migrate("identity", identity);
             migrate("applications", applications);
-            migrate("matching", matching);
         };
     }
 
