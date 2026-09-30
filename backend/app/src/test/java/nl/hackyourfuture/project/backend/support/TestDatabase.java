@@ -5,8 +5,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import java.util.List;
 
 /**
- * Puts the database back to its starting state between tests: empty module schemas in project_db
- * and the baseline mart in jobs_db.
+ * Puts the database back to its starting state between tests: empty module schemas in project_db,
+ * the baseline mart in jobs_db, and the DynamoDB score table.
  *
  * <p>Truncate rather than roll back a transaction. The tests drive the application over HTTP,
  * so the writes happen on the server's own connections and there is no test-side transaction
@@ -49,6 +49,7 @@ public final class TestDatabase {
         }
         JOBS_JDBC.sql("TRUNCATE TABLE " + String.join(", ", MART_TABLES)).update();
         PostgresContainer.executeInJobs(SEED);
+        ScoreTable.empty();
     }
 
     /**

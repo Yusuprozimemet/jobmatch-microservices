@@ -11,7 +11,8 @@ import java.net.URI;
 /**
  * matching-service in a container, one for the whole run (Day 21), started on first use from an image
  * built beforehand; signs with {@link MatchingServiceKey}'s key; reaches identity through job-service's
- * relay, job-service at its container, the model at {@link StubLlm}; Ryuk removes it.
+ * relay, job-service at its container, the model at {@link StubLlm}; reads scores from {@link ScoreTable}
+ * (Day 22); Ryuk removes it.
  */
 public final class MatchingService {
 
@@ -54,6 +55,9 @@ public final class MatchingService {
         if (container != null) {
             return;
         }
+        // Ensure ScoreTable is started so its network is ready
+        ScoreTable.client();
+
         int postgresPort = PostgresContainer.instance().getMappedPort(5432);
         int jobServicePort = JobService.port();
         int jobServiceRelayPort = JobService.relayPort();
@@ -67,6 +71,7 @@ public final class MatchingService {
                 // Readable by the image's user 1000: a temp file on Linux is 0600, and the copy is root's.
                 .withCopyFileToContainer(MountableFile.forHostPath(MatchingServiceKey.pemPath(), 0444),
                         "/run/keys/matching-service.pem")
+                .withNetwork(ScoreTable.network())
                 .withEnv("SERVICE_JWT_PRIVATE_KEY_FILE", "/run/keys/matching-service.pem")
                 .withEnv("INTERNAL_IDENTITY_URL",
                         "http://host.testcontainers.internal:" + jobServiceRelayPort)
@@ -80,6 +85,12 @@ public final class MatchingService {
                 .withEnv("DB_NAME", PostgresContainer.instance().getDatabaseName())
                 .withEnv("DB_MATCHING_USER", "matching_user")
                 .withEnv("DB_MATCHING_PASSWORD", PostgresContainer.rolePassword())
+                // DynamoDB scores (Day 22): the table is the harness's, so create is false
+                .withEnv("SCORES_DYNAMODB_ENDPOINT", ScoreTable.NETWORK_ENDPOINT)
+                .withEnv("AWS_REGION", "eu-west-1")
+                .withEnv("AWS_ACCESS_KEY_ID", "dummy")
+                .withEnv("AWS_SECRET_ACCESS_KEY", "dummy")
+                .withEnv("SCORES_CREATE_TABLE", "false")
                 // One line per request, method and path, which matching-service's log pattern prefixes
                 // with [traceId,spanId]: what a test reads to see which trace a request arrived under.
                 // As JSON, not LOGGING_LEVEL_*: an environment variable's name is lowercased, and

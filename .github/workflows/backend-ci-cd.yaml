@@ -59,6 +59,10 @@ jobs:
       - name: Build the matching-service image
         run: docker build -t jobmatch-matching-service:harness services/matching-service
 
+      # Pull the DynamoDB emulator (Day 22): the harness's score table.
+      - name: Pull the DynamoDB emulator
+        run: docker pull amazon/dynamodb-local:3.3.1
+
       # `verify`, not `test`: the integration tests are the safety net for the microservices
       # split, so a pull request that breaks one has to fail here. They need a Docker daemon
       # for Testcontainers, which ubuntu-latest has.

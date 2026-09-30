@@ -35,6 +35,10 @@ jobs:
       - name: Run Checkstyle
         run: backend/mvnw -B -f services/matching-service/pom.xml checkstyle:check
 
+      # Pull the DynamoDB emulator (Day 22): the service's test base's container.
+      - name: Pull the DynamoDB emulator
+        run: docker pull amazon/dynamodb-local:3.3.1
+
       - name: Run tests
         run: backend/mvnw -B -f services/matching-service/pom.xml verify
 
