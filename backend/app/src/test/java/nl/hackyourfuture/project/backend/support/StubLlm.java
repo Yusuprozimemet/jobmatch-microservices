@@ -69,7 +69,7 @@ public final class StubLlm {
         return INSTANCE;
     }
 
-    /** Point {@code app.llm.base-url} here. */
+    /** What matching-service's model URL is set to ({@link MatchingService}). */
     public String baseUrl() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }

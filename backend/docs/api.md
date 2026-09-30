@@ -445,7 +445,8 @@ The shortlist comes from jobs' internal route (§13). If it cannot be reached (c
    for `0–100` and a one-line reason per job. The list is then sorted by `score`, ties broken by
    `matchedCount`, and cut to **25**.
 
-**The model is optional.** With no `LLM_API_KEY` the app logs a warning at startup and every row
+**The model is optional.** With no `LLM_API_KEY` matching-service (which serves this route since
+Day 21) logs a warning at startup and every row
 comes back with `aiScored: false`, `reason: null` and `score` falling back to `matchPercent` — the
 skill-overlap order, still ordered and still useful. Any failure degrades the same way: a timeout, a
 provider rejecting `reasoning_effort`, a reply with no JSON array in it. `MatchScorer.score` never

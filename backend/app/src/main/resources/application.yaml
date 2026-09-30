@@ -73,23 +73,10 @@ app:
     terms-required-redirect: ${OAUTH2_TERMS_REDIRECT:${app.base-url}/accept-terms}
 
   # Where the internal clients send their calls (Day 19): empty is this process; compose points
-  # jobs-url at job-service (Day 17), and Day 21 points identity-url at identity.
+  # jobs-url at job-service (Day 17). Top matches, the only caller of identity's routes, left with
+  # matching-service on Day 21.
   internal:
     jobs-url: ${INTERNAL_JOBS_URL:}
-    identity-url: ${INTERNAL_IDENTITY_URL:}
-
-  llm:
-    api-key: ${LLM_API_KEY:}
-    base-url: ${LLM_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
-    model: ${LLM_MODEL:gemini-flash-lite-latest}
-    timeout-seconds: ${LLM_TIMEOUT_SECONDS:20}
-    # Sent as reasoning_effort - cuts response time for models that reason by default.
-    # Leave empty for a provider that rejects the field.
-    reasoning-effort: ${LLM_REASONING_EFFORT:low}
-    # How long a stored score stays valid. Reads already skip expired ones; the hourly
-    # purge just frees the space.
-    score-retention-days: ${LLM_SCORE_RETENTION_DAYS:1}
-    score-purge-cron: ${LLM_SCORE_PURGE_CRON:0 0 * * * *}
 
 # API Docs
 springdoc:
