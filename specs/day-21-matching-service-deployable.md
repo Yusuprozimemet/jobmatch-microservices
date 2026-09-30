@@ -140,42 +140,73 @@ If E1a passes 400 it carries an `Oversized:` line with the reason. Between E1a a
 still routes top-matches to the backend, which no longer serves it; E2 follows E1b directly.
 
 ## Acceptance criteria
-- [ ] **new** — in the harness, `/api/jobs/top-matches` is served by the matching-service
+- [x] **new** — in the harness, `/api/jobs/top-matches` is served by the matching-service
       container: `ServiceRoutingIT` names it as the owner, and a request reaches it. Red today:
       `Services.owner("/api/jobs/top-matches")` is empty (the monolith).
-- [ ] **hold** — `MatchTopMatchesIT`, `MatchRankingIT`, `MatchScoreCacheIT`,
+      #224: `support/ServiceRoutingIT.topMatchesReachesTheMatchingService`, with a recording stub
+      of its own for matching-service; top-matches reaches it and not job-service's stub. #224
+      broke criteria 2, 4 and 8 but not this one, so it was first seen red at the close:
+      on e596a1e, with matching-service's entry removed from `Services`,
+      `topMatchesReachesTheMatchingService` failed, expected `Optional[matching-service]` but
+      was `Optional.empty`; the other three passed. Reverted.
+- [x] **hold** — `MatchTopMatchesIT`, `MatchRankingIT`, `MatchScoreCacheIT`,
       `SessionWithoutAUserIT` and `JobRoutesIT` pass unedited, directly and through the gateway
-      (`-Dharness.gateway=true`), with top-matches in the container. Broken on purpose: <Track
-      E1a: the container's jobs URL at a closed port; what failed>.
-- [ ] **new** — with `StubLlm` hanging and 10 top-matches requests in flight, an 11th answers
+      (`-Dharness.gateway=true`), with top-matches in the container. Broken on purpose in Track
+      E1a (#224): the container's jobs URL at a closed port (port 1 on the host), and 19 of 31
+      failed: `MatchRankingIT` 4 and 3 errors, `MatchScoreCacheIT` 6,
+      `MatchTopMatchesIT` 6 (e.g. `sendsTheProfileSkillsAndTheShortlistToTheModel`, "Expecting
+      actual not to be null"). `JobRoutesIT` and `SessionWithoutAUserIT` stayed green: they stop
+      at 401 or 422, before the shortlist. `contract/` is unchanged since f776017.
+- [x] **new** — with `StubLlm` hanging and 10 top-matches requests in flight, an 11th answers
       within 1 s with `aiScored` false on every row. Red today: the auditor's run at f776017
       took 20.2 s. The test lands in E3 with the bulkhead.
-- [ ] **hold** — a user whose `sub` identity does not know gets 422 from top-matches, and the
+      #227: `HungModelIT` in the harness, `BulkheadHungModelTest` and `BulkheadConfigTest` in the
+      service's module. With `max-concurrent-calls: 11`, the eleventh call took 15.0 s against
+      1 s, and `BulkheadConfigTest` expected 10 but was 11.
+- [x] **hold** — a user whose `sub` identity does not know gets 422 from top-matches, and the
       existence call was made: `aUserIdentityDoesNotKnowIsA422` passes, in the service's module
-      after E1a. Broken on purpose: <Track E1a: `UserExistenceClient` answering true for every id;
-      what it reported>.
-- [ ] **hold** — with `StubLlm` hanging and 10 top-matches requests in flight, `GET /api/jobs`
+      after E1a. Broken on purpose in Track E1a (#224): `UserExistenceClient` answering true for
+      every id, and `aUserIdentityDoesNotKnowIsA422` failed at its 422 assertion, and
+      `anUnreachableIdentityIsA503` with it.
+- [x] **hold** — with `StubLlm` hanging and 10 top-matches requests in flight, `GET /api/jobs`
       (job-service) and `GET /api/profile` (the monolith) answer within 1 s. Isolated since Day
       17 for job search and by virtual threads for the rest; this keeps it so. Broken on
       purpose: the model call and the profile read on one shared ten-thread executor (Track 0,
       #209): the ten hung calls fill it and `GET /api/profile` took 19.7 s against 1 s.
-- [ ] **hold** — top-matches answers within 30 s with `StubLlm` hanging, the gateway's read.
-      Broken on purpose: <Track 0: the model's read timeout at 40 s; what it reported>.
-- [ ] **hold** — a request sent to the gateway with a `traceparent` reaches `StubLlm` and job-
-      service's shortlist route with the same trace id. Broken on purpose: <Track 0: the
-      propagator removed; what it reported>.
-- [ ] **hold** — `TopMatchesTrustTheSubjectIT` passes unedited against the container. Broken on
-      purpose: <Track E1a: the service's token check leaving the details unset; what it
-      reported>.
-- [ ] **new** — `git grep -n "LLM_" -- backend/app/src/main backend/.env.example
+      #209: `HungModelIT`, seen red with that break, direct and, since #209, in CI's gateway
+      run.
+- [x] **hold** — top-matches answers within 30 s with `StubLlm` hanging, the gateway's read.
+      Broken on purpose in Track 0 (#209): the model's read timeout at 40 s, and `HungModelIT`
+      failed: top-matches took 42.4 s, limit 30 s.
+- [x] **hold** — a request sent to the gateway with a `traceparent` reaches `StubLlm` and job-
+      service's shortlist route with the same trace id. Broken on purpose in Track 0 (#209): the
+      W3C propagator bean removed, and `TopMatchesTracedIT` failed: the model received no
+      `traceparent`.
+      The test reads what `StubLlm` recorded and job-service's own log line, not local spans,
+      so it passed unedited after E1a moved matching out.
+- [x] **hold** — `TopMatchesTrustTheSubjectIT` passes unedited against the container. Broken on
+      purpose in Track E1a (#224): `UserTokens.subjectPrincipal` without
+      `setDetails(new TokenSubject(...))`. It failed, expected 200 but was **401**, not the 422
+      the spec's reasoning implied: without the details the service refuses the request.
+      **Not met as written: the test was edited**, one word, `direct()` to `anonymous()`
+      (#224, the maintainer's call). `direct()` is always the monolith (`IntegrationTest:125`),
+      which answered 404 once top-matches left it; see the Notes.
+- [x] **new** — `git grep -n "LLM_" -- backend/app/src/main backend/.env.example
       services/api-gateway/src/main services/job-service/src/main` finds nothing. Red today:
       finds 13, 6 in `backend/.env.example` and 7 in the backend's `application.yaml`. The
       harness (`MatchingTest`, `StubLlm`) and the docs keep the name; they configure and
       describe matching-service.
-- [ ] **new** — `docker compose config --format json` lists `matching-service` with no `ports`
+      #228 (with #224 and #226). At the close, on e596a1e: nothing, exit 1. Seen red by the
+      spec-auditor on f776017: 13 lines.
+- [x] **new** — `docker compose config --format json` lists `matching-service` with no `ports`
       and `LLM_API_KEY` in its environment, and no other service has `LLM_API_KEY`. Red today:
       no `matching-service`, and the check below exits with a `KeyError`.
-- [ ] **new** — `test ! -d backend/matching` succeeds. Red today: the module exists.
+      #226. At the close, on e596a1e: `ok`. Seen red in #226: the check exited 1 on `main` (no
+      `LLM_API_KEY` on matching-service) and 1 with the key also given to the backend (others:
+      `['backend']`). End to end, the gateway without `MATCHING_SERVICE_URL` answered 404 from the
+      backend.
+- [x] **new** — `test ! -d backend/matching` succeeds. Red today: the module exists.
+      #224, by `git mv`. At the close, on e596a1e: `gone`. Seen red on every commit before #224.
 
 ## Verify
 ```bash
@@ -251,3 +282,76 @@ test ! -d backend/matching && echo gone
   kept `ProfileDirectory` in-process, measured a path Day 17 had moved, and named no `shared`
   copies, key, Flyway, scheduling or harness entry. Rewritten in #200, with Day 41 split out of
   Day 24.
+- **Four departures from the spec, each recorded in its PR; the first three were the maintainer's call:**
+  - **Criterion 8's test was edited** (#224), one word. `TopMatchesTrustTheSubjectIT` asked
+    through `direct()`, which is always the monolith (`IntegrationTest:125`): once top-matches
+    left, it got 404. The spec's premise, "`ApiClient`, which reaches the container", was
+    wrong. Changing `direct()` itself would have moved about 40 calls that rely on it
+    (`JobsLeftTheMonolithIT` among them), so the test asks through `anonymous()`, which routes
+    by `Services`, direct or through the gateway. Not `contract/`, so not a stop-and-ask.
+  - **User tokens: cookie only** (#213). "From the cookie and then the header, as the monolith
+    does" was false: the monolith (`cookieResolver`) and the gateway (`verifiedCookie`) read
+    only the cookie, and the gateway forwards it. `UserTokenTest.theAuthorizationHeaderIsNotRead`
+    pins it (a Bearer token gets 401; with the header read, 200).
+  - **No `InternalCallers` and no `/internal/**` chain** (#215, #216). matching-service serves
+    no internal route, and copying job-service's would have added a required
+    `BACKEND_KEY_SET_URL` that guards nothing. The user chain answers 401 to any path without a
+    user token.
+  - **`ObservedContainers` does not collect spans** (#221): it records database URLs. The
+    container logs `[traceId,spanId]` per request and has its own `logs()`, as `JobService`
+    does.
+- **Four tracks split for the 400-line gate,** A1 (#212, #213), B1 (#215, #216), B2 (#217,
+  #218) and E1 (#224, #225), and B3 (#219, #223) so each half reviewed on its own; that B3b was
+  untaken was only found starting E1 (#222). **E1a used an `Oversized:` line** at 950 changed lines by `gh` (945 in the
+  PR), as the spec allowed: the first since #3, before Day 3. Its ~460 deleted lines are the
+  monolith's copies; nothing in it could land separately and keep `main` green.
+- **Defect** — found: review · cause: implementation · seven tracks' first drafts, all by the
+  implementer on Haiku: a `StubLlm` whose hang survived `reset()` and a missing half of
+  criterion 7 reported as "no departures" (#209); a dead loop and a stale comment (#210); tabs,
+  missing tests and a weak Prometheus check (#212); the principal set to the `sub` instead of
+  the email and a `@Profile("test")` route (#213); a line parser that broke on blank lines and a
+  non-atomic `volatile` counter, introduced squeezing under 400 lines (#223); `support/
+  MatchingService` rewritten without `LLM_BASE_URL`/`LLM_API_KEY`, so every model assertion
+  would have passed testing nothing, and database cases removed instead of made deterministic
+  (#224); a service test named `*IT`, which the service module never runs, reported as passing
+  (#227, found because it had no surefire report).
+- **Defect** — found: self · cause: process · three reviewer mistakes in the main session:
+  `git checkout --` after `git add -N` emptied `ServiceTokens.java` (#215); a break's `sed`
+  stripped a comma and corrupted the SQL (#219); `git checkout docker-compose.yml`, reverting
+  one break, discarded the whole track (#226). Each was redone before the PR. And #225 cut a
+  stub profile to two skills, below the five matching needs, and got 422.
+- **Defect** — found: break on purpose · cause: spec · two breaks reported other than the spec
+  implied: criterion 8's unset details gave 401, not 422 (#224); C1's first break renamed only
+  the trust entry's name, not its key-set URL, and job-service failed to start (#220).
+- **Defect** — found: close · cause: spec · criterion 1 had a test but no break in any track;
+  it was first seen red at the close. The close's first try at that break left one parenthesis
+  too many: the class did not compile and all four tests errored ("Unresolved compilation
+  problem"), which proves nothing. Redone with `clean`; that run is the one recorded above.
+- **The close's Verify, on e596a1e:** the three harness images rebuilt; `clean verify` 425
+  tests, 0 failures, 0 errors, 1 skipped, counted from the reports after deleting them;
+  `checkstyle:check` 0 violations; criteria 9, 10 and 11's commands as recorded above. The
+  gateway run and the two service modules were not rerun at the close: #228 ran them on the
+  same code (425 through the gateway, only `ServiceJwksIT` red; job-service 55), and #227
+  matching-service (63), and nothing but #229's tooling merged since.
+- **Defect** — found: dashboard · cause: tooling · `spec-drift.py` lost tests that moved into
+  a service under a new name; fixed in #229, outside the tracks.
+- **Environment:** "remaining connection slots are reserved for roles with the SUPERUSER
+  attribute" from the harness Postgres in local runs of #215, #216, #217, #219 and #221; each
+  passed on rerun. The harness now runs a third container on the same Postgres.
+- **Found, not owned:** `ServiceJwksIT` fails through the gateway (3 failures, 1 error): the
+  gateway publishes `/.well-known/jwks.json` but not the service key set. It fails the same on
+  695adf9, before Track F, and CI's gateway run leaves the class out. No day owns it.
+- **The estimate:** 15 PRs expected (13 tracks, a spec change, the close). Took 18 track PRs
+  (#209, #210, #212–#221, #223–#228), 3 spec changes (#206, #211, #222) and this close, 22,
+  besides #200 (the seam-first rewrite, before Day 41) and #229 (tooling). The tracks came to
+  5,252 changed lines against the table's 2,900–4,240; E1a's 950 is most of the overrun. Day
+  17, the other extraction, took 14 track PRs.
+- **Hand-offs this day leaves:**
+  - **Day 22:** matching-service's NoSQL store.
+  - **Day 23:** `JobMatchScoreCleanup`, `SchedulingConfig`, the `matching` table, the
+    service's datasource and `db/matching`, and the harness's `matching` role and schema
+    (`PostgresContainer` still creates them for the container). Day 24's "no datasource"
+    criterion holds only after.
+  - **Day 24:** the profile cache, retry, and whether to cache the existence answer (Day 39's
+    reason against).
+  - **Any day that touches the gateway's key sets:** `ServiceJwksIT` through the gateway.
