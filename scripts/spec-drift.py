@@ -435,10 +435,40 @@ def in_evidence_format(crit):
     return any(c["kind"] for c in crit)
 
 
-def test_state(tests, sha, blobs):
+def moves(snaps):
+    """The test classes that moved under a new name, and the merge each move completed at, as
+    (index, old, new). A test moved into a service ends in Test, not IT (surefire runs it there),
+    and is rewritten for that service's harness, too much for git to call it a rename: Day 21
+    moved PostingShortlistUnavailableIT to matching-service at 27% alike. So a move is told by
+    name: a class leaves the tree, and a class of the same stem arrives in that merge or a later
+    one. Day 17 deleted SavedJobCountsUnavailableIT in #174, and its Test arrived in #180. Only a
+    test moves: StubLlm leaving and StubLlmTest arriving is a helper gone and a test of it."""
+    at = {s["sha"]: i for i, s in enumerate(snaps)}
+    added, deleted, i = {}, {}, None
+    for line in run("git", "log", "--first-parent", "--diff-merges=first-parent", "--no-renames", "--reverse",
+                    "--name-status", "--format=@%h", snaps[-1]["sha"], "--", "*.java", "*.kt").splitlines():
+        if line.startswith("@"):
+            i = at.get(line[1:])
+        elif line[:1] in ("A", "D") and i is not None:
+            name = os.path.splitext(os.path.basename(line.split("\t")[-1]))[0]
+            if line[0] == "A":
+                added.setdefault(name, i)
+            else:
+                deleted[name] = i
+    stem = lambda n: re.sub(r"(?:IT|Tests?)$", "", n)
+    out = []
+    for old, gone in ((n, k) for n, k in deleted.items() if stem(n) != n):
+        new = min(((k, n) for n, k in added.items() if n != old and stem(n) == stem(old) and k >= gone), default=None)
+        if new:
+            out.append((new[0], old, new[1]))
+    return out
+
+
+def test_state(tests, sha, blobs, moved=None):
     """Where each named test stands at a commit: present, skippable (a class or file CI can skip,
     as GatewayHarnessIT is opt-in), or missing. CI runs every test that is present, so a hold
-    goes quiet only by its test leaving the tree or being switched off."""
+    goes quiet only by its test leaving the tree or being switched off. A class that has left
+    the tree is looked for under the name it moved to by then (moved: old to new)."""
     files = collections.defaultdict(list)
     for path in run("git", "ls-tree", "-r", "--name-only", sha).splitlines():
         if path.endswith((".java", ".kt")):
@@ -446,6 +476,10 @@ def test_state(tests, sha, blobs):
     out = {}
     for t in tests:
         cls, _, member = t.partition(".")
+        seen = {cls}
+        while cls not in files and (moved or {}).get(cls) not in seen | {None}:
+            cls = moved[cls]
+            seen.add(cls)
         texts = [blobs.read(sha, p) for p in files.get(cls, [])]
         if not any(not member or re.search(rf"\b{member}\b", x) for x in texts):
             out[t] = "missing"
@@ -500,7 +534,7 @@ def evidence(days, snaps, blobs):
     added to" another), and a day can rewrite a test it names (Day 11), and neither is a loss."""
     at = {s["pr"]: i for i, s in enumerate(snaps) if s["pr"]}
     named = {t for d in days for c in d["evidence"] for t in c["tests"]}
-    now = test_state(named, snaps[-1]["sha"], blobs)
+    now = test_state(named, snaps[-1]["sha"], blobs, {old: new for _, old, new in moves(snaps)})
     for d in days:
         ended = sorted(at[p["number"]] for p in d["prs"] if p["number"] in at)
         if d["status"] not in FINISHED or not ended:
@@ -516,9 +550,10 @@ def evidence(days, snaps, blobs):
 def evidence_history(rows, days, snaps, blobs):
     """At each merge, where the tests of the days finished by then stand: the check that a hold's
     test has not left the tree or been switched off, merge by merge, as CI cannot see it."""
+    moved = moves(snaps)
     for i, (r, s) in enumerate(zip(rows, snaps)):
         names = {t for d in days if d.get("ended_at", len(snaps)) <= i for c in d["evidence"] for t in c["tests"]}
-        states = list(test_state(names, s["sha"], blobs).values())
+        states = list(test_state(names, s["sha"], blobs, {old: new for k, old, new in moved if k <= i}).values())
         r["evidence"] = {k: states.count(k) for k in ("present", "skippable", "missing")} if names else None
 
 

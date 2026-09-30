@@ -210,6 +210,37 @@ class EvidenceTest(unittest.TestCase):
         self.repo.snaps.append(dict(self.repo.snaps[-1], sha=self.repo.git("rev-parse", "--short", "HEAD").strip()))
         self.assertEqual(set(self.state()[0]["tests"].values()), {"missing"})
 
+    def test_a_test_moved_under_a_new_name_is_followed_from_the_merge_it_arrives(self):
+        # Day 17: SavedJobCountsUnavailableIT left in #174, and its Test arrived in #180. A helper
+        # leaving as a test of its name arrives is not a move: only tests are followed.
+        self.repo.merge({"src/Stub.java": "class Stub {}\n"})
+        self.repo.git("rm", "-q", "src/FooIT.java", "src/Stub.java")
+        self.repo.merge({"src/Other.java": "class Other {}\n"})
+        self.repo.merge({"svc/FooTest.java": "class FooTest { void refuses() {} void saves() {} }\n",
+                         "svc/StubTest.java": "class StubTest {}\n"})
+        self.assertEqual(self.repo.inside(lambda blobs: sd.moves(self.repo.snaps)), [(4, "FooIT", "FooTest")])
+        self.assertEqual(self.state()[1]["tests"], {"FooIT": "present", "FooIT.saves": "present"})
+
+    def test_a_class_of_the_same_stem_there_before_the_test_left_is_not_where_it_went(self):
+        self.repo.merge({"svc/FooTest.java": "class FooTest { void refuses() {} void saves() {} }\n"})
+        self.repo.git("rm", "-q", "src/FooIT.java")
+        self.repo.merge({"src/Other.java": "class Other {}\n"})
+        self.assertEqual(self.repo.inside(lambda blobs: sd.moves(self.repo.snaps)), [])
+        self.assertEqual(set(self.state()[1]["tests"].values()), {"missing"})
+
+    def test_the_history_counts_a_moved_test_missing_until_it_arrives(self):
+        days = [dict(day=1, status="done", prs=[dict(number=1)], evidence=sd.criteria(CRITERIA))]
+        self.repo.git("rm", "-q", "src/FooIT.java")
+        self.repo.merge({"src/Other.java": "class Other {}\n"})
+        self.repo.merge({"svc/FooTest.java": "class FooTest { void refuses() {} void saves() {} }\n"})
+        rows = [{} for _ in self.repo.snaps]
+        self.repo.inside(lambda blobs: sd.evidence_history(rows, sd.evidence(days, self.repo.snaps, blobs),
+                                                           self.repo.snaps, blobs))
+        self.assertEqual([r["evidence"] for r in rows][1:], [
+            dict(present=3, skippable=0, missing=0),
+            dict(present=0, skippable=0, missing=3),
+            dict(present=3, skippable=0, missing=0)])
+
 
     def test_the_history_starts_when_the_day_ends_and_shows_the_merge_a_test_left(self):
         self.repo.merge({"src/FooIT.java": "class FooIT { void refuses() {} }\n"})
