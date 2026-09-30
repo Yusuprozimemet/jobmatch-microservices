@@ -128,7 +128,7 @@ services:
       INTERNAL_IDENTITY_URL: http://backend:8080
       INTERNAL_JOBS_URL: http://job-service:8080
       # The model call (Day 21): only this service has the key. With no key top-matches ranks by
-      # skill overlap. LLM_TIMEOUT_SECONDS is left to the service's 15 s, which keeps a request
+      # skill overlap. LLM_TIMEOUT_SECONDS is left to the service's 13 s, which keeps a request
       # under the gateway's 30 s read.
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}

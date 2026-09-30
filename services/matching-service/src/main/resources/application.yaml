@@ -44,14 +44,24 @@ app:
   # no default; it does not start without one.
   service-jwt:
     private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
+  # The score store (Day 22). The endpoint is blank on AWS and the emulator's URL elsewhere;
+  # create-table is for compose and tests (production's table is Terraform's).
+  scores:
+    endpoint: ${SCORES_DYNAMODB_ENDPOINT:}
+    region: ${AWS_REGION:eu-west-1}
+    table: ${SCORES_TABLE:job_match_scores}
+    create-table: ${SCORES_CREATE_TABLE:false}
+    # The whole call, retries included (one read and two writes per request).
+    api-call-timeout: 500ms
   # The model call: the gateway reads for 30 s; top-matches makes three internal calls in a row
-  # (existence, profile, shortlist), each 1 s connect and 2 s read, then the model call, 5 s
-  # connect and this read: 9 + 5 + 15 = 29 s. The monolith's 20 made 34 s.
+  # (existence, profile, shortlist), each 1 s connect and 2 s read, one score read at 0.5 s, the
+  # model call 5 s connect and this read, two score writes at 0.5 s each: 9 + 0.5 + 5 + 13 + 1 = 28.5 s.
+  # The monolith's 20 made 34 s.
   llm:
     api-key: ${LLM_API_KEY:}
     base-url: ${LLM_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
     model: ${LLM_MODEL:gemini-flash-lite-latest}
-    timeout-seconds: ${LLM_TIMEOUT_SECONDS:15}
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:13}
     # Sent as reasoning_effort - cuts response time for models that reason by default.
     # Leave empty for a provider that rejects the field.
     reasoning-effort: ${LLM_REASONING_EFFORT:low}

@@ -38,11 +38,18 @@ class ConfigurationTest {
                         .isEqualTo(new InternalUrls("http://identity:8080", "http://jobs:8080")));
     }
 
-    /** 9 s of internal calls and 5 s to connect to the model leave 15 s under the gateway's 30 s read. */
+    /** 9 s of internal calls, a score read, 5 s to connect to the model, 13 s to read and two score writes: 28.5 s of the gateway's 30. */
     @Test
-    void theModelsReadIsFifteenSeconds() {
+    void theModelsReadIsThirteenSeconds() {
         context.withPropertyValues("app.internal.identity-url=x", "app.internal.jobs-url=x")
-                .run(started -> assertThat(started.getEnvironment().getProperty("app.llm.timeout-seconds")).isEqualTo("15"));
+                .run(started -> assertThat(started.getEnvironment().getProperty("app.llm.timeout-seconds")).isEqualTo("13"));
+    }
+
+    /** A score store call, retries included, is half a second of that sum, three times a request (Day 22). */
+    @Test
+    void theStoresApiCallTimeoutIsHalfASecond() {
+        context.withPropertyValues("app.internal.identity-url=x", "app.internal.jobs-url=x")
+                .run(started -> assertThat(started.getEnvironment().getProperty("app.scores.api-call-timeout")).isEqualTo("500ms"));
     }
 
     @EnableConfigurationProperties(InternalUrls.class)
