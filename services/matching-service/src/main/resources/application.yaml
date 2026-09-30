@@ -120,3 +120,10 @@ resilience4j:
         base-config: internal
       postingShortlist:
         base-config: internal
+  # The model call's bulkhead (Day 21): ten calls at most, none waiting; a full bulkhead answers
+  # in skill-overlap order.
+  bulkhead:
+    instances:
+      modelCall:
+        max-concurrent-calls: 10
+        max-wait-duration: 0ms
