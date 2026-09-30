@@ -38,7 +38,6 @@ class ModuleBoundariesTest {
 
     private static final String IDENTITY = "..backend.identity..";
     private static final String APPLICATIONS = "..backend.applications..";
-    private static final String MATCHING = "..backend.matching..";
     private static final String APP = "..backend.config..";
 
     // Worded differently from the enforcer's message on purpose: when a build fails, which of
@@ -50,14 +49,14 @@ class ModuleBoundariesTest {
     @ArchTest
     static final ArchRule identityKeepsToItself = noClasses()
             .that().resideInAPackage(IDENTITY)
-            .should().dependOnClassesThat().resideInAnyPackage(APPLICATIONS, MATCHING)
+            .should().dependOnClassesThat().resideInAnyPackage(APPLICATIONS)
             .because(WHY);
 
     /** The one Day 09 will be tested by: applications must stop reading postings. */
     @ArchTest
     static final ArchRule applicationsKeepsToItself = noClasses()
             .that().resideInAPackage(APPLICATIONS)
-            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY, MATCHING)
+            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY)
             .because(WHY);
 
     /**
@@ -69,7 +68,7 @@ class ModuleBoundariesTest {
     static final ArchRule sharedDependsOnNobody = noClasses()
             .that().resideInAPackage("..backend.shared..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage(IDENTITY, APPLICATIONS, MATCHING, APP)
+            .resideInAnyPackage(IDENTITY, APPLICATIONS, APP)
             .because("shared is depended on by everything, so anything it depends on is shared too");
 
     /**
@@ -78,7 +77,7 @@ class ModuleBoundariesTest {
      */
     @ArchTest
     static final ArchRule nobodyDependsOnTheAssembly = noClasses()
-            .that().resideInAnyPackage(IDENTITY, APPLICATIONS, MATCHING, "..backend.shared..")
+            .that().resideInAnyPackage(IDENTITY, APPLICATIONS, "..backend.shared..")
             .should().dependOnClassesThat().resideInAPackage(APP)
             .because("app assembles the modules; a module that knows about the assembly is not a module");
 
@@ -86,7 +85,9 @@ class ModuleBoundariesTest {
      * A {@code RestClient} comes from the builder Spring injects, which carries the observation
      * registry. One built by {@code RestClient.builder()} or {@code RestClient.create()} makes
      * calls that no metric counts and no trace shows (Day 38): the LLM call was one, and the
-     * clients Days 19, 21 and 24 add between services would be the next.
+     * clients Days 19, 21 and 24 add between services would be the next. The matching-service
+     * and job-service modules carry the same rule in their own RestClientRuleTest classes,
+     * since this one analyses the monolith's classes only.
      */
     @ArchTest
     static final ArchRule restClientsComeFromSpring = noClasses()

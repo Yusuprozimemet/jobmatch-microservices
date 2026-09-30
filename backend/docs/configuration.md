@@ -37,10 +37,11 @@ yourself — `set -a; source .env; set +a`, an IDE plugin, or `--env-file` — o
 in the run configuration.
 
 Under compose, the backend gets exactly what its `environment:` block names and nothing else. It
-does not name `GOOGLE_CLIENT_ID`, `LLM_API_KEY` or the mail settings, so the compose stack runs
-with Google sign-in off (its routes are 404), overlap-only matching and no reset emails — see
+does not name `GOOGLE_CLIENT_ID` or the mail settings, so the compose stack runs with Google
+sign-in off (its routes are 404) and no reset emails — see
 [section 7](#7-what-degrades-without-which-key). Run the backend by hand with `backend/.env` for
-those.
+those. The model's key is matching-service's alone since Day 21: compose passes `LLM_API_KEY` from
+the root `.env` to it and to nothing else, and without it matching ranks by skill overlap.
 
 ---
 
@@ -52,13 +53,18 @@ flowchart LR
     FE -->|"/api/* rewritten to<br/>BACKEND_API_URL"| GW["api-gateway<br/>:8080 on the host"]
     GW --> BE["backend<br/>Spring Boot, no published port"]
     GW -->|"/api/jobs/**"| JS["job-service<br/>no published port"]
+    GW -->|"/api/jobs/top-matches"| MS["matching-service<br/>no published port"]
     JS <-->|"/internal/**,<br/>service tokens"| BE
+    MS -->|"/internal/**,<br/>service tokens"| BE
+    MS -->|"/internal/**,<br/>service tokens"| JS
+    MS -.->|"LLM_API_KEY"| LLM["language model<br/>optional"]
     BE --> DB[("postgres :5432<br/>module + analytics schemas")]
     JS -->|"as jobs_user"| DB
+    MS -->|"as matching_user"| DB
     PIPE["pipeline<br/>profile: data, run-once"] -.->|"publishes marts"| DB
 
     classDef s fill:#e8eef7,stroke:#4a6080
-    class FE,GW,BE,JS s
+    class FE,GW,BE,JS,MS s
 ```
 
 ```bash
@@ -72,6 +78,7 @@ scripts/dev-up.sh          # docker compose up -d db backend api-gateway fronten
 | `jwt-key` | — | Runs and exits. Writes the token signing key into the `jwt-keys` volume on the first start, then keeps it until `down -v` |
 | `backend` | — | Built from `./backend`. Listens on 8080 inside the network only (Day 16). Waits for the database to be healthy and for `jwt-key` to finish |
 | `job-service` | — | Built from `./services/job-service` (Day 17). Job search and the postings routes. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Needs its image built first when the harness runs it: `docker build -t jobmatch-job-service:harness services/job-service` |
+| `matching-service` | — | Built from `./services/matching-service` (Day 21). Top matches, and the only service with the model's key. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Its harness image: `docker build -t jobmatch-matching-service:harness services/matching-service` |
 | `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. Healthcheck on `/actuator/health/readiness` (management port 9090, inside the network). `depends_on: backend` |
 | `frontend` | 3000 | Built from `./frontend`. Waits for the gateway to be healthy (`condition: service_healthy`), so `up --wait` returns once the gateway is ready |
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
@@ -87,7 +94,7 @@ The gateway's settings, all with defaults that suit compose:
 | --- | --- | --- |
 | `BACKEND_URL` | `http://localhost:8080` — `http://backend:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
 | `JOB_SERVICE_URL` | `BACKEND_URL`'s value — `http://job-service:8080` in compose | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. The backend no longer serves these (Day 17), so outside compose it must be set |
-| `MATCHING_SERVICE_URL` | `BACKEND_URL`'s value | Where `/api/jobs/top-matches` goes: matching-service, `http://matching-service:8080` in compose once it runs there (Day 21). The backend serves it until then |
+| `MATCHING_SERVICE_URL` | `BACKEND_URL`'s value — `http://matching-service:8080` in compose | Where `/api/jobs/top-matches` goes. The backend no longer serves it (Day 21), so outside compose it must be set |
 | `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login, register and the two password-reset steps, per client |
 | `GATEWAY_TRUSTED_PROXIES` | empty | A regex of proxy addresses whose `X-Forwarded-For` is believed. Leave it empty behind the frontend, which passes a client's own header through; set it only for a proxy that overwrites it |
 | `GATEWAY_CONNECT_TIMEOUT` / `GATEWAY_READ_TIMEOUT` | `5s` / `30s` | Past them the gateway answers 502 / 504 |
@@ -105,6 +112,36 @@ job-service's settings (Day 17), as compose sets them:
 | `INTERNAL_APPLICATIONS_URL` | empty | Where it asks for saved counts (`/internal/saved-counts`): the backend, `http://backend:8080` in compose. Empty would mean itself, which has no such route |
 | `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
 | `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |
+
+matching-service's settings (Day 21), in its
+[`application.yaml`](../../services/matching-service/src/main/resources/application.yaml):
+
+| Variable | Default | |
+| --- | --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `project_db` | The `matching` schema is still in the monolith's database, until Day 23 |
+| `DB_MATCHING_USER` / `DB_MATCHING_PASSWORD` | `matching_user` / `password` | Its own login; its Flyway applies `db/matching` as it. Compose passes `MATCHING_DB_PASSWORD` |
+| `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-matching-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
+| `INTERNAL_IDENTITY_URL` | none | Where it asks whether a user exists (`/internal/users/{id}`) and for their profile (`/internal/profiles/{userId}`): the backend, `http://backend:8080` in compose. **Required**: it does not start without it |
+| `INTERNAL_JOBS_URL` | none | Where it asks for the shortlist (`/internal/postings/shortlist`): job-service, `http://job-service:8080` in compose. **Required** |
+| `IDENTITY_JWKS_URL` | `INTERNAL_IDENTITY_URL` + `/.well-known/jwks.json` | The user key set it checks tokens against |
+| `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
+| `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |
+
+And the model, which only it calls. With no key it still answers, by skill overlap
+([`matching-profile.md`](matching-profile.md)):
+
+| Variable | Default | |
+| --- | --- | --- |
+| `LLM_API_KEY` | empty | Empty disables model scoring; matching still ranks by skill overlap |
+| `LLM_BASE_URL` | Gemini's OpenAI-compatible endpoint | Any chat-completions API |
+| `LLM_MODEL` | `gemini-flash-lite-latest` | Part of the cache key |
+| `LLM_TIMEOUT_SECONDS` | `15` | Read timeout; connect is fixed at 5s. 15 keeps the worst case, three internal calls then the model, at 29 s, under the gateway's 30 s read |
+| `LLM_REASONING_EFFORT` | `low` | Empty omits the field for providers that reject it |
+| `LLM_SCORE_RETENTION_DAYS` | `1` | Clamped to a minimum of 1 |
+| `LLM_SCORE_PURGE_CRON` | `0 0 * * * *` | Hourly |
+
+At most ten scoring calls run at once (a bulkhead, Day 21); an eleventh request is answered by
+skill overlap at once rather than waiting.
 
 **The gateway's healthcheck makes `up --wait` wait until it is ready.** The backend has actuator on
 its management port but compose has no healthcheck for it. The gateway's check is the one compose
@@ -126,8 +163,8 @@ All of it in [`application.yaml`](../src/main/resources/application.yaml).
 | `DB_NAME` | `project_db` | The mart is not here: it is in `jobs_db`, job-service's (Day 20) |
 | `DB_USER` | `admin` | The owner of the migrations; only Flyway logs in as it. `app_user` in a production-like setup |
 | `DB_PASSWORD` | `password` | |
-| `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_MATCHING_USER`, `DB_JOBS_USER` | `identity_user`, … | Each module's own login, with its own schema as the search path (Day 11). `jobs_user` only reads the mart |
-| `DB_IDENTITY_PASSWORD`, `DB_APPLICATIONS_PASSWORD`, `DB_MATCHING_PASSWORD`, `DB_JOBS_PASSWORD` | `password` | Their passwords |
+| `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER` | `identity_user`, `applications_user` | Each module's own login, with its own schema as the search path (Day 11). Jobs and matching are their services' logins now (Days 17 and 21) |
+| `DB_IDENTITY_PASSWORD`, `DB_APPLICATIONS_PASSWORD` | `password` | Their passwords |
 
 There is no schema setting since Day 11: the owner's Flyway migrates `app` (V1–V14), and each
 module's Flyway migrates its own schema as its own login.
@@ -137,8 +174,7 @@ module's Flyway migrates its own schema as its own login.
 | Variable | Default | |
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** |
-| `INTERNAL_JOBS_URL` | empty | Where saved jobs and top matches send their internal calls for postings (`/internal/postings/**`, Day 19). Empty means this process, `http://localhost:<the server's port>`, read on the first call, which no longer serves them (Day 17): set it to job-service, `http://job-service:8080` in compose |
-| `INTERNAL_IDENTITY_URL` | empty | Where top matches sends its internal calls for a user's profile (`/internal/profiles/{userId}`) and to check the user exists (`/internal/users/{id}`, Day 41). Empty means this process, `http://localhost:<the server's port>`, read on the first call, which serves them until Day 21 moves matching out |
+| `INTERNAL_JOBS_URL` | empty | Where saved jobs sends its internal calls for postings (`/internal/postings/**`, Day 19). Empty means this process, `http://localhost:<the server's port>`, read on the first call, which no longer serves them (Day 17): set it to job-service, `http://job-service:8080` in compose |
 | `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the two token cookies and the Google flow's two, `google_auth_request` and `pending_google_link`. Must be `true` on HTTPS |
 | `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with: a PEM, PKCS#8 file of at least 2048 bits. **Required**, in every profile; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/private.pem` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | The monolith's key for service tokens (Day 39): a PEM, PKCS#8 file of at least 2048 bits. **Required**, separate from the user key; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/service.pem` |
@@ -160,17 +196,8 @@ module's Flyway migrates its own schema as its own login.
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | empty | Empty logs a warning at startup; reset emails then fail silently |
 | `MAIL_FROM` | `jobmatch.team2026@gmail.com` | |
 
-## Match scoring
-
-| Variable | Default | |
-| --- | --- | --- |
-| `LLM_API_KEY` | empty | Empty disables model scoring; matching still ranks by skill overlap |
-| `LLM_BASE_URL` | Gemini's OpenAI-compatible endpoint | Any chat-completions API |
-| `LLM_MODEL` | `gemini-flash-lite-latest` | Part of the cache key |
-| `LLM_TIMEOUT_SECONDS` | `20` | Connect timeout is fixed at 5s |
-| `LLM_REASONING_EFFORT` | `low` | Empty omits the field for providers that reject it |
-| `LLM_SCORE_RETENTION_DAYS` | `1` | Clamped to a minimum of 1 |
-| `LLM_SCORE_PURGE_CRON` | `0 0 * * * *` | Hourly |
+The model's settings (`LLM_*`) left with matching on Day 21: they are matching-service's, in
+[section 2](#2-the-local-stack).
 
 Any Spring property can be set the same way: upper-case it and replace `.` with `_`, so
 `server.port` becomes `SERVER_PORT`.
@@ -273,7 +300,7 @@ feature rather than breaking the app.
 
 | Missing | What happens | Where you find out |
 | --- | --- | --- |
-| `LLM_API_KEY` | Matches rank by skill overlap only; every row has `aiScored: false` | Startup: *"LLM_API_KEY is not set: /api/jobs/top-matches will rank by skill overlap only."* |
+| `LLM_API_KEY` | Matches rank by skill overlap only; every row has `aiScored: false` | matching-service's startup: *"LLM_API_KEY is not set: /api/jobs/top-matches will rank by skill overlap only."* |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Reset emails never arrive; `forgot-password` still answers 200, by design | Startup: *"Mail service warning..."* |
 | `GOOGLE_CLIENT_ID` | The Google button 404s — the routes are not registered | Startup: *"Google sign-in disabled..."* |
 | An empty `analytics` schema | Jobs list is empty, filters are empty, matches are `[]`. No errors | Only by looking |
@@ -292,8 +319,9 @@ say so once, loudly, rather than fail per request.
 What must be set beyond the defaults, in one place:
 
 - [ ] `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER=app_user`, `DB_PASSWORD`, and each module's login:
-      `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_MATCHING_USER`, `DB_JOBS_USER` with their
-      `_PASSWORD`s — the `prod` profile has no fallbacks, and the backend does not start without them
+      `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER` with their `_PASSWORD`s — the `prod` profile has no
+      fallbacks, and the backend does not start without them. job-service's `DB_JOBS_*` and
+      matching-service's `DB_MATCHING_*` are set on those services
 - [ ] `JWT_PRIVATE_KEY_FILE`, pointing at a key from the secret store — the backend does not start
       without it. Replacing the key later signs every user out
 - [ ] `SERVICE_JWT_PRIVATE_KEY_FILE`, pointing at the service key from the secret store — the
@@ -303,7 +331,8 @@ What must be set beyond the defaults, in one place:
 - [ ] `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, with the redirect URI registered in the Google
       Console for that exact host
 - [ ] `MAIL_USERNAME` / `MAIL_PASSWORD`, or accept that password reset does not work
-- [ ] `LLM_API_KEY`, or accept overlap-only matching
+- [ ] `LLM_API_KEY` on matching-service, or accept overlap-only matching; with
+      `INTERNAL_IDENTITY_URL` and `INTERNAL_JOBS_URL`, without which it does not start
 - [ ] `BACKEND_API_URL` on the frontend, pointing at the gateway's internal address, and
       `BACKEND_URL` on the gateway at the backend's. Only the gateway gets the public ingress
 - [ ] `GATEWAY_TRUSTED_PROXIES`, only if the ingress overwrites `X-Forwarded-For`; otherwise every

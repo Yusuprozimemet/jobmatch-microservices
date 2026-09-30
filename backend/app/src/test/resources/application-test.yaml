@@ -29,12 +29,6 @@ app:
       # Empty means GoogleOAuth2Config does not register, so tests never redirect to Google.
       client-id: ""
       client-secret: ""
-  llm:
-    # Empty means MatchScorer is off and top-matches ranks by skill overlap alone: a
-    # deterministic result, and no calls to a model from a test run.
-    api-key: ""
-    # Scheduled purge off. "-" is Spring's disabled-cron value.
-    score-purge-cron: "-"
   internal:
     # The harness points job-service's URL here (Day 17), never at app.internal.jobs-url
     # itself: a base class's @DynamicPropertySource wins over a subclass's, so a registration

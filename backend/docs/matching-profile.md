@@ -5,9 +5,10 @@ only input `GET /api/jobs/top-matches` has, and every design decision in it — 
 `text[]`, why there is a five-skill floor, why the stored spelling is kept — is a decision about
 matching.
 
-Code: [`profile/`](../src/main/java/nl/hackyourfuture/project/backend/profile) and
-[`matching/`](../src/main/java/nl/hackyourfuture/project/backend/matching). Request and response
-shapes are in [`api.md`](api.md).
+Code: [`profile/`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/profile), in
+the monolith, and [`matching/`](../../services/matching-service/src/main/java/nl/hackyourfuture/project/backend/matching), in matching-service since Day 21, which asks identity for
+the profile and job-service for the shortlist over HTTP. Request and response shapes are in
+[`api.md`](api.md).
 
 ---
 
@@ -176,8 +177,8 @@ flowchart TD
 
 ## Step 1 — the SQL shortlist
 
-[`JobMatchRepository.findTopMatches`](../src/main/java/nl/hackyourfuture/project/backend/matching/JobMatchRepository.java)
-is deliberately dumb. Exact skill-string overlap, nothing else. Synonyms and seniority are the
+[`JobsDirectory.shortlist`](../../services/job-service/src/main/java/nl/hackyourfuture/project/backend/jobs/JobsDirectory.java),
+in job-service behind `/internal/postings/shortlist`, is deliberately dumb. Exact skill-string overlap, nothing else. Synonyms and seniority are the
 model's job, and encoding them here is how this query grows unreadable.
 
 | Rule | Detail |
@@ -196,7 +197,7 @@ array it can intersect; the API wants a list to render.
 
 ## Step 2 — the model rescores
 
-[`MatchScorer`](../src/main/java/nl/hackyourfuture/project/backend/matching/MatchScorer.java) sends
+[`MatchScorer`](../../services/matching-service/src/main/java/nl/hackyourfuture/project/backend/matching/MatchScorer.java) sends
 one request for the whole unscored shortlist: the candidate's skills, then one line per job with a
 truncated id, the title, and the job's skills. It asks for `0–100` and a reason under twelve words
 per job, as a bare JSON array.
@@ -295,6 +296,7 @@ Every failure path ends in a usable list. That is the design goal of the split.
 | --- | --- |
 | No `LLM_API_KEY` | Skill-overlap order, `aiScored: false`, `score` = `matchPercent`, `reason` null. Logged as a warning at startup |
 | Model times out, errors, or returns junk | Same as above, for the rows it did not score. A partly scored list still sorts, because unscored rows fall back to `matchPercent` |
+| Ten scoring calls already in flight | Same, at once: the bulkhead (Day 21) turns the eleventh away rather than queue it |
 | Provider rejects `reasoning_effort` | Same, and the log carries the provider's response body — without it a config problem reads exactly like an outage |
 | Empty mart | `[]`. No error |
 | Profile with no row | 422, *"Fill in your profile to see matching jobs."* |
@@ -305,12 +307,14 @@ Every failure path ends in a usable list. That is the design goal of the split.
 
 # 8. Configuration
 
+matching-service's, set in compose from the root `.env`; nothing else holds the key.
+
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `LLM_API_KEY` | empty | Empty disables step 2 entirely. Everything still works |
 | `LLM_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Any OpenAI-compatible chat-completions endpoint |
 | `LLM_MODEL` | `gemini-flash-lite-latest` | Part of `scorer_version`, so changing it invalidates stored verdicts |
-| `LLM_TIMEOUT_SECONDS` | `20` | Read timeout; connect is fixed at 5s. A cold shortlist takes ~4s on a flash-tier model, so this is headroom, not a target |
+| `LLM_TIMEOUT_SECONDS` | `15` | Read timeout; connect is fixed at 5s. A cold shortlist takes ~4s on a flash-tier model, so this is headroom, not a target. At most 15 so that three internal calls and the model fit the gateway's 30 s read |
 | `LLM_REASONING_EFFORT` | `low` | Sent as `reasoning_effort`. Gemini 3 flash costs ~14s without it, ~4s with `low`. Empty omits the field for providers that reject it |
 | `LLM_SCORE_RETENTION_DAYS` | `1` | Clamped to a minimum of 1 |
 | `LLM_SCORE_PURGE_CRON` | `0 0 * * * *` | Hourly. Only reclaims space, so an expired row lingers at most an hour |
