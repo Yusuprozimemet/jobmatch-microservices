@@ -165,6 +165,12 @@
 			<artifactId>testcontainers-postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>dynamodb</artifactId>
+			<version>2.46.7</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
