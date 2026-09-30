@@ -51,8 +51,7 @@ function rowTip(r) {
   <div class="row"><span>gap</span><span>${fmt(r.gap_full)}°</span></div>
   <div class="row"><span>gap by chance</span><span>${r.gap_chance == null ? "–" : fmt(r.gap_chance) + "°"}</span></div>
   <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>
-  <div class="row"><span>service code out</span><span>${movedShare(r) == null ? "–" : fmt(movedShare(r)) + "%"}</span></div>
-  <div class="row"><span>imports crossing</span><span>${crossCount(r) ?? "–"}</span></div>`;
+  <div class="row"><span>service code out</span><span>${movedShare(r) == null ? "–" : fmt(movedShare(r)) + "%"}</span></div>`;
 }
 
 /* ---------- derived numbers ---------- */
@@ -280,11 +279,6 @@ function drawLines() {
     label: "Share of the four services' main source lines under services/",
     series: [{ name: "out", color: "var(--close)", get: r => movedShare(r) }],
   });
-  lineChart(document.getElementById("crossings"), {
-    H: 190, yMin: 0, yMax: crossMax, ticks: steps(0, crossMax, 4), unit: "", strip: false, digits: 0,
-    label: "Imports crossing from one service's packages into another's",
-    series: [{ name: "crossing", color: "var(--code)", get: r => crossCount(r) }],
-  });
   lineChart(document.getElementById("churn"), {
     H: 220, yMin: 0, yMax: 100, ticks: steps(0, 100, 4), unit: "%", strip: true,
     label: "Spec and code lines changed so far, each as a share of its own total",
@@ -296,14 +290,12 @@ function drawLines() {
   const p = R[sel].placed || {};
   document.getElementById("placed").innerHTML = `<p>At ${prLabel(R[sel])}: ` + Object.keys(p).sort().map(s =>
     `<b>${s}</b> ${p[s][1] ? (p[s][0] ? `${p[s][1]} lines out, ${p[s][0]} still in the monolith` : `out (${p[s][1]} lines)`) : `in the monolith (${p[s][0]} lines)`}`).join(" · ")
-    + (crossCount(R[sel]) ? ` · crossing: ${Object.entries(R[sel].crossings).map(([k, v]) => `${esc(k.replace(">", " → "))} ${v}`).join(", ")}` : "") + "</p>";
+    + "</p>";
 }
 const movedShare = r => {
   const v = Object.values(r.placed || {}), all = v.reduce((a, [i, o]) => a + i + o, 0);
   return all ? +(v.reduce((a, [, o]) => a + o, 0) / all * 100).toFixed(1) : null;
 };
-const crossCount = r => r.crossings ? Object.values(r.crossings).reduce((a, b) => a + b, 0) : null;
-const crossMax = Math.max(4, Math.ceil(Math.max(0, ...R.map(r => crossCount(r) || 0)) / 4) * 4);
 const evMax = Math.max(4, Math.ceil(Math.max(0, ...R.map(r => r.evidence ? r.evidence.present : 0)) / 20) * 20);
 // Code lines outnumber spec lines several times over, so each runs to 100% of its own total rather than sharing a scale.
 const CUM = new Map();
@@ -315,43 +307,57 @@ const cumShare = (r, k) => { const [s, c] = CUM.get(r), [S, C] = CUM.get(last); 
 const gapDelta = i => +(R[i].gap_full - R[i - 1].gap_full).toFixed(2);
 const signed = (x, d = 2) => (x > 0 ? "+" : x < 0 ? "−" : "") + fmt(Math.abs(x), d);
 
-/* ---------- per-merge change in gap ---------- */
+/* ---------- per-merge change in drift and gap ---------- */
+// Two panels on the merge axis of the line chart above: the step each merge took on drift, then on gap.
 function drawDeltas() {
   const box = document.getElementById("deltas");
   box.innerHTML = "";
-  const kinds = ["spec", "code", "close", "other"], H = 360, P = { l: 52, r: 16, t: 16, b: 56 };
-  const pts = R.slice(1).map((r, j) => ({ i: j + 1, r, d: gapDelta(j + 1) }));
-  const yMax = Math.max(1, Math.ceil(Math.max(...pts.map(p => Math.abs(p.d)))));
-  const ly = v => P.t + (1 - (v + yMax) / (2 * yMax)) * (H - P.t - P.b);
-  const colW = (LW - P.l - P.r) / kinds.length;
-  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Change in gap at each merge, grouped by kind of pull request" }, box);
-  [-yMax, -yMax / 2, 0, yMax / 2, yMax].forEach(t => {
-    el("line", { x1: P.l, x2: LW - P.r, y1: ly(t), y2: ly(t), stroke: t ? "var(--grid)" : "var(--axis)" }, svg);
-    el("text", { x: P.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = signed(t, t % 1 ? 1 : 0) + "°";
-  });
-  kinds.forEach((k, c) => {
-    const all = pts.filter(p => p.r.kind === k).sort((a, b) => a.d - b.d), cx = P.l + (c + 0.5) * colW;
-    // Merges that left the gap exactly where it was are counted, not drawn: one row of them is wider than the column.
-    const mine = all.filter(p => p.d), still = all.length - mine.length;
-    // A plain beeswarm: dots within 6px of height spread sideways, alternating, so none hides another.
-    const taken = new Map();
-    mine.forEach(p => {
-      const row = Math.round(ly(p.d) / 6), n = taken.get(row) || 0;
-      taken.set(row, n + 1);
-      p.x = cx + Math.max(-colW * 0.45, Math.min(colW * 0.45, (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 7));
+  const panels = [
+    { name: "drift", label: "Δ drift", get: r => r.drift },
+    { name: "gap", label: "Δ gap", get: r => r.gap_full },
+  ];
+  const PH = 200, GAP = 18, H = LP.t + panels.length * PH + (panels.length - 1) * GAP + 40;
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Change in drift and in gap at each merge, in merge order" }, box);
+  panels.forEach((pn, k) => {
+    const top = LP.t + k * (PH + GAP), bot = top + PH;
+    const pts = R.slice(1).map((r, j) => ({ i: j + 1, r, d: +(pn.get(r) - pn.get(R[j])).toFixed(2) }));
+    const lo = Math.min(0, ...pts.map(p => p.d)), hi = Math.max(0, ...pts.map(p => p.d));
+    const unit = hi - lo > 4 ? 1 : 0.5, yMin = Math.floor(lo / unit) * unit, yMax = Math.max(Math.ceil(hi / unit) * unit, yMin + unit);
+    const ly = v => top + (1 - (v - yMin) / (yMax - yMin)) * PH;
+    for (let t = yMin; t <= yMax + 1e-9; t += unit) {
+      el("line", { x1: LP.l, x2: LW - LP.r, y1: ly(t), y2: ly(t), stroke: Math.abs(t) < 1e-9 ? "var(--axis)" : "var(--grid)" }, svg);
+      el("text", { x: LP.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = signed(t, t % 1 ? 1 : 0) + "°";
+    }
+    el("rect", { x: LP.l, y: top, width: LW - LP.l - LP.r, height: PH, fill: "none", stroke: "var(--axis)" }, svg);
+    el("text", { x: LW - LP.r + 10, y: top + 16, class: "lbl" }, svg).textContent = pn.label;
+    const net = pts.reduce((a, p) => a + p.d, 0);
+    el("text", { x: LW - LP.r + 10, y: top + 34, class: "num" }, svg).textContent = `net ${signed(net, 1)}°`;
+    let lastX = -99;
+    dayStarts().forEach(([i, d]) => {
+      if (!d || lx(i) - lastX < 34) return;
+      lastX = lx(i);
+      el("line", { x1: lx(i), x2: lx(i), y1: top, y2: bot, stroke: "var(--grid)", "stroke-dasharray": "2 3" }, svg);
+      if (k === panels.length - 1) {
+        const t = el("text", { x: lx(i) + 3, y: bot + 16, class: "num" + (OOO.has(d) ? " ooo" : "") }, svg);
+        t.textContent = "D" + dd(d) + (OOO.has(d) ? "*" : "");
+      }
     });
-    const net = all.reduce((a, p) => a + p.d, 0), med = all.length ? all[Math.floor(all.length / 2)].d : 0;
-    if (all.length) el("line", { x1: cx - colW * 0.36, x2: cx + colW * 0.36, y1: ly(med), y2: ly(med), stroke: "var(--ink-2)", "stroke-width": 1.5, "stroke-dasharray": "4 3" }, svg);
-    mine.forEach(p => {
-      el("circle", { cx: p.x, cy: ly(p.d), r: 3.5, fill: KVAR[k], stroke: "var(--surface)", "stroke-width": 1 }, svg);
-      if (p.i === sel) el("circle", { cx: p.x, cy: ly(p.d), r: 7, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, svg);
-      const hit = el("circle", { cx: p.x, cy: ly(p.d), r: 7, class: "hit" }, svg);
-      hit.addEventListener("mousemove", ev => showTip(ev, rowTip(p.r) + `<div class="row"><span>change in gap</span><span>${signed(p.d)}°</span></div>`));
+    el("line", { x1: lx(sel), x2: lx(sel), y1: top, y2: bot, stroke: "var(--ink-2)", "stroke-width": 1 }, svg);
+    pts.forEach(p => {
+      el("circle", { cx: lx(p.i), cy: ly(p.d), r: 3.5, fill: KVAR[p.r.kind], stroke: "var(--surface)", "stroke-width": 1 }, svg);
+      if (p.i === sel) el("circle", { cx: lx(p.i), cy: ly(p.d), r: 7, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, svg);
+      const hit = el("circle", { cx: lx(p.i), cy: ly(p.d), r: 7, class: "hit" }, svg);
+      hit.addEventListener("mousemove", ev => showTip(ev, rowTip(p.r) + `<div class="row"><span>change in ${pn.name}</span><span>${signed(p.d)}°</span></div>`));
       hit.addEventListener("mouseleave", hideTip);
       hit.addEventListener("click", () => setSel(p.i));
     });
-    el("text", { x: cx, y: H - P.b + 22, "text-anchor": "middle", class: "lbl" }, svg).textContent = `${KIND[k]} · ${all.length}` + (still ? `, ${still} unchanged` : "");
-    el("text", { x: cx, y: H - P.b + 40, "text-anchor": "middle", class: "num" }, svg).textContent = `net ${signed(net, 1)}° · median ${signed(med)}°`;
+  });
+  let lastDate = -99;
+  const bot = H - 40 + 4;
+  dateStarts().forEach(([i, s]) => {
+    if (lx(i) - lastDate < 44) return;
+    lastDate = lx(i);
+    el("text", { x: lx(i) + 3, y: bot + 28, class: "date" }, svg).textContent = shortDate(s);
   });
 }
 
