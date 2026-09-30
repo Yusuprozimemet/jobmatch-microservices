@@ -48,7 +48,7 @@ public abstract class IntegrationTest {
         registry.add("spring.flyway.url", PostgresContainer::jdbcUrl);
         registry.add("spring.flyway.user", () -> PostgresContainer.instance().getUsername());
         registry.add("spring.flyway.password", () -> PostgresContainer.instance().getPassword());
-        for (String module : PostgresContainer.MODULE_SCHEMAS) {
+        for (String module : PostgresContainer.CONNECTED_SCHEMAS) {
             registry.add("app.datasource." + module + ".url", () -> PostgresContainer.jdbcUrl(module));
             registry.add("app.datasource." + module + ".username", () -> module + "_user");
             registry.add("app.datasource." + module + ".password", PostgresContainer::rolePassword);

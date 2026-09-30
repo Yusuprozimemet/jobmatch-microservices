@@ -13,26 +13,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Job-service's paths pointed at a recording stub in this JVM show which requests reach it:
- * directly, the harness's clients route; through the gateway ({@code -Dharness.gateway=true}),
- * the gateway does, with {@code JOB_SERVICE_URL} from the table. Its gateway is its own
+ * Job-service and matching-service's paths pointed at recording stubs in this JVM show which
+ * requests reach them: directly, the harness's clients route; through the gateway
+ * ({@code -Dharness.gateway=true}), the gateway does, with {@code JOB_SERVICE_URL} and
+ * {@code MATCHING_SERVICE_URL} from the table. Each service's gateway is its own
  * (the route table is part of {@link Gateway}'s key).
  */
 class ServiceRoutingIT extends IntegrationTest {
 
     private static final RecordingStub STUB = new RecordingStub();
+    private static final RecordingStub MATCHING_STUB = new RecordingStub();
 
     @Override
     protected Map<String, String> serviceUrls() {
-        return Map.of(Services.JOB_SERVICE, STUB.url());
+        return Map.of(Services.JOB_SERVICE, STUB.url(), Services.MATCHING_SERVICE, MATCHING_STUB.url());
     }
 
     @BeforeEach
     void clearStub() {
         STUB.clear();
+        MATCHING_STUB.clear();
     }
 
     @Test
@@ -61,13 +66,24 @@ class ServiceRoutingIT extends IntegrationTest {
     }
 
     @Test
-    void topMatchesAndTheUsersOwnPathsStayOnTheMonolith() {
+    void topMatchesReachesTheMatchingService() {
+        assertThat(Services.owner("/api/jobs/top-matches")).isEqualTo(Optional.of(Services.MATCHING_SERVICE));
+
         ApiClient client = authenticatedAs(aUser().create());
         client.get("/api/jobs/top-matches");
+
+        assertThat(MATCHING_STUB.received()).hasSize(1);
+        assertThat(STUB.received()).isEmpty();
+    }
+
+    @Test
+    void theUsersOwnPathsStayOnTheMonolith() {
+        ApiClient client = authenticatedAs(aUser().create());
         ApiResponse response = client.get("/api/users/me");
 
         assertThat(response.status()).isEqualTo(200);
         assertThat(STUB.received()).isEmpty();
+        assertThat(MATCHING_STUB.received()).isEmpty();
     }
 
     private record Received(String pathAndQuery, String cookie, String userId) {

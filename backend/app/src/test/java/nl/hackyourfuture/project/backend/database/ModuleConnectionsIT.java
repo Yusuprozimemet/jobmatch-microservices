@@ -1,8 +1,10 @@
 package nl.hackyourfuture.project.backend.database;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.MatchingService;
 import nl.hackyourfuture.project.backend.support.PostgresContainer;
 import nl.hackyourfuture.project.backend.support.TestUser;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -30,18 +32,26 @@ class ModuleConnectionsIT extends IntegrationTest {
 
     @Autowired @Qualifier("identityDataSource") private DataSource identity;
     @Autowired @Qualifier("applicationsDataSource") private DataSource applications;
-    @Autowired @Qualifier("matchingDataSource") private DataSource matching;
     private final DataSource jobs = new DriverManagerDataSource(
             PostgresContainer.jobsJdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
     // jobs_user keeps CONNECT on project_db, so what it must not read there is checked from there.
     private final DataSource jobsOnProjectDb = new DriverManagerDataSource(
             PostgresContainer.jdbcUrl("public"), "jobs_user", PostgresContainer.rolePassword());
+    // matching_user's login left with matching-service (Day 21); checked as jobs_user's is.
+    private final DataSource matching = new DriverManagerDataSource(
+            PostgresContainer.jdbcUrl("matching"), "matching_user", PostgresContainer.rolePassword());
+
+    // db/matching's revokes are applied by matching-service's container when it starts, not by
+    // this context: started here, the schema checks below do not depend on which test ran first.
+    @BeforeAll
+    static void matchingServiceHasMigratedItsSchema() {
+        MatchingService.port();
+    }
 
     @Test
     void eachModuleLogsInAsItsOwnRoleWithItsOwnSchema() {
         assertThat(whoAndWhere(identity)).isEqualTo("identity_user identity");
         assertThat(whoAndWhere(applications)).isEqualTo("applications_user applications");
-        assertThat(whoAndWhere(matching)).isEqualTo("matching_user matching");
         assertThat(whoAndWhere(jobs)).isEqualTo("jobs_user analytics");
     }
 

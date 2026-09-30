@@ -53,8 +53,6 @@ services:
       DB_IDENTITY_PASSWORD: ${IDENTITY_DB_PASSWORD:-password}
       DB_APPLICATIONS_USER: applications_user
       DB_APPLICATIONS_PASSWORD: ${APPLICATIONS_DB_PASSWORD:-password}
-      DB_MATCHING_USER: matching_user
-      DB_MATCHING_PASSWORD: ${MATCHING_DB_PASSWORD:-password}
       # Day 17: job search and the postings routes are job-service's; it calls back for saved counts.
       INTERNAL_JOBS_URL: http://job-service:8080
       APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-job-service
@@ -116,8 +114,8 @@ services:
         condition: service_completed_successfully
 
   # matching-service (Day 21). No published port, and not routed to yet: the gateway still sends
-  # top-matches to the backend until Track E2 sets MATCHING_SERVICE_URL there. DB_MATCHING_* is read
-  # from Track E1, when matching's code and migrations move here; LLM_* comes with the key in E2.
+  # top-matches to the backend until Track E2 sets MATCHING_SERVICE_URL there. DB_MATCHING_* is
+  # read here since Track E1, when matching's code and migrations moved. LLM_* comes with the key in E2.
   matching-service:
     build: ./services/matching-service
     environment:

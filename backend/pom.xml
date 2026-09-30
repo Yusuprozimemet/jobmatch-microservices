@@ -25,7 +25,6 @@
 		<module>shared</module>
 		<module>identity</module>
 		<module>applications</module>
-		<module>matching</module>
 		<module>app</module>
 	</modules>
 

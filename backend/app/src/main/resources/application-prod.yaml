@@ -32,7 +32,3 @@ app:
       url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?currentSchema=applications
       username: ${DB_APPLICATIONS_USER}
       password: ${DB_APPLICATIONS_PASSWORD}
-    matching:
-      url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?currentSchema=matching
-      username: ${DB_MATCHING_USER}
-      password: ${DB_MATCHING_PASSWORD}

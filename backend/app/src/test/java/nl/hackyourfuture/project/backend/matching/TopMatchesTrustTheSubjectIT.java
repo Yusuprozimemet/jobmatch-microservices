@@ -29,7 +29,7 @@ class TopMatchesTrustTheSubjectIT extends MatchingTest {
         posting("subject-based-1", "Subject-Based Job", "java", "sql");
 
         String tokenForAEmailB = accessTokens.mint(userA.id(), userB.email());
-        ApiClient client = direct().withCookie("access_token", tokenForAEmailB);
+        ApiClient client = anonymous().withCookie("access_token", tokenForAEmailB);
         model().willScoreInPromptOrder(80);
         ApiResponse response = client.get("/api/jobs/top-matches");
 

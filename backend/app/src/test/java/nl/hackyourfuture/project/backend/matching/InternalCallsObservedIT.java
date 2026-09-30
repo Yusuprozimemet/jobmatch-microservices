@@ -27,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the request that made it. An ancestor, not the parent: the parent is Spring Security's
  * {@code secured request} span.
  *
- * <p>Annotated as {@link LlmCallObservedIT} is, so it shares that test's context.
+ * <p>The top-matches calls are matching-service's now (Day 21); this test covers the
+ * saved-jobs call, which stays on the monolith.
  */
 @AutoConfigureTracing
 @Import(EndedSpans.Config.class)
@@ -35,10 +36,7 @@ class InternalCallsObservedIT extends MatchingTest {
 
     /** Each internal route, and the {@code /api} request whose client calls it. */
     private static final Map<String, String> CALLED_BY = Map.of(
-            "/internal/postings/batch", "/api/saved-jobs",
-            "/internal/postings/shortlist", "/api/jobs/top-matches",
-            "/internal/profiles/{userId}", "/api/jobs/top-matches",
-            "/internal/users/{id}", "/api/jobs/top-matches");
+            "/internal/postings/batch", "/api/saved-jobs");
 
     @LocalManagementPort
     private int managementPort;
@@ -80,7 +78,7 @@ class InternalCallsObservedIT extends MatchingTest {
         });
     }
 
-    /** Saved jobs and top matches, each through its client, each answering 200. */
+    /** Saved jobs through its client, answering 200. */
     private void askEveryCaller(String prefix) {
         TestUser saver = aUser().create();
         posting(prefix + "-saved", "Observed Saved Job", "java");
@@ -89,11 +87,6 @@ class InternalCallsObservedIT extends MatchingTest {
                 .param("postingId", prefix + "-saved")
                 .update();
         assertThat(authenticatedAs(saver).get("/api/saved-jobs").status()).isEqualTo(200);
-
-        TestUser matcher = userWithProfile();
-        posting(prefix + "-match", "Observed Engineer", "java", "sql");
-        model().willScoreInPromptOrder(80);
-        assertThat(authenticatedAs(matcher).get("/api/jobs/top-matches").status()).isEqualTo(200);
     }
 
     /** The nearest server span above {@code span} in its trace, walking parent ids. */

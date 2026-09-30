@@ -72,14 +72,12 @@ public final class MatchingService {
                         "http://host.testcontainers.internal:" + jobServiceRelayPort)
                 .withEnv("INTERNAL_JOBS_URL",
                         "http://host.testcontainers.internal:" + jobServicePort)
-                // The service reads neither yet; they come with matching's code in Track E1, and are
-                // set here so the container is complete when that code arrives.
                 .withEnv("LLM_BASE_URL",
                         "http://host.testcontainers.internal:" + stubLlmPort)
                 .withEnv("LLM_API_KEY", "test-key")
                 .withEnv("DB_HOST", "host.testcontainers.internal")
                 .withEnv("DB_PORT", String.valueOf(postgresPort))
-                .withEnv("DB_NAME", PostgresContainer.JOBS_DATABASE)
+                .withEnv("DB_NAME", PostgresContainer.instance().getDatabaseName())
                 .withEnv("DB_MATCHING_USER", "matching_user")
                 .withEnv("DB_MATCHING_PASSWORD", PostgresContainer.rolePassword())
                 // One line per request, method and path, which matching-service's log pattern prefixes

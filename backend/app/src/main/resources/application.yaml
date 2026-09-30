@@ -49,10 +49,6 @@ app:
       url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=applications
       username: ${DB_APPLICATIONS_USER:applications_user}
       password: ${DB_APPLICATIONS_PASSWORD:password}
-    matching:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=matching
-      username: ${DB_MATCHING_USER:matching_user}
-      password: ${DB_MATCHING_PASSWORD:password}
   base-url: ${APP_BASE_URL:http://localhost:3000}
   # The RSA key identity signs tokens with (Day 12): a PEM, PKCS#8 file. No default on purpose,
   # since the application never generates one; without it, it does not start. Compose writes one
