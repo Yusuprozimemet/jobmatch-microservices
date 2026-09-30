@@ -3,7 +3,7 @@ package nl.hackyourfuture.project.matchingservice;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -74,7 +74,8 @@ class BreakerConfigTest extends MatchingServiceTest {
 
     }
 
-    @AfterEach
+    // Before, not after: the context is cached, so an earlier class's calls are still in the window.
+    @BeforeEach
     void resetBreakers() {
         circuitBreakerRegistry.circuitBreaker("profileDirectory").reset();
         circuitBreakerRegistry.circuitBreaker("userExistence").reset();
