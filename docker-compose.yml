@@ -113,6 +113,12 @@ services:
       jwt-key:
         condition: service_completed_successfully
 
+  # matching-service's score store (Day 22): the DynamoDB emulator, in memory, so scores are lost
+  # on a restart, which costs model calls, not data. No published port.
+  dynamodb:
+    image: amazon/dynamodb-local:3.3.1
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+
   # matching-service (Day 21), no published port; the gateway routes top-matches to it
   # (MATCHING_SERVICE_URL on api-gateway below); it alone holds the LLM key.
   matching-service:
@@ -123,6 +129,13 @@ services:
       DB_NAME: ${POSTGRES_DB}
       DB_MATCHING_USER: matching_user
       DB_MATCHING_PASSWORD: ${MATCHING_DB_PASSWORD:-password}
+      # The score store (Day 22): the emulator above, whose table the service creates. The keys are
+      # the emulator's dummies; on AWS a task role (Phase 7).
+      SCORES_DYNAMODB_ENDPOINT: http://dynamodb:8000
+      SCORES_CREATE_TABLE: "true"
+      AWS_REGION: eu-west-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/matching-service.pem
       # identity is still the monolith's; user tokens are checked against its key set there.
       INTERNAL_IDENTITY_URL: http://backend:8080
@@ -149,6 +162,8 @@ services:
         condition: service_healthy
       jwt-key:
         condition: service_completed_successfully
+      dynamodb:
+        condition: service_started
 
   # The API gateway (Day 15), the only way in to the backend: published on 8080, where the
   # backend used to be (Day 16). It listens on 8081 inside the network.

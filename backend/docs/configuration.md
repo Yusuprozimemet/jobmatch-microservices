@@ -135,10 +135,11 @@ And the model, which only it calls. With no key it still answers, by skill overl
 | `LLM_API_KEY` | empty | Empty disables model scoring; matching still ranks by skill overlap |
 | `LLM_BASE_URL` | Gemini's OpenAI-compatible endpoint | Any chat-completions API |
 | `LLM_MODEL` | `gemini-flash-lite-latest` | Part of the cache key |
-| `LLM_TIMEOUT_SECONDS` | `15` | Read timeout; connect is fixed at 5s. 15 keeps the worst case, three internal calls then the model, at 29 s, under the gateway's 30 s read |
+| `LLM_TIMEOUT_SECONDS` | `13` | Read timeout; connect is fixed at 5s. 13 keeps the worst case, three internal calls, the score reads and writes and the model, at 28.5 s, under the gateway's 30 s read |
 | `LLM_REASONING_EFFORT` | `low` | Empty omits the field for providers that reject it |
 | `LLM_SCORE_RETENTION_DAYS` | `1` | Clamped to a minimum of 1 |
-| `LLM_SCORE_PURGE_CRON` | `0 0 * * * *` | Hourly |
+| `SCORES_DYNAMODB_ENDPOINT` | empty | The score store (Day 22); compose sets the emulator |
+| `SCORES_CREATE_TABLE` | `false` | `true` in compose: the service creates the table at startup |
 
 At most ten scoring calls run at once (a bulkhead, Day 21); an eleventh request is answered by
 skill overlap at once rather than waiting.

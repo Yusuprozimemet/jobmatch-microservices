@@ -262,7 +262,8 @@ and shows `reason` only when `aiScored` is true.
 
 # 6. The score cache
 
-Verdicts live in `job_match_scores`, keyed on
+Verdicts live in matching-service's DynamoDB table `job_match_scores` (Day 22; Postgres before),
+keyed on
 **(SHA-256 of the sorted lowercased skill set, `posting_id`, `model/promptVersion`)**.
 
 Four properties fall out of that key:
@@ -277,14 +278,13 @@ Four properties fall out of that key:
 - **Editing a profile costs a rescore.** A different skill set is a different hash, so every save
   makes the next matches request a cold one.
 
-**Freshness is enforced on the read**, not by the purge:
-`scored_at > now() - make_interval(days => retention)`. A verdict is therefore never served older
-than the window even if the hourly purge is late, misconfigured, or has never run - the purge only
-reclaims disk. Retention is clamped to a minimum of one day, because a shorter window would expire
+**Freshness is enforced on the read**, not by expiry: an item whose `ttl` (`scored_at` +
+retention) has passed is dropped when read. DynamoDB deletes expired items lazily, within a few
+days, so the TTL only reclaims space; the read decides what is served. Retention is clamped to a minimum of one day, because a shorter window would expire
 verdicts as fast as they are written and turn every request into a full rescore.
 
-Writes never throw. A failed insert costs one repeated model call later, not an error page for a
-ranking the user already has.
+Neither reads nor writes throw. A store that is down or hung (each call is bounded at 500 ms) reads
+as all misses and drops the write: it costs model calls, not an error page.
 
 ---
 
@@ -314,10 +314,11 @@ matching-service's, set in compose from the root `.env`; nothing else holds the 
 | `LLM_API_KEY` | empty | Empty disables step 2 entirely. Everything still works |
 | `LLM_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Any OpenAI-compatible chat-completions endpoint |
 | `LLM_MODEL` | `gemini-flash-lite-latest` | Part of `scorer_version`, so changing it invalidates stored verdicts |
-| `LLM_TIMEOUT_SECONDS` | `15` | Read timeout; connect is fixed at 5s. A cold shortlist takes ~4s on a flash-tier model, so this is headroom, not a target. At most 15 so that three internal calls and the model fit the gateway's 30 s read |
+| `LLM_TIMEOUT_SECONDS` | `13` | Read timeout; connect is fixed at 5s. A cold shortlist takes ~4s on a flash-tier model, so this is headroom, not a target. At most 13 so that three internal calls, the score reads and writes and the model fit the gateway's 30 s read |
 | `LLM_REASONING_EFFORT` | `low` | Sent as `reasoning_effort`. Gemini 3 flash costs ~14s without it, ~4s with `low`. Empty omits the field for providers that reject it |
 | `LLM_SCORE_RETENTION_DAYS` | `1` | Clamped to a minimum of 1 |
-| `LLM_SCORE_PURGE_CRON` | `0 0 * * * *` | Hourly. Only reclaims space, so an expired row lingers at most an hour |
+| `SCORES_DYNAMODB_ENDPOINT` | empty | The score store; empty is AWS itself, compose sets the emulator |
+| `SCORES_CREATE_TABLE` | `false` | `true` (compose) creates the table and its TTL at startup; on AWS it is Terraform's |
 
 Constants that are code, not configuration, in `JobMatchService`: shortlist size 40, result limit 25,
 strong-match threshold 60%.

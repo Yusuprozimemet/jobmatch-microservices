@@ -25,7 +25,7 @@ in application code, not in SQL — e.g. a saved job's `posting_id` (text) is lo
 | `saved_jobs` | (`user_id`, `posting_id`) | A user's saved postings and their `job_state` (`SAVED` / `APPLIED` / `REJECTED`). `posting_id` is a text reference into the mart, not a foreign key. See [`saving-tracking.md`](saving-tracking.md) |
 | `password_reset_tokens` | `id` (UUID) | One-time tokens for the forgot-password flow, with an expiry |
 | `refresh_tokens` | `id` (UUID), `user_id` → `users.id` | Refresh tokens, stored as their SHA-256 only, with an expiry and a revocation time. Created by `identity`'s own migration (`db/identity/V1`), and readable by no other module's role. See [`auth.md`](auth.md#8-deleting-the-account) |
-| `job_match_scores` | (`skills_hash`, `posting_id`, `scorer_version`) | Cached LLM match verdicts, keyed on a hash of the profile's skill set rather than the user — so identical profiles share a cache entry and nothing user-identifying is stored. See [`matching-profile.md`](matching-profile.md#6-the-score-cache) |
+| `job_match_scores` | (`skills_hash`, `posting_id`, `scorer_version`) | No longer read or written since Day 22: the scores are in matching-service's DynamoDB table, and Day 23 drops this one. Cached LLM match verdicts, keyed on a hash of the profile's skill set rather than the user — so identical profiles share a cache entry and nothing user-identifying is stored. See [`matching-profile.md`](matching-profile.md#6-the-score-cache) |
 
 ---
 

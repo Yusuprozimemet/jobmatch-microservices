@@ -164,7 +164,7 @@ elsewhere still verifies for up to 15 minutes, and finds no user.
 
 | Survives | Personal? |
 | --- | --- |
-| `job_match_scores` rows the user's skill set produced | No — keyed on a hash of skills, shared with anyone who has the same set. Unreachable after 24h, and deleted by the purge within an hour of that |
+| `job_match_scores` rows the user's skill set produced | No — keyed on a hash of skills, shared with anyone who has the same set. Unreachable after 24h, and deleted by the store's TTL within days of that |
 | Application log lines naming the email address | **Yes** — see [section 8](#8-personal-data-in-the-logs) |
 | Emails already delivered to the user's inbox | Out of our hands by definition |
 
@@ -203,17 +203,16 @@ the app deliberately gives up control — the terms page says so, and the link c
 | Data | Kept |
 | --- | --- |
 | Account, profile, saved jobs | Until the user deletes the account. **There is no inactivity policy** |
-| `job_match_scores` | `LLM_SCORE_RETENTION_DAYS`, default and minimum 1 day. Enforced on the read, so nothing older is ever served; an hourly purge reclaims the space within an hour of a row expiring |
+| `job_match_scores` | `LLM_SCORE_RETENTION_DAYS`, default and minimum 1 day. Enforced on the read, so nothing older is ever served. Since Day 22 the scores are in DynamoDB, where each item carries a `ttl` and DynamoDB deletes it within a few days of expiring; unreadable at once, deleted later |
 | Password reset tokens | 15 minutes of validity. Deleted on use, and when a newer link is requested |
 | Refresh tokens | 30 days, or until logout, a password change or reset. A spent or expired row stays in `refresh_tokens` until the account is deleted; nothing sweeps it yet |
 | Pending Google links | 10 minutes of validity. Deleted when the account parks a newer one or is deleted; a claimed or expired row otherwise stays, as refresh tokens do |
 
 One gap: **an expired reset token that is never used and never superseded stays in the table
-indefinitely.** Nothing sweeps `password_reset_tokens` on a schedule the way `job_match_scores` is
-swept; a row is only removed when that user resets, requests another link, or deletes their account.
+indefinitely.** Nothing sweeps `password_reset_tokens` on a schedule; a row is only removed when
+that user resets, requests another link, or deletes their account.
 The token is useless after 15 minutes, but the row still ties a user id to a moment in time. A
-scheduled delete of `expiry_date < now()` would close it — the `JobMatchScoreCleanup` component is
-the pattern to copy.
+scheduled delete of `expiry_date < now()` would close it.
 
 ---
 
