@@ -1,19 +1,17 @@
-package nl.hackyourfuture.project.backend.matching;
+package nl.hackyourfuture.project.matchingservice;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.sdk.trace.data.SpanData;
-import nl.hackyourfuture.project.backend.support.ApiClient;
-import nl.hackyourfuture.project.backend.support.EndedSpans;
-import nl.hackyourfuture.project.backend.support.MatchingTest;
-import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfigureTracing;
 import org.springframework.boot.test.web.server.LocalManagementPort;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,40 +19,50 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The internal clients serve, and are measured and traced like any outgoing call (Day 38): each
+ * The internal clients serve, and are measured and traced like the LLM call (Day 38): each
  * {@code /api} request below answers 200 through its client, and each client call is an
  * {@code http_client_requests} line with its route and status, and a client span in the trace of
  * the request that made it. An ancestor, not the parent: the parent is Spring Security's
  * {@code secured request} span.
  *
- * <p>The top-matches calls are matching-service's now, tested in its
- * {@code InternalCallsObservedTest} (Day 21); this test covers the saved-jobs call, which stays on
- * the monolith.
+ * <p>Moved from the monolith on Day 21: the top-matches calls. The saved-jobs call stays there, in
+ * {@code InternalCallsObservedIT}.
  */
 @AutoConfigureTracing
 @Import(EndedSpans.Config.class)
-class InternalCallsObservedIT extends MatchingTest {
+class InternalCallsObservedTest extends MatchingServiceTest {
 
     /** Each internal route, and the {@code /api} request whose client calls it. */
     private static final Map<String, String> CALLED_BY = Map.of(
-            "/internal/postings/batch", "/api/saved-jobs");
+            "/internal/postings/shortlist", "/api/jobs/top-matches",
+            "/internal/profiles/{userId}", "/api/jobs/top-matches",
+            "/internal/users/{id}", "/api/jobs/top-matches");
 
     @LocalManagementPort
     private int managementPort;
 
+    @LocalServerPort
+    private int port;
+
     @Autowired
     private EndedSpans spans;
+
+    private TopMatchesRequest request;
 
     @BeforeEach
     void forgetEarlierSpans() {
         spans.clear();
+        StubUpstream.instance().reset();
+        StubLlm.instance().reset();
+        request = new TopMatchesRequest(port, managementPort);
     }
 
     @Test
-    void everyInternalCallIsCountedWithItsRouteAndStatus() {
-        askEveryCaller("observed-metric");
+    void everyInternalCallIsCountedWithItsRouteAndStatus() throws IOException, InterruptedException {
+        askTopMatches("observed-metric");
 
-        List<String> counts = ApiClient.onPort(managementPort).get("/actuator/prometheus").body().lines()
+        String metrics = request.prometheus();
+        List<String> counts = metrics.lines()
                 .filter(line -> line.startsWith("http_client_requests_seconds_count"))
                 .toList();
         CALLED_BY.keySet().forEach(route -> assertThat(counts)
@@ -63,8 +71,8 @@ class InternalCallsObservedIT extends MatchingTest {
     }
 
     @Test
-    void everyInternalCallIsAClientSpanInsideItsApiRequestsTrace() {
-        askEveryCaller("observed-span");
+    void everyInternalCallIsAClientSpanInsideItsApiRequestsTrace() throws IOException, InterruptedException {
+        askTopMatches("observed-span");
 
         List<SpanData> ended = spans.all();
         CALLED_BY.forEach((route, apiRequest) -> {
@@ -79,15 +87,8 @@ class InternalCallsObservedIT extends MatchingTest {
         });
     }
 
-    /** Saved jobs through its client, answering 200. */
-    private void askEveryCaller(String prefix) {
-        TestUser saver = aUser().create();
-        posting(prefix + "-saved", "Observed Saved Job", "java");
-        jdbc().sql("INSERT INTO saved_jobs (user_id, posting_id) VALUES (:userId, :postingId)")
-                .param("userId", saver.id())
-                .param("postingId", prefix + "-saved")
-                .update();
-        assertThat(authenticatedAs(saver).get("/api/saved-jobs").status()).isEqualTo(200);
+    private void askTopMatches(String postingId) throws IOException, InterruptedException {
+        assertThat(request.send(postingId).statusCode()).isEqualTo(200);
     }
 
     /** The nearest server span above {@code span} in its trace, walking parent ids. */
