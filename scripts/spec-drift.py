@@ -141,6 +141,45 @@ def work_kind(path):
     return "prod"
 
 
+CHECKLIST = re.compile(r"^\s*- \[[ x]\]")
+BREAK_SAID = re.compile(r"\b(?:broken|broke|breaks?|red)\b[^.\n]{0,60}?\b(?:on\s+purpose|deliberately)\b"
+                        r"|\bon\s+purpose\b[^.\n]{0,60}?\bfail(?:ed|s)\b|\bseen\s+(?:failing|to\s+fail|red)\b"
+                        r"|\ba\s+temporary\s+break\b", re.I)
+BREAK_NONE = re.compile(r"\b(?:nothing|not|never|no)\b[^.\n]{0,30}?\b(?:broken|broke)\s+on\s+purpose\b", re.I)
+
+
+def break_state(body):
+    """What a PR description says about breaking the code on purpose: "recorded", "none" (it says
+    nothing was broken, and why) or "silent". The template's checklist asks every PR whether its
+    checks were "seen to fail", so its lines are not read."""
+    said = [l for l in (body or "").splitlines() if not CHECKLIST.match(l) and BREAK_SAID.search(l)]
+    if any(not BREAK_NONE.search(l) for l in said):
+        return "recorded"
+    return "none" if said else "silent"
+
+
+def ci_pushes(runs):
+    """Per branch: the commits CI ran on for a pull request, and those that failed a workflow."""
+    shas, failed = collections.defaultdict(set), collections.defaultdict(set)
+    for r in runs:
+        if r["event"] == "pull_request":
+            shas[r["headBranch"]].add(r["headSha"])
+            if r["conclusion"] == "failure":
+                failed[r["headBranch"]].add((r["headSha"], r["workflowName"]))
+    return {b: (len(s), len({sha for sha, _ in failed[b]}), sorted({w for _, w in failed[b]})) for b, s in shas.items()}
+
+
+def verification(prs, runs):
+    """Every merged PR: whether it recorded a break, and how many of its pushes CI failed."""
+    ci, out = ci_pushes(runs), []
+    for p in sorted(prs.values(), key=lambda p: p["number"]):
+        if p.get("state") == "MERGED":
+            pushes, failed, failed_in = ci.get(p["headRefName"], (0, 0, []))
+            out.append(dict(number=p["number"], day=day_of(p["headRefName"]), kind=kind(p["title"], p["headRefName"]),
+                            breaks=break_state(p.get("body")), pushes=pushes, failed=failed, failed_in=failed_in))
+    return out
+
+
 def kind(title, branch, files=None):
     """What a merge was. A spec change must touch the spec (a day spec or plan.md) when its files
     are known: #55 changed the spec rules and #59 and #107 the dashboard, none of them a spec."""
@@ -764,7 +803,9 @@ def main():
     out.add_argument("--build", help="write docs/dashboard/ here as one page, with the data inlined")
     args = ap.parse_args()
     listed = json.loads(run("gh", "pr", "list", "--state", "all", "--limit", "500",
-                            "--json", "number,title,headRefName,state,url"))
+                            "--json", "number,title,headRefName,state,url,body"))
+    runs = json.loads(run("gh", "run", "list", "--limit", "5000",
+                          "--json", "headBranch,headSha,conclusion,event,workflowName"))
     prs = {p["number"]: p for p in listed}
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
     blobs = Blobs()
@@ -786,6 +827,7 @@ def main():
                            removals=removal_history(days, snaps, blobs),
                            hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
                            vocab_size=vocab, pca_var=pca, tokens=token_usage(),
+                           verification=verification(prs, runs),
                            conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md"))),
                       separators=(",", ":"))
     target = args.build or args.out
