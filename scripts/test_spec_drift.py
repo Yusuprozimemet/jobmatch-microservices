@@ -113,6 +113,26 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(sd.renamed_to("src/{ => job}/X.java"), "src/job/X.java")
         self.assertEqual(sd.renamed_to("a.txt => b/a.txt"), "b/a.txt")
 
+    def test_a_pr_records_a_break_by_its_label_and_the_checklist_is_not_read(self):
+        checklist = "- [x] Spec changes only: each check has been seen to fail (see `specs/README.md`)\n"
+        for body, state in [("**Broken on purpose:** `ISSUER` back. It fails 2 of 8.\n", "recorded"),
+                            ("**Seen red on purpose, each alone, then reverted:**\n", "recorded"),
+                            ("**Seen failing:** the test ran before the bean existed.\n", "recorded"),
+                            ("so I broke it deliberately. Failures: 3\n", "recorded"),
+                            ("Uppercasing the email on purpose (so no user is found) failed.\n", "recorded"),
+                            ("with `AccessLog` delayed (a temporary break, reverted), it failed\n", "recorded"),
+                            ("**Nothing was broken on purpose:** this track adds no test.\n", "none"),
+                            ("It passes today, on purpose.\n", "silent"), ("", "silent"), (None, "silent")]:
+            self.assertEqual(sd.break_state(body and body + checklist), state, body)
+        self.assertEqual(sd.break_state(checklist), "silent")
+
+    def test_ci_counts_each_pushed_commit_once_and_only_pull_request_runs(self):
+        run = lambda sha, result, flow="PR checks", event="pull_request": dict(
+            headBranch="day-01/track-a-x", headSha=sha, conclusion=result, workflowName=flow, event=event)
+        runs = [run("a", "failure"), run("a", "failure", "Backend CI/CD"), run("a", "success", "Dashboard"),
+                run("b", "success"), run("b", "cancelled", "Backend CI/CD"), run("c", "failure", event="push")]
+        self.assertEqual(sd.ci_pushes(runs), {"day-01/track-a-x": (2, 1, ["Backend CI/CD", "PR checks"])})
+
     def test_a_day_that_runs_later_is_not_reached_by_a_higher_number(self):
         self.repo.merge({"specs/day-17-x.md": "Day 17 adds `LaterThing`.\n",
                          "specs/day-38-x.md": "Day 38 adds `PlatformThing`.\n"})

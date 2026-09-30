@@ -460,6 +460,64 @@ function drawPerDay() {
   });
 }
 
+/* ---------- verification that leaves no lines ---------- */
+// One stacked bar per day in run order, plus one for the PRs that belong to no day.
+function dayStack(box, items, parts, label, list) {
+  box.innerHTML = "";
+  const days = [...new Set(items.map(v => v.day))].sort((a, b) => (a == null) - (b == null) || rank(a) - rank(b));
+  const groups = days.map(d => ({ d, items: items.filter(v => v.day === d) }));
+  const H = 220, P = { l: 44, r: 16, t: 22, b: 30 };
+  const yMax = Math.max(4, Math.ceil(Math.max(...groups.map(g => parts.reduce((a, p) => a + p.count(g.items), 0))) / 4) * 4);
+  const ly = v => P.t + (1 - v / yMax) * (H - P.t - P.b);
+  const bw = (LW - P.l - P.r) / groups.length, w = Math.min(28, bw - 6);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": label }, box);
+  steps(0, yMax, 4).forEach(t => {
+    el("line", { x1: P.l, x2: LW - P.r, y1: ly(t), y2: ly(t), stroke: t ? "var(--grid)" : "var(--axis)" }, svg);
+    el("text", { x: P.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = t;
+  });
+  groups.forEach((g, j) => {
+    const x = P.l + j * bw + (bw - w) / 2;
+    let base = 0;
+    parts.forEach(p => {
+      const n = p.count(g.items);
+      if (!n) return;
+      el("rect", { x: x + 0.5, y: ly(base + n) + 0.5, width: w - 1, height: Math.max(1, ly(base) - ly(base + n) - 2), rx: 2,
+        fill: p.outline ? "none" : p.color, stroke: p.outline ? p.color : "none", "stroke-dasharray": p.outline ? "3 2" : "none" }, svg);
+      base += n;
+    });
+    const name = g.d == null ? "none" : "D" + dd(g.d) + (OOO.has(g.d) ? "*" : "");
+    el("text", { x: x + w / 2, y: H - P.b + 16, "text-anchor": "middle", class: "num" + (OOO.has(g.d) ? " ooo" : "") }, svg).textContent = name;
+    const hit = el("rect", { x: P.l + j * bw, y: P.t, width: bw, height: H - P.t - P.b, class: "hit" }, svg);
+    hit.addEventListener("mousemove", ev => showTip(ev, `<b>${g.d == null ? "No day (tooling, docs)" : "Day " + dd(g.d)}</b>`
+      + parts.map(p => `<div class="row"><span>${p.name}</span><span>${p.count(g.items)}</span></div>`).join("") + list(g.items)));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+}
+function drawVerification() {
+  const V = DATA.verification || [], code = V.filter(v => v.kind === "code");
+  if (!V.length) return;
+  const n = (vs, s) => vs.filter(v => v.breaks === s).length;
+  const breakParts = [
+    { name: "break recorded", color: "var(--close)", count: vs => n(vs, "recorded") },
+    { name: "says why none", color: "var(--other)", count: vs => n(vs, "none") },
+    { name: "silent", color: "var(--muted)", outline: true, count: vs => n(vs, "silent") },
+  ];
+  const nums = vs => vs.map(v => "#" + v.number).join(", ");
+  dayStack(document.getElementById("breaks"), code, breakParts, "Code PRs per day by whether they record a break on purpose",
+    vs => n(vs, "silent") ? `<div style="margin-top:6px">silent: ${nums(vs.filter(v => v.breaks === "silent"))}</div>` : "");
+  document.getElementById("breaks-legend").innerHTML = breakParts.map(p =>
+    `<span><i class="dot" style="${p.outline ? `border:1px dashed ${p.color}` : `background:${p.color}`}"></i>${p.name} · ${p.count(code)}</span>`).join("")
+    + `<span>${code.length} code PRs</span>`;
+  const sum = (vs, k) => vs.reduce((a, v) => a + v[k], 0);
+  // Only the failures are drawn: a day's one or two would be a sliver on a bar of its 20 pushes.
+  const ciParts = [{ name: "pushes CI failed", color: "var(--fail)", count: vs => sum(vs, "failed") }];
+  dayStack(document.getElementById("ci-fails"), V, ciParts, "Commits pushed to each day's PRs, by whether CI failed them",
+    vs => `<div class="row"><span>pushes CI ran on</span><span>${sum(vs, "pushes")}</span></div>` + vs.filter(v => v.failed).map(v => `<div class="row"><span>#${v.number}</span><span>${esc(v.failed_in.join(", "))}</span></div>`).join(""));
+  const pushes = sum(V, "pushes"), failed = sum(V, "failed");
+  document.getElementById("ci-legend").innerHTML = `<span><i class="dot" style="background:var(--fail)"></i>pushes CI failed · ${failed} of ${pushes} (${fmt(failed / Math.max(1, pushes) * 100, 1)}%)</span>`
+    + `<span>in ${V.filter(v => v.failed).length} of ${V.length} merged PRs</span>`;
+}
+
 /* ---------- heatmap ---------- */
 function drawHeat() {
   const box = document.getElementById("heat");
@@ -759,7 +817,7 @@ function drawTokens() {
     }).join("") + "</tbody>";
 }
 
-drawNow(); drawWork(); drawPerDay(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
+drawNow(); drawWork(); drawPerDay(); drawVerification(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
 }
 
 function start() {
