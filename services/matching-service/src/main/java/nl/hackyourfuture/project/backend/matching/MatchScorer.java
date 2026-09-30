@@ -1,5 +1,7 @@
 package nl.hackyourfuture.project.backend.matching;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -80,6 +82,10 @@ public class MatchScorer {
 
     // Scores each posting 0-100, keyed by posting id. Missing entries are normal - the
     // caller falls back for whatever's absent.
+    // At most 10 scoring calls wait on the model at once. An 11th does not queue; it gets the
+    // skill-overlap order, as an unavailable model does. Under virtual threads a dedicated pool
+    // would limit nothing; a semaphore does (Day 21).
+    @Bulkhead(name = "modelCall", type = Bulkhead.Type.SEMAPHORE, fallbackMethod = "busy")
     public Map<String, Score> score(List<String> candidateSkills, List<ShortlistedPosting> jobs) {
         if (!isEnabled() || jobs.isEmpty()) {
             return Map.of();
@@ -98,6 +104,11 @@ public class MatchScorer {
             log.warn("LLM scoring unavailable, falling back to skill-overlap order: {}", e.getMessage());
             return Map.of();
         }
+    }
+
+    private Map<String, Score> busy(List<String> candidateSkills, List<ShortlistedPosting> jobs, BulkheadFullException e) {
+        log.warn("LLM scoring at its concurrent-call limit, falling back to skill-overlap order");
+        return Map.of();
     }
 
     // Short ids keep the prompt small and less likely to be echoed back wrong.

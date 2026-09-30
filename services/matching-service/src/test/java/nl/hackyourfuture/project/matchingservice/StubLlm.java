@@ -12,7 +12,9 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -28,9 +30,11 @@ final class StubLlm {
 
     private final HttpServer server;
     private final AtomicInteger calls = new AtomicInteger();
+    private final AtomicInteger hanging = new AtomicInteger();
 
     private volatile int[] scoresInPromptOrder = new int[0];
     private volatile String lastPrompt;
+    private volatile CountDownLatch release;
 
     private StubLlm() {
         try {
@@ -57,6 +61,11 @@ final class StubLlm {
         calls.set(0);
         scoresInPromptOrder = new int[0];
         lastPrompt = null;
+        CountDownLatch hung = release;
+        release = null;
+        if (hung != null) {
+            hung.countDown();
+        }
     }
 
     /** How many times the application actually called a model. Zero means it never tried. */
@@ -74,8 +83,48 @@ final class StubLlm {
         this.scoresInPromptOrder = scores.clone();
     }
 
+    /**
+     * Hold every call until {@link #reset()}, then answer 503: a provider that accepts the
+     * connection and never answers. Held at most 90 s, so a test that forgets to release cannot
+     * hold the run; longer than any read timeout a test breaks the application with.
+     */
+    void hang() {
+        this.release = new CountDownLatch(1);
+    }
+
+    /** Wait until at least {@code calls} calls are being held, up to 10 s. */
+    void awaitHanging(int calls) {
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        while (hanging.get() < calls && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        if (hanging.get() < calls) {
+            throw new AssertionError("Expected " + calls + " calls held by the model, found " + hanging.get());
+        }
+    }
+
     private void handleCompletion(HttpExchange exchange) throws IOException {
         calls.incrementAndGet();
+
+        CountDownLatch hung = release;
+        if (hung != null) {
+            hanging.incrementAndGet();
+            try {
+                hung.await(90, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                hanging.decrementAndGet();
+            }
+            respond(exchange, 503, "{\"error\":{\"message\":\"stubbed hang\"}}");
+            return;
+        }
+
         JsonNode body = JSON.readTree(new String(
                 exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
         String prompt = body.path("messages").path(0).path("content").asString("");
@@ -85,6 +134,15 @@ final class StubLlm {
                 .formatted(JSON.writeValueAsString(scoreJobsIn(prompt))).getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         exchange.sendResponseHeaders(200, bytes.length);
+        try (OutputStream out = exchange.getResponseBody()) {
+            out.write(bytes);
+        }
+    }
+
+    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        exchange.sendResponseHeaders(status, bytes.length);
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(bytes);
         }

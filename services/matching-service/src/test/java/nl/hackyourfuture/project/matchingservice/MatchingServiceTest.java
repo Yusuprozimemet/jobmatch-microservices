@@ -28,4 +28,8 @@ abstract class MatchingServiceTest {
         registry.add("app.internal.jobs-url", () -> StubUpstream.instance().baseUrl());
         registry.add("app.identity.jwks-url", () -> TestIdentity.instance().url() + "/.well-known/jwks.json");
     }
+
+    protected StubLlm model() {
+        return StubLlm.instance();
+    }
 }

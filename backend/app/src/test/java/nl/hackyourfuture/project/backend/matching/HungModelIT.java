@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * A model that never answers costs top-matches its read timeout and nothing else (Day 21). Job
  * search has been isolated from it since Day 17, in its own container; the rest of the monolith
  * by virtual threads, which a request waiting on the model does not hold up. Both hold today,
- * and must still hold once matching runs in its own container.
+ * and must still hold once matching runs in its own container. The bulkhead caps the model at
+ * ten calls, and the eleventh is answered without it (criterion 3).
  */
 class HungModelIT extends MatchingTest {
 
@@ -69,6 +70,39 @@ class HungModelIT extends MatchingTest {
                 .isLessThan(Duration.ofSeconds(30));
         assertThat(response.json()).isNotEmpty()
                 .allSatisfy(match -> assertThat(match.get("aiScored").asBoolean()).isFalse());
+    }
+
+    @Test
+    void anEleventhRequestIsAnsweredWithoutTheModelWhileTenWaitOnIt() throws Exception {
+        TestUser reader = userWithProfile();
+        List<ApiClient> askers = new ArrayList<>();
+        for (int i = 0; i < IN_FLIGHT; i++) {
+            askers.add(authenticatedAs(userWithProfile()));
+            posting("bulkhead-" + UUID.randomUUID().toString().substring(0, 8), "Bulkhead Engineer " + i, "java", "sql");
+        }
+        model().hang();
+
+        try (ExecutorService threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<CompletableFuture<ApiResponse>> topMatches = askers.stream()
+                    .map(asker -> CompletableFuture.supplyAsync(() -> asker.get("/api/jobs/top-matches"), threads))
+                    .toList();
+            model().awaitHanging(IN_FLIGHT);
+
+            long started = System.nanoTime();
+            ApiResponse eleventhResponse = authenticatedAs(reader).get("/api/jobs/top-matches");
+            Duration took = Duration.ofNanos(System.nanoTime() - started);
+
+            assertThat(eleventhResponse.status()).isEqualTo(200);
+            assertThat(took).as("11th request with bulkhead full").isLessThan(Duration.ofSeconds(1));
+            assertThat(eleventhResponse.json()).isNotEmpty()
+                    .allSatisfy(match -> assertThat(match.get("aiScored").asBoolean()).isFalse());
+            assertThat(model().callCount()).as("model call count unchanged").isEqualTo(IN_FLIGHT);
+
+            model().reset();
+            for (CompletableFuture<ApiResponse> request : topMatches) {
+                assertThat(request.get(30, TimeUnit.SECONDS).status()).as("top-matches once released").isEqualTo(200);
+            }
+        }
     }
 
     private static void assertAnswersWithinASecond(String route, Supplier<ApiResponse> request) {
