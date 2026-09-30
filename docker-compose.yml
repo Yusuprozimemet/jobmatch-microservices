@@ -113,9 +113,8 @@ services:
       jwt-key:
         condition: service_completed_successfully
 
-  # matching-service (Day 21). No published port, and not routed to yet: the gateway still sends
-  # top-matches to the backend until Track E2 sets MATCHING_SERVICE_URL there. DB_MATCHING_* is
-  # read here since Track E1, when matching's code and migrations moved. LLM_* comes with the key in E2.
+  # matching-service (Day 21), no published port; the gateway routes top-matches to it
+  # (MATCHING_SERVICE_URL on api-gateway below); it alone holds the LLM key.
   matching-service:
     build: ./services/matching-service
     environment:
@@ -128,6 +127,12 @@ services:
       # identity is still the monolith's; user tokens are checked against its key set there.
       INTERNAL_IDENTITY_URL: http://backend:8080
       INTERNAL_JOBS_URL: http://job-service:8080
+      # The model call (Day 21): only this service has the key. With no key top-matches ranks by
+      # skill overlap. LLM_TIMEOUT_SECONDS is left to the service's 15 s, which keeps a request
+      # under the gateway's 30 s read.
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      LLM_MODEL: ${LLM_MODEL:-gemini-flash-lite-latest}
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     volumes:
@@ -156,6 +161,8 @@ services:
     environment:
       BACKEND_URL: http://backend:8080
       JOB_SERVICE_URL: http://job-service:8080
+      # Day 21: top-matches goes to matching-service; unset, it would fall back to the backend.
+      MATCHING_SERVICE_URL: http://matching-service:8080
       # Tracing as the backend's, above: off unless TRACING_EXPORT_ENABLED=true, to the same Tempo.
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
@@ -176,6 +183,8 @@ services:
       backend:
         condition: service_started
       job-service:
+        condition: service_healthy
+      matching-service:
         condition: service_healthy
 
   frontend:
