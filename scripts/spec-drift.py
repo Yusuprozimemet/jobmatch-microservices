@@ -112,6 +112,35 @@ def code_like(tok):
     return bool(re.search(r"[a-z][A-Z]", tok)) or ("_" in tok.strip("_") and tok.lower() == tok)
 
 
+WORK_KINDS = ("spec", "context", "prod", "test", "tooling")
+NOT_WRITTEN = re.compile(r"(^|/)package-lock\.json$|^docs/dashboard/token-usage\.json$|^screenshots/")
+TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)(test_[^/]*|[^/]*_test|conftest)\.py$|(Test|Tests|IT)\.java$"
+                       r"|\.(test|spec)\.[jt]sx?$")
+
+
+def renamed_to(path):
+    """numstat writes a moved file as src/{a => b}/X.java or a => b; its lines count where it went."""
+    path = re.sub(r"\{[^{}]* => ([^{}]*)\}", r"\1", path)
+    return path.split(" => ")[-1].replace("//", "/")
+
+
+def work_kind(path):
+    """Which box a changed file's lines go in; the first rule that matches wins. None: generated
+    by a tool, not written, so not counted."""
+    if NOT_WRITTEN.search(path):
+        return None
+    if path == "plan.md" or path.startswith("specs/"):
+        return "spec"
+    if path.endswith(".md") or path.startswith(".claude/") or (path.startswith("docs/")
+                                                               and not path.startswith("docs/dashboard/")):
+        return "context"
+    if TEST_PATH.search(path):
+        return "test"
+    if path.startswith(("scripts/", ".github/", "docs/dashboard/")):
+        return "tooling"
+    return "prod"
+
+
 def kind(title, branch, files=None):
     """What a merge was. A spec change must touch the spec (a day spec or plan.md) when its files
     are known: #55 changed the spec rules and #59 and #107 the dashboard, none of them a spec."""
@@ -254,8 +283,13 @@ def trajectory(snaps, blobs, order=()):
         for line in run("git", "diff", "--numstat", snaps[0]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
             a, d, _ = line.split("\t")
             added, deleted = added + int(a), deleted + int(d)
-        spec_files, churn = {}, 0
+        spec_files, churn, work = {}, 0, dict.fromkeys(WORK_KINDS, 0)
         if i:
+            for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"]).splitlines():
+                a, d, f = line.split("\t")
+                w = work_kind(renamed_to(f))
+                if a != "-" and w:
+                    work[w] += int(a) + int(d)
             for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
                 a, d, f = line.split("\t")
                 spec_files[f] = int(a) + int(d)
@@ -271,7 +305,7 @@ def trajectory(snaps, blobs, order=()):
                          gap_full=round(angle(spec_v, code_v), 2),
                          gap_chance=round(chance_angle(spec_v, code_v, known), 2),
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
-                         spec_files=spec_files, code_churn=churn))
+                         spec_files=spec_files, code_churn=churn, work=work))
         prev = words
         vectors.append((spec_v, code_v))
     X = np.array([v / (np.linalg.norm(v) or 1) for pair in zip(*vectors) for v in pair])

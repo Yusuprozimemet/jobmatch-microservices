@@ -120,14 +120,27 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Where the work went</h2>
+      <p>Every line changed in a merged pull request, sorted by what the file is: the spec, the context the agents work from, the production code, and the tests with the scripts and CI that check them. Sorted by path, not by purpose: the rules are under “How the vectors are built”. Breaks on purpose never merge and the auditors only report, so verification does more than its lines show.</p>
+    </div>
+    <div class="legend" id="work-legend"></div>
+    <div id="work-bar"></div>
+    <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Tests per line of code, so far</h2>
+      <p>Test lines changed so far divided by production lines changed so far, at each merge. Days 1–4 wrote the contract tests before any code moved, so the line starts once production passes 1,000 lines; above the dashed line, more test than code has been written.</p>
+    </div>
+    <div id="test-ratio"></div>
+    <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Spec and code, each against its own total</h2>
       <p>Lines changed so far in the specs (<code>plan.md</code> and <code>specs/</code>) and in everything else except Markdown, each as a share of its own total: code lines outnumber spec lines several times over, so on one scale the spec line would hug the axis. When the spec line rises ahead of the code line, the plan is being written before it is built.</p>
     </div>
     <div class="legend" id="churn-legend"></div>
     <div id="churn"></div>
     <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">Pull requests per day</h2>
-      <p>Each day's merged pull requests by kind, in run order, counted from the <code>day-NN/</code> branches; tooling and docs PRs belong to no day and are not here. A tall bar is a day that took more tracks, or more spec changes, than it was written for: hover for the estimate.</p>
+      <p>Each day's merged pull requests by kind, in run order, counted from the <code>day-NN/</code> branches; tooling and docs PRs belong to no day, so they are only in the bar above, which counts every merge. A tall bar is a day that took more tracks, or more spec changes, than it was written for: hover for the estimate.</p>
     </div>
+    <div class="legend" id="pr-total-legend"></div>
+    <div id="pr-total"></div>
     <div id="perday"></div>
   </section>
 
@@ -149,6 +162,15 @@
         <p><b>Drift</b> uses the full spec text: word frequencies (log-scaled) of <code>plan.md</code> and <code>specs/*.md</code>, compared by angle with the Sep 20 version. Each word is weighted by how few of the Sep 20 files used it, so words every file uses (“the”, “day”) count for nothing and a rewrite is not diluted by them. 0° means unchanged. 90° would mean nothing in common, but the scale is not linear in change: the Sep 20 files split in two (even and odd by name) are <span class="num drift-ref"></span> apart, so a drift near that means the spec now differs from its first version about as much as one half of that version differs from the other.</p>
         <p><b>Gap</b> needs a space both sides share. It is built from the <span class="num vocab-n"></span> code-like names the specs put in backticks (<code>SavedJobCounts</code>, <code>saved_jobs</code>, <code>JobRepository</code>…). The spec vector counts how often each name appears in the specs. The code vector counts how often it appears in the code, with Markdown, <code>data/</code>, screenshots and comment lines left out: a comment naming a thing is not the thing. Both are log-scaled and compared by angle. Each merge’s gap uses only the names the specs had used by that merge, so a name a later spec adds does not move an earlier point. Counts are never negative, so even unrelated vectors sit well under 90°: the same code counts shuffled across the names would read <span class="num" id="gap-chance"></span> today (the dashed line). The gap is worth reading only as its distance below that line; the share of reached names found in the code (“The sawtooth, up close”) is the plainer measure.</p>
         <p><b>The plane</b> is a principal-component projection of all <span class="num" id="n-vectors"></span> vectors (one spec and one code vector per snapshot) together. PC1 holds <span class="num" id="pc1"></span> of the variance and PC2 holds <span class="num" id="pc2"></span>; the other <span class="num" id="pc-rest"></span> is not shown, so distances in the plot are approximate.</p>
+        <p><b>Where the work went</b> counts <code>git diff --numstat</code> between one merge and the one before it, every file, so nothing merged is counted twice and nothing is left out. A moved file counts only the lines that changed in the move, under the path it moved to. Binary files, <code>package-lock.json</code>, <code>screenshots/</code> and <code>docs/dashboard/token-usage.json</code> are written by tools, not people, and are not counted. The first rule that matches a file’s path decides its box:</p>
+        <ol>
+          <li><b>Specs:</b> <code>plan.md</code> and <code>specs/</code>, the template and README there included.</li>
+          <li><b>Context:</b> any other <code>*.md</code> (<code>CLAUDE.md</code>, READMEs, the PR template), <code>.claude/</code> (the agents and settings), and <code>docs/</code> apart from <code>docs/dashboard/</code>.</li>
+          <li><b>Tests:</b> a path through a <code>test/</code> or <code>tests/</code> folder (<code>src/test/</code>, the harness and its <code>support/</code> included), or a file named <code>*Test.java</code>, <code>*Tests.java</code>, <code>*IT.java</code>, <code>test_*.py</code>, <code>*_test.py</code>, <code>conftest.py</code>, <code>*.test.js</code> or <code>*.spec.ts</code> and their kin.</li>
+          <li><b>Scripts, CI, dashboard</b> (drawn with the tests, as verification): the rest of <code>scripts/</code>, <code>.github/</code> and <code>docs/dashboard/</code>.</li>
+          <li><b>Production code:</b> everything else: source, migrations, Dockerfiles, compose, <code>.env.example</code>, <code>observability/</code>, the frontend and <code>data/</code> pipelines.</li>
+        </ol>
+        <p>The rules sort by path, and a path does not always say what a change was for. A spec-change PR that fixes a test counts as tests; a test helper under <code>src/test/</code> counts as tests even when it is plumbing; a Markdown file inside a service counts as context; the dashboard’s own code counts as verification. The ratio of tests to code uses the <b>Tests</b> box alone, without the scripts.</p>
         <p><b>Refresh.</b> <code>python scripts/spec-drift.py --build</code> in the repository writes this page with its data. It is rerun after every merge, before the next step starts.</p>
         <p><b>Limits.</b> Names in a spec that should <em>disappear</em> (like <code>saved_jobs</code> leaving <code>jobs/</code>) still count as shared vocabulary. Comments are recognised by line (<code>//</code>, <code>/*</code>, <code>*</code>, <code>--</code>, <code>#</code>, <code>&lt;!--</code>), not parsed, so a marker inside a string can hide the code after it on that line. The gap measures shared language, not correctness; correctness lives in the acceptance criteria and the tests.</p>
       </div>
@@ -165,6 +187,7 @@
       <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the migration day whose branch they ran on. Under each bar, and in the table, is the context per reply: how much of the conversation each reply re-read. It falls when sessions are kept short, and it drives most of the cost.</p>
     </div>
     <div class="legend" id="token-legend"></div>
+    <p id="token-implementer"></p>
     <div id="token-bars"></div>
     <div class="scroll-x"><table id="token-days"></table></div>
   </section>

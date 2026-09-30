@@ -287,6 +287,15 @@ function drawLines() {
       { name: "spec", color: "var(--spec)", end: "spec", dy: 8, get: r => cumShare(r, "spec") },
     ],
   });
+  lineChart(document.getElementById("test-ratio"), {
+    H: 200, yMin: 0, yMax: ratioMax, ticks: steps(0, ratioMax, ratioMax <= 6 ? ratioMax : 4),
+    unit: "×", strip: false, digits: 2,
+    label: "Test lines changed so far per production line changed so far",
+    series: [
+      { name: "one to one", color: "var(--muted)", dash: true, end: "1 : 1", get: () => 1 },
+      { name: "tests", color: "var(--close)", get: r => testRatio(r) },
+    ],
+  });
   const p = R[sel].placed || {};
   document.getElementById("placed").innerHTML = `<p>At ${prLabel(R[sel])}: ` + Object.keys(p).sort().map(s =>
     `<b>${s}</b> ${p[s][1] ? (p[s][0] ? `${p[s][1]} lines out, ${p[s][0]} still in the monolith` : `out (${p[s][1]} lines)`) : `in the monolith (${p[s][0]} lines)`}`).join(" · ")
@@ -304,6 +313,47 @@ R.reduce(([s, c], r) => {
   CUM.set(r, next); return next;
 }, [0, 0]);
 const cumShare = (r, k) => { const [s, c] = CUM.get(r), [S, C] = CUM.get(last); return k === "spec" ? (S ? s / S * 100 : 0) : (C ? c / C * 100 : 0); };
+// Lines per box, summed merge by merge; the ratio waits for 1,000 production lines, since Days 1-4 wrote only tests.
+const WORK = new Map();
+R.reduce((acc, r) => {
+  const next = { ...acc };
+  Object.entries(r.work || {}).forEach(([k, v]) => { next[k] = (next[k] || 0) + v; });
+  WORK.set(r, next); return next;
+}, {});
+const RATIO_FROM = 1000;
+const testRatio = r => { const w = WORK.get(r); return w.prod >= RATIO_FROM ? +(w.test / w.prod).toFixed(2) : null; };
+const ratioMax = Math.max(2, Math.ceil(Math.max(0, ...R.map(testRatio).filter(v => v != null))));
+// One bar, split into boxes in order; a box's share is printed inside it when there is room.
+function shareBar(box, parts, label) {
+  box.innerHTML = "";
+  const H = 40, total = parts.reduce((a, p) => a + p.value, 0) || 1, P = { l: 0, r: 0 };
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": label }, box);
+  let x = P.l;
+  parts.forEach(p => {
+    const w = p.value / total * (LW - P.l - P.r);
+    if (!w) return;
+    const rect = el("rect", { x: x + 1, y: 4, width: Math.max(1, w - 2), height: H - 8, rx: 3, fill: p.color }, svg);
+    if (w > 54) el("text", { x: x + 10, y: H / 2 + 5, class: "num", style: "fill:var(--surface);font-weight:600" }, svg).textContent = fmt(p.value / total * 100, 0) + "%";
+    rect.addEventListener("mousemove", ev => showTip(ev, `<b>${esc(p.name)}</b>${p.tip || ""}<div class="row"><span>share</span><span>${fmt(p.value / total * 100, 1)}%</span></div>`));
+    rect.addEventListener("mouseleave", hideTip);
+    x += w;
+  });
+}
+function drawWork() {
+  const w = WORK.get(last), n = k => w[k] || 0;
+  const row = (k, v) => `<div class="row"><span>${k}</span><span>${v.toLocaleString()}</span></div>`;
+  const parts = [
+    { name: "Specs", value: n("spec"), color: "var(--spec)", tip: row("plan.md and specs/", n("spec")) },
+    { name: "Context", value: n("context"), color: "var(--w-context)", tip: row("CLAUDE.md, agents, README, docs", n("context")) },
+    { name: "Production code", value: n("prod"), color: "var(--code)", tip: row("code and config", n("prod")) },
+    { name: "Tests and verification", value: n("test") + n("tooling"), color: "var(--close)",
+      tip: row("tests", n("test")) + row("scripts, CI, dashboard", n("tooling")) },
+  ];
+  shareBar(document.getElementById("work-bar"), parts, "Lines changed in merged pull requests, by what the file is");
+  document.getElementById("work-legend").innerHTML = parts.map(p =>
+    `<span><i class="dot" style="background:${p.color}"></i>${p.name} · ${kilo(p.value)}</span>`).join("")
+    + `<span>${fmt(n("test") / Math.max(1, n("prod")), 1)} test lines per production line</span>`;
+}
 const gapDelta = i => +(R[i].gap_full - R[i - 1].gap_full).toFixed(2);
 const signed = (x, d = 2) => (x > 0 ? "+" : x < 0 ? "−" : "") + fmt(Math.abs(x), d);
 
@@ -366,6 +416,11 @@ function drawPerDay() {
   const [S, C] = CUM.get(last);
   document.getElementById("churn-legend").innerHTML = `<span><i style="background:var(--spec)"></i>Spec lines changed · ${kilo(S)}</span>
     <span><i style="background:var(--code)"></i>Code lines changed · ${kilo(C)}</span>`;
+  const merges = R.filter(r => r.pr);
+  const totals = ["spec", "code", "close", "other"].map(k => ({ name: KIND[k], value: merges.filter(r => r.kind === k).length, color: KVAR[k] }));
+  shareBar(document.getElementById("pr-total"), totals, "Every merged pull request by kind");
+  document.getElementById("pr-total-legend").innerHTML = totals.map(t =>
+    `<span><i class="dot" style="background:${t.color}"></i>${t.name} · ${t.value}</span>`).join("") + `<span>${merges.length} in all</span>`;
   const box = document.getElementById("perday");
   box.innerHTML = "";
   const kinds = ["spec", "code", "close", "other"], H = 240, P = { l: 44, r: 16, t: 22, b: 30 };
@@ -658,6 +713,11 @@ function drawTokens() {
   const color = m => MODEL_VAR[m] || "var(--other)";
   document.getElementById("token-legend").innerHTML = models.map(m =>
     `<span><i class="dot" style="background:${color(m)}"></i>${esc(modelName(m))} · ${kilo(sum(T.filter(r => r.model === m), "output"))}</span>`).join("");
+  // The log counts by model, not by agent; the implementer is the one agent on Haiku, so its share is the Haiku rows.
+  const haiku = T.filter(r => /haiku/.test(r.model)), pct = (a, b) => fmt(b ? a / b * 100 : 0, 1) + "%";
+  document.getElementById("token-implementer").innerHTML = haiku.length
+    ? `<b>The implementer</b> (Haiku, which writes the track code from a brief) used <b>${pct(ctx(haiku), ctx(T))}</b> of the context read (${kilo(ctx(haiku))} of ${kilo(ctx(T))}) and <b>${pct(sum(haiku, "output"), sum(T, "output"))}</b> of the output (${kilo(sum(haiku, "output"))} of ${kilo(sum(T, "output"))}). The main sessions (specs, audits, review, the breaks on purpose, the pull requests) used the rest. Counted by model: any other Haiku reply would count here too.`
+    : "";
   const dates = [...new Set(T.map(r => r.date))].sort();
   const H = 260, P = { l: 56, r: 12, t: 12, b: 46 }, bw = (LW - P.l - P.r) / dates.length;
   const perDate = dates.map(d => T.filter(r => r.date === d));
@@ -699,7 +759,7 @@ function drawTokens() {
     }).join("") + "</tbody>";
 }
 
-drawNow(); drawPerDay(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
+drawNow(); drawWork(); drawPerDay(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
 }
 
 function start() {

@@ -90,6 +90,29 @@ class SpecDriftTest(unittest.TestCase):
         self.repo.merge({"specs/day-01-x.md": DAY + "It calls `BazClient`.\n"})
         self.assertEqual(self.repo.rows()[1]["gap_full"], before)
 
+    def test_each_merge_counts_its_own_lines_by_box_and_a_move_only_what_changed(self):
+        rows = self.repo.merge({"src/test/FooTest.java": "a\nb\n", "CLAUDE.md": "c\n", "specs/day-01-x.md": DAY + "d\n",
+                                "scripts/x.py": "e\n", "package-lock.json": "{}\n", "src/Big.java": "f\ng\nh\ni\n"}).rows()
+        self.assertEqual(rows[1]["work"], dict(spec=1, context=1, prod=4, test=2, tooling=1))
+        os.remove(os.path.join(self.repo.path, "src", "Big.java"))
+        rows = self.repo.merge({"src/test/BigTest.java": "f\ng\nh\ni\nj\n"}).rows()
+        self.assertEqual(rows[2]["work"], dict(spec=0, context=0, prod=0, test=1, tooling=0))
+
+    def test_a_file_goes_in_the_first_box_its_path_matches(self):
+        for path, box in [("plan.md", "spec"), ("specs/README.md", "spec"), ("specs/day-01-test-harness.md", "spec"),
+                          ("CLAUDE.md", "context"), ("backend/app/README.md", "context"), (".claude/agents/x.md", "context"),
+                          (".claude/settings.json", "context"), ("docs/workflow.svg", "context"),
+                          ("backend/app/src/test/java/x/support/Harness.java", "test"), ("services/job/src/FooIT.java", "test"),
+                          ("scripts/test_spec_drift.py", "test"), ("data/tests/conftest.py", "test"), ("web/a.spec.ts", "test"),
+                          ("scripts/spec-drift.py", "tooling"), (".github/workflows/ci.yml", "tooling"),
+                          ("docs/dashboard/dashboard.js", "tooling"), ("backend/app/src/main/java/x/Latest.java", "prod"),
+                          ("docker-compose.yml", "prod"), ("docs/dashboard/token-usage.json", None),
+                          ("frontend/package-lock.json", None), ("screenshots/a.png", None)]:
+            self.assertEqual(sd.work_kind(path), box, path)
+        self.assertEqual(sd.renamed_to("backend/{app => job}/src/X.java"), "backend/job/src/X.java")
+        self.assertEqual(sd.renamed_to("src/{ => job}/X.java"), "src/job/X.java")
+        self.assertEqual(sd.renamed_to("a.txt => b/a.txt"), "b/a.txt")
+
     def test_a_day_that_runs_later_is_not_reached_by_a_higher_number(self):
         self.repo.merge({"specs/day-17-x.md": "Day 17 adds `LaterThing`.\n",
                          "specs/day-38-x.md": "Day 38 adds `PlatformThing`.\n"})
