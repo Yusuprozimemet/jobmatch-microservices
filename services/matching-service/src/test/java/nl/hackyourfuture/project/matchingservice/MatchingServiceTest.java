@@ -28,8 +28,10 @@ abstract class MatchingServiceTest {
         registry.add("app.internal.identity-url", () -> StubUpstream.instance().baseUrl());
         registry.add("app.internal.jobs-url", () -> StubUpstream.instance().baseUrl());
         registry.add("app.identity.jwks-url", () -> TestIdentity.instance().url() + "/.well-known/jwks.json");
-        registry.add("app.scores.endpoint", DynamoDbContainer::endpoint);
-        registry.add("app.scores.create-table", () -> "true");
+        // A subclass's own @DynamicPropertySource runs first, so it cannot replace these; it sets
+        // test.scores.* instead, which these defer to.
+        registry.add("app.scores.endpoint", () -> "${test.scores.endpoint:" + DynamoDbContainer.endpoint() + "}");
+        registry.add("app.scores.create-table", () -> "${test.scores.create-table:true}");
     }
 
     protected StubLlm model() {
