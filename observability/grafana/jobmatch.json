@@ -92,7 +92,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "top-matches latency, p50 and p95",
-      "description": "Its own panel because the language model sits inside this request with a 20 second timeout. This is the line Phase 4 is meant to move: extracting matching-service takes the slow call off job search's path.",
+      "description": "Its own panel because the language model sits inside this request with a 13 second read timeout. This is the line Phase 4 is meant to move: extracting matching-service takes the slow call off job search's path.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
       "fieldConfig": {
@@ -139,6 +139,27 @@
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "hikaricp_connections_pending",
           "legendFormat": "pending"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Score store hit rate",
+      "description": "Share of shortlisted postings whose score came from matching-service's store (DynamoDB, Day 22) rather than a model call. A drop after a deploy is expected: a new scorer version or an emptied table starts cold.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "fillOpacity": 10, "lineWidth": 2 } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(jobmatch_scores_lookups_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(jobmatch_scores_lookups_total[5m])), 0.001)",
+          "legendFormat": "hit rate"
         }
       ]
     }
