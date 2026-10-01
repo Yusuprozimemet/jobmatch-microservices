@@ -462,12 +462,12 @@ or above and null otherwise — a badge, never a filter. `matchedSkills` is exac
 so a job matched on `postgresql` will not list the user's `postgres` there even though the score
 reflects it.
 
-**Caching.** Verdicts are stored in `job_match_scores` under
+**Caching.** Verdicts are stored in matching-service's DynamoDB table `job_match_scores` under
 `(sha-256 of the sorted, lowercased skill set, posting_id, model + prompt version)`. A returning
 skill set only pays for the postings the daily publish added. Changing the model or the prompt
 version invalidates every old verdict for free. The retention window (`LLM_SCORE_RETENTION_DAYS`,
-minimum and default 1 day) is applied **on the read**, so nothing stale is ever served even if the
-hourly purge is late, misconfigured, or has never run.
+minimum and default 1 day) is applied **on the read**, so nothing stale is ever served although
+DynamoDB deletes an expired item only within days.
 
 **One canonicalisation difference worth knowing.** `ProfileService` collapses hyphens and whitespace;
 the matcher only lowercases and trims, because the mart is consistently hyphenated and collapsing

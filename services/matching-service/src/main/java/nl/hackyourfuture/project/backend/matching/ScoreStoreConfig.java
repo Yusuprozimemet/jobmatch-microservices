@@ -6,11 +6,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClientBuilder;
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
 import software.amazon.awssdk.services.dynamodb.model.KeyType;
 import software.amazon.awssdk.services.dynamodb.model.ResourceInUseException;
@@ -20,6 +23,7 @@ import software.amazon.awssdk.services.dynamodb.model.TimeToLiveStatus;
 
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
 
 /**
  * The score store's client (Day 22). On AWS the endpoint is blank and the table is Terraform's
@@ -54,11 +58,20 @@ class ScoreStoreConfig {
      * Creates the table if it is absent, then turns on TTL on {@code ttl}, before the service
      * serves. A failure stops startup: the flag is for local runs, where that is the clearer
      * answer. The harness creates its own table, without TTL, and runs with the flag off.
+     *
+     * <p>These calls are not the request path's: each gets {@link #CALL_TIMEOUT}, not 500 ms, which
+     * a freshly started emulator can take on its first calls (#240), and the first is repeated for
+     * up to {@link #WAIT} while the store is not answering yet, as in compose, where both start
+     * together.
      */
     @Slf4j
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(name = "app.scores.create-table", havingValue = "true")
     static class ScoreTableCreator implements InitializingBean {
+
+        static final Duration CALL_TIMEOUT = Duration.ofSeconds(5);
+        static final Duration WAIT = Duration.ofSeconds(30);
+        private static final Duration PAUSE = Duration.ofMillis(500);
 
         private final DynamoDbClient dynamo;
         private final String table;
@@ -69,24 +82,43 @@ class ScoreStoreConfig {
         }
 
         @Override
-        public void afterPropertiesSet() {
-            try {
-                dynamo.describeTable(describe -> describe.tableName(table));
-            } catch (ResourceNotFoundException absent) {
+        public void afterPropertiesSet() throws InterruptedException {
+            if (!exists()) {
                 create();
             }
-            TimeToLiveStatus ttl = dynamo.describeTimeToLive(describe -> describe.tableName(table))
+            TimeToLiveStatus ttl = dynamo.describeTimeToLive(describe -> describe.tableName(table)
+                            .overrideConfiguration(ScoreTableCreator::startup))
                     .timeToLiveDescription().timeToLiveStatus();
             // DynamoDB refuses to enable TTL twice, so only when it is off.
             if (ttl != TimeToLiveStatus.ENABLED && ttl != TimeToLiveStatus.ENABLING) {
                 dynamo.updateTimeToLive(update -> update.tableName(table)
+                        .overrideConfiguration(ScoreTableCreator::startup)
                         .timeToLiveSpecification(spec -> spec.enabled(true).attributeName(TTL_ATTRIBUTE)));
+            }
+        }
+
+        private boolean exists() throws InterruptedException {
+            Instant deadline = Instant.now().plus(WAIT);
+            while (true) {
+                try {
+                    dynamo.describeTable(describe());
+                    return true;
+                } catch (ResourceNotFoundException absent) {
+                    return false;
+                } catch (SdkClientException notAnswering) {
+                    if (Instant.now().isAfter(deadline)) {
+                        throw notAnswering;
+                    }
+                    log.info("The score store is not answering yet: {}", notAnswering.getMessage());
+                    Thread.sleep(PAUSE);
+                }
             }
         }
 
         private void create() {
             try {
                 dynamo.createTable(create -> create.tableName(table)
+                        .overrideConfiguration(ScoreTableCreator::startup)
                         .billingMode(BillingMode.PAY_PER_REQUEST)
                         .keySchema(key(PARTITION_KEY, KeyType.HASH), key(SORT_KEY, KeyType.RANGE))
                         .attributeDefinitions(string(PARTITION_KEY), string(SORT_KEY)));
@@ -94,7 +126,16 @@ class ScoreStoreConfig {
             } catch (ResourceInUseException createdMeanwhile) {
                 // Another instance created it between the describe and the create.
             }
-            dynamo.waiter().waitUntilTableExists(describe -> describe.tableName(table));
+            dynamo.waiter().waitUntilTableExists(describe());
+        }
+
+        private DescribeTableRequest describe() {
+            return DescribeTableRequest.builder().tableName(table)
+                    .overrideConfiguration(ScoreTableCreator::startup).build();
+        }
+
+        private static void startup(AwsRequestOverrideConfiguration.Builder config) {
+            config.apiCallTimeout(CALL_TIMEOUT);
         }
 
         private static KeySchemaElement key(String name, KeyType type) {

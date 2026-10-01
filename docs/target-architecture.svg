@@ -189,7 +189,7 @@ text{font-family:'Architects Daughter','Segoe Print','Comic Sans MS',cursive;}
 <text class="t" x="880" y="240" font-size="17" text-anchor="middle">identity DB</text>
 <text class="st" x="880" y="259" font-size="12" text-anchor="middle">Postgres: users, profiles,</text>
 <text class="st" x="880" y="276" font-size="12" text-anchor="middle">refresh tokens, outbox</text>
-<text class="t" x="880" y="390" font-size="17" text-anchor="middle">Cosmos DB</text>
+<text class="t" x="880" y="390" font-size="17" text-anchor="middle">DynamoDB</text>
 <text class="st" x="880" y="408" font-size="12" text-anchor="middle">match scores,</text>
 <text class="st" x="880" y="424" font-size="12" text-anchor="middle">expire by TTL</text>
 <text class="t" x="880" y="522" font-size="17" text-anchor="middle">jobs DB</text>
@@ -235,7 +235,7 @@ text{font-family:'Architects Daughter','Segoe Print','Comic Sans MS',cursive;}
 <!-- card: built and deployed -->
 <text class="t" x="50" y="745" font-size="16">Built and deployed by</text>
 <text class="st" x="50" y="772" font-size="13">One IaC tool (chosen in Phase 7): AKS,</text>
-<text class="st" x="50" y="792" font-size="13">Postgres, Cosmos DB, storage, Key Vault</text>
+<text class="st" x="50" y="792" font-size="13">Postgres, DynamoDB, storage, Key Vault</text>
 <text class="st" x="50" y="812" font-size="13">Helm: charts/common + a thin chart each</text>
 <text class="st" x="50" y="832" font-size="13">Argo CD syncs deploy/argocd (GitOps)</text>
 <text class="st" x="50" y="852" font-size="13">Flyway runs as a pre-upgrade hook Job</text>
@@ -246,7 +246,7 @@ text{font-family:'Architects Daughter','Segoe Print','Comic Sans MS',cursive;}
 <!-- card: score cache -->
 <text class="t" x="570" y="743" font-size="15" text-anchor="middle">matching-service: scoring one posting</text>
 <text class="st" x="570" y="768" font-size="13" text-anchor="middle">Is (skills_hash, posting_id, scorer_version)</text>
-<text class="st" x="570" y="786" font-size="13" text-anchor="middle">already in Cosmos DB?</text>
+<text class="st" x="570" y="786" font-size="13" text-anchor="middle">already in DynamoDB?</text>
 <text class="t" x="490" y="840" font-size="15" text-anchor="middle">no</text>
 <text class="t" x="652" y="840" font-size="15" text-anchor="middle">yes</text>
 <text class="st" x="415" y="864" font-size="13">1. ask the LLM (20 s timeout)</text>
