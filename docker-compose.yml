@@ -71,6 +71,12 @@ services:
       # Written by jwt-key above, read-only here.
       JWT_PRIVATE_KEY_FILE: /run/keys/private.pem
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/service.pem
+      # Day 26: the outbox relay publishes user.deleted to the emulator below, whose account id
+      # is always 000000000000 and which takes any key.
+      EVENTS_SNS_ENDPOINT: http://localstack:4566
+      EVENTS_USER_DELETED_TOPIC_ARN: arn:aws:sns:eu-west-1:000000000000:user-deleted
+      EVENTS_SNS_ACCESS_KEY: test
+      EVENTS_SNS_SECRET_KEY: test
     volumes:
       - jwt-keys:/run/keys:ro
     # No published port (Day 16): the gateway below is the way in, on 8080. 9090, the management
@@ -80,6 +86,8 @@ services:
         condition: service_healthy
       jwt-key:
         condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
 
   # job-service (Day 17): routed to by the gateway and the backend since Track D. No published port.
   job-service:
