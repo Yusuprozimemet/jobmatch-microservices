@@ -30,7 +30,10 @@ import java.util.function.Supplier;
  * <p>No retry: the read is idempotent, but a retry on the 2 s read timeout doubles the wait on
  * the path the phase exists to protect, and the breaker already covers an outage. Day 24
  * measured it across the network: 160 calls in compose, mean 5.7-7.5 ms, no error of any kind,
- * so no transient error a retry would have saved; no retry.
+ * so no transient error a retry would have saved; no retry. The JDK {@code HttpClient} under
+ * {@code InternalClients} does send this GET a second time by itself when the connection closes
+ * with no answer: Day 24's Track 0 saw two calls reach identity for one request. That is the
+ * transport's resend of an idempotent request, not a policy of this client.
  */
 @Component
 class UserExistenceClient {
