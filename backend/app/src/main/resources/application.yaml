@@ -78,6 +78,19 @@ app:
   internal:
     jobs-url: ${INTERNAL_JOBS_URL:}
 
+  # The outbox relay (Day 26) publishes identity's user.deleted to SNS. With the relay on, the
+  # topic is required; compose points it and the endpoint at the emulator. Empty keys mean the
+  # SDK's default credentials.
+  events:
+    relay:
+      enabled: ${EVENTS_RELAY_ENABLED:true}
+    sns:
+      endpoint: ${EVENTS_SNS_ENDPOINT:}
+      region: ${EVENTS_SNS_REGION:eu-west-1}
+      access-key: ${EVENTS_SNS_ACCESS_KEY:}
+      secret-key: ${EVENTS_SNS_SECRET_KEY:}
+    user-deleted-topic-arn: ${EVENTS_USER_DELETED_TOPIC_ARN:}
+
 # API Docs
 springdoc:
   api-docs:

@@ -35,6 +35,11 @@ app:
     # in IntegrationTest would override the failure tests' stub. Since Day 17 Track D,
     # IntegrationTest sets it to the container.
     jobs-url: ${harness.job-service-url:}
+  events:
+    relay:
+      # Off: the run caches several contexts, and each one's relay would take another test's
+      # outbox row. Only UserDeletedRelayIT turns it on, in a context it closes after itself.
+      enabled: false
 
 management:
   server:
