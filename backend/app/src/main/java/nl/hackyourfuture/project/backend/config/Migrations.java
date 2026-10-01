@@ -19,8 +19,8 @@ import javax.sql.DataSource;
  *
  * <p>Each module instance baselines at version 0 on its first run, since its schema already holds
  * the tables the moves brought in, so the module's own V1 still runs. Day 12's
- * {@code identity.refresh_tokens} is the first. jobs has none: it owns no tables. matching's
- * migrations are applied by matching-service since Day 21.
+ * {@code identity.refresh_tokens} is the first. jobs has none: it owns no tables. matching has
+ * none since Day 23: matching-service keeps its scores in DynamoDB and has no database.
  */
 @Configuration(proxyBeanMethods = false)
 class Migrations {

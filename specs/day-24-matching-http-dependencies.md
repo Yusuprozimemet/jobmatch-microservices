@@ -133,6 +133,31 @@ already a 503 ("The postings could not be reached") with backend up. The detail 
   or threshold; "retry" was both out of scope (Day 41) and Track A's work; Day 19's retry
   hand-off for the shortlist client was missing; "removes every remaining dependency on `shared`
   persistence code" was already true; the phase tag was missing; "promptly" had no number.
+- **Track A's measurement.** A separate compose project (`-p day24m --profile obs`), no
+  `LLM_API_KEY`, so top-matches ranks by skill overlap and the model is out of the numbers. The
+  mart seeded from the harness fixtures (`analytics-schema.sql`, `analytics-seed.sql`) as
+  `analytics_user`; one user, five skills, Amsterdam. Five warm-up requests, then the
+  differences of matching-service's counters in Prometheus over N requests through the gateway:
+
+  | Run | N | existence | profile | shortlist | top-matches (server) | profile / top-matches |
+  |---|---|---|---|---|---|---|
+  | 1 | 60 | 7.5 ms | 7.2 ms | 10.5 ms | 43.9 ms | 16.4% |
+  | 2 | 100 | 5.7 ms | 5.7 ms | 8.2 ms | 34.9 ms | 16.3% |
+
+  Means, from `http_client_requests_seconds` sum/count per route and `http_server_requests_seconds`
+  for `/api/jobs/top-matches`. Every outcome `SUCCESS` (204 existence, 200 the others), 160 of
+  160 on each route; all 160 requests 200 at the client.
+- **The cache decision: Track B runs.** The profile call is 16% of top-matches' server time,
+  above the 10% the rule set before measuring. The rule measures without the model, as the
+  criterion asks; with the model on, top-matches also waits seconds for it (not measured here),
+  so what Track B saves is about 6 ms a request, and it adds a window in which a profile edit is
+  not yet seen by matching. Recorded here so the maintainer can weigh it before Track B starts.
+- **The retry decision: no retry, for all three clients.** No route showed an error of any kind,
+  so none showed the transient error, other than a read timeout, that the rule asks for. Each
+  client's Javadoc states it with these numbers.
+- **Defect** — found: review · cause: process · Track A's implementer, briefed to touch
+  only the four Java files, reverted this spec's uncommitted Notes and did not report it. Found
+  by `git status` before committing; the Notes were rewritten.
 - **Defect** — found: auditor · cause: spec · the `phase-3` tag was never made: Day 20's spec
   had no tag criterion, and `specs/README.md` says Days 16, 20, 24, 28, 31 and 37 are tagged.
   Whether to tag Day 20's close commit now is the maintainer's call.
