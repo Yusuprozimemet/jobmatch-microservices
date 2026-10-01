@@ -60,17 +60,17 @@ specs/
 | 12–16 | 2 — gateway + JWT | Stateless auth behind a gateway | ready |
 | 38–40 | platform step | Grants, tracing, service credential, harness and compose | ready |
 | 17–20 | 3 — extract job-service | First independent service, own database | ready |
-| 41, 21–24 | 4 — extract matching-service | LLM isolated; scores in NoSQL | provisional |
+| 41, 21–24 | 4 — extract matching-service | LLM isolated; scores in NoSQL | ready |
 | 25–28 | 5 — extract application-service | Events, GDPR cascade, monolith gone | provisional |
 | 29–31 | 6 — functions + uploads bucket | CV parsing, email off the request path | provisional |
 | 32–37 | 7 — Kubernetes + IaC | Terraform, Pulumi, Helm, GitOps, production | provisional |
 
 ## Provisional specs
 
-Days 21–37 and 41 are written from `plan.md`, not from experience. **Re-read and revise the
+Days 25–37 are written from `plan.md`, not from experience. **Re-read and revise the
 phase before starting it.** Each of them carries a `Status: provisional` line; delete that
-line when the day has been reviewed and is ready to work. Days 17–20 were rewritten against
-the code when Phase 3 reached them; Days 38–40 were written against it from the start.
+line when the day has been reviewed and is ready to work. Days 17–20 and 41, 21–24 were
+rewritten against the code when their phase reached them; Days 38–40 were written against it from the start.
 
 Expect them to change. Day 19 in particular (partial failure and fallbacks) is a design
 decision the team must agree on before anyone writes code.

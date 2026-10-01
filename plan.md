@@ -275,7 +275,7 @@ the README's Day entries record two estimates, the provisional spec's and the re
 All seven phases and the platform step are broken into 40 day specs in [`specs/`](specs/). Read
 [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-20 (Phases 0-3) and 38-40 (the platform step) are done. Days 21-37 and 41 are **provisional**:
+Days 1-24 and 38-41 (Phases 0-4 and the platform step) are done. Days 25-37 are **provisional**:
 written from this plan before the course correction, so each is rewritten against the code,
 with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
 links hold; they run in this order, and the dashboard follows it:
