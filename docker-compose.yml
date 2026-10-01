@@ -119,6 +119,25 @@ services:
     image: amazon/dynamodb-local:3.3.1
     command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
 
+  # The event bus (Day 26): SNS topic user-deleted fanning out to one SQS queue per consumer,
+  # each with a dead-letter queue and redrive policy after 5 receives. Created by the ready.d
+  # hook; in memory; no published port; no reader until Day 27.
+  localstack:
+    image: localstack/localstack:4.14.0
+    environment:
+      SERVICES: sns,sqs
+      AWS_DEFAULT_REGION: eu-west-1
+    volumes:
+      - ./scripts/bus-init:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      # Healthy once the hook above has run and succeeded, so `up --wait` waits for the queues.
+      test: ["CMD-SHELL", "curl -s localhost:4566/_localstack/init/ready | grep -q '\"state\": \"SUCCESSFUL\"'"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
+
   # matching-service (Day 21), no published port; the gateway routes top-matches to it
   # (MATCHING_SERVICE_URL on api-gateway below); it alone holds the LLM key.
   matching-service:
