@@ -3,6 +3,7 @@ package nl.hackyourfuture.project.matchingservice;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -72,8 +73,23 @@ class StubUpstreamTest {
         assertThat(stub.calls("/counted")).isZero();
     }
 
+    @Test
+    void aDropClosesTheConnectionWithNoResponse() throws Exception {
+        stub.drop("/x");
+
+        assertThatThrownBy(() -> post("/x")).isInstanceOf(IOException.class);
+        assertThat(stub.calls("/x")).isOne();
+    }
+
     private HttpResponse<String> get(String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(stub.baseUrl() + path)).timeout(Duration.ofSeconds(2)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    // A POST: the JDK client sends a GET again once when the connection closes, so a GET would count two.
+    private HttpResponse<String> post(String path) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(stub.baseUrl() + path)).timeout(Duration.ofSeconds(2))
+                .POST(HttpRequest.BodyPublishers.noBody()).build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 }

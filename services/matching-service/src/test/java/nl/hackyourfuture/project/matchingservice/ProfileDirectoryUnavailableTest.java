@@ -23,6 +23,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * breaker), the client throws a 503: a profile is needed to rank. A 404 (no profile) returns
  * 422 "Fill in your profile", the same answer as a missing account. A 4xx is a bug on the
  * caller's side and is not an outage: it is not counted by the breaker and surfaces as a 500.
+ *
+ * <p>The existence call refused or hanging is a 503 too, within the 1 s connect and 2 s read
+ * timeouts. Its answer is never cached ({@code InternalUserController} says why), so every request
+ * asks. Those tests stub everything after the existence call, so that an existence client that
+ * took a failure for "exists" would answer 200.
  */
 class ProfileDirectoryUnavailableTest extends MatchingServiceTest {
 
@@ -148,6 +153,59 @@ class ProfileDirectoryUnavailableTest extends MatchingServiceTest {
 
         assertThat(response.statusCode()).isEqualTo(503);
         assertThat(response.body()).contains("Your account could not be checked");
+    }
+
+    @Test
+    void aRefusedIdentityIsA503() throws IOException, InterruptedException {
+        UUID userId = UUID.randomUUID();
+        rankable(userId, "refused-identity-1", "Refused Identity Job");
+
+        StubUpstream.instance().drop("/internal/users/" + userId);
+
+        HttpResponse<String> response = topMatches(userId);
+
+        assertThat(response.statusCode()).isEqualTo(503);
+        assertThat(response.body()).contains("Your account could not be checked");
+    }
+
+    @Test
+    void aHangingIdentityIsA503WithinTheTimeouts() throws IOException, InterruptedException {
+        UUID userId = UUID.randomUUID();
+        rankable(userId, "hanging-identity-1", "Hanging Identity Job");
+
+        StubUpstream.instance().hang("/internal/users/" + userId);
+
+        long start = System.currentTimeMillis();
+        HttpResponse<String> response = topMatches(userId);
+        long elapsed = System.currentTimeMillis() - start;
+
+        assertThat(response.statusCode()).isEqualTo(503);
+        assertThat(elapsed).isLessThan(3000);
+        assertThat(response.body()).contains("Your account could not be checked");
+
+        StubUpstream.instance().reset();
+    }
+
+    @Test
+    void theExistenceAnswerIsNotCached() throws IOException, InterruptedException {
+        UUID userId = UUID.randomUUID();
+        knownUser(userId);
+        rankable(userId, "not-cached-1", "Not Cached Job");
+
+        HttpResponse<String> first = topMatches(userId);
+        HttpResponse<String> second = topMatches(userId);
+
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(second.statusCode()).isEqualTo(200);
+        assertThat(StubUpstream.instance().calls("/internal/users/" + userId)).isEqualTo(2);
+    }
+
+    /** Everything after the existence call answers: a posting, a five-skill profile and the model. */
+    private void rankable(UUID userId, String postingId, String title) {
+        stubPosting(postingId, title, "java", "sql");
+        StubUpstream.instance().answer("/internal/profiles/" + userId, 200,
+                "{\"skills\":[\"java\",\"sql\",\"docker\",\"git\",\"linux\"],\"preferredCity\":\"testville\"}");
+        StubLlm.instance().willScoreInPromptOrder(80);
     }
 
     private void knownUser(UUID userId) {

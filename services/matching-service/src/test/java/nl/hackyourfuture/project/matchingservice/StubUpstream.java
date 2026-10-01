@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * An upstream for matching-service's internal clients to fail against: identity's existence and
  * profile routes, and job-service's shortlist. {@code MatchingServiceTest} points both internal
- * URLs here, and each path answers, refuses with a status, or hangs, as the test sets it. Counts
- * the calls each path gets.
+ * URLs here, and each path answers, refuses with a status, hangs, or drops the connection, as the
+ * test sets it. Counts the calls each path gets.
  *
  * <p>Handlers run on virtual threads of their own, not on the single default thread, on which
  * one hanging request would hold up every later one. A hang lasts until {@link #reset()}, at
@@ -36,13 +36,16 @@ final class StubUpstream {
     private final Map<String, AtomicInteger> calls = new ConcurrentHashMap<>();
     private volatile CountDownLatch released = new CountDownLatch(1);
 
-    private sealed interface Mode permits Answer, Hang {
+    private sealed interface Mode permits Answer, Hang, Drop {
     }
 
     private record Answer(int status, String body) implements Mode {
     }
 
     private record Hang() implements Mode {
+    }
+
+    private record Drop() implements Mode {
     }
 
     private StubUpstream() {
@@ -87,6 +90,11 @@ final class StubUpstream {
         modes.put(path, new Hang());
     }
 
+    /** Closes the connection at once with no response, as a hang does when it ends. */
+    void drop(String path) {
+        modes.put(path, new Drop());
+    }
+
     int calls(String path) {
         AtomicInteger count = calls.get(path);
         return count == null ? 0 : count.get();
@@ -95,13 +103,18 @@ final class StubUpstream {
     private void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
         calls.computeIfAbsent(path, p -> new AtomicInteger()).incrementAndGet();
-        if (modes.getOrDefault(path, NOT_FOUND) instanceof Answer(int status, String body)) {
+        Mode mode = modes.getOrDefault(path, NOT_FOUND);
+        if (mode instanceof Answer(int status, String body)) {
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
             try (OutputStream out = exchange.getResponseBody()) {
                 out.write(bytes);
             }
+            return;
+        }
+        if (mode instanceof Drop) {
+            exchange.close();
             return;
         }
         CountDownLatch hung = released;
