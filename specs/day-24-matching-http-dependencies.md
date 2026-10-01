@@ -30,7 +30,8 @@ fully independent.
 | B | | Dependency cleanup + failure tests |
 
 ## Acceptance criteria
-- [ ] `matching-service` has no datasource and no Flyway configuration.
+- [ ] **hold** (Day 23's, by its Track B) — `matching-service` has no datasource and no Flyway
+      configuration: Day 23's `git grep` over `services/matching-service` finds nothing.
 - [ ] With `identity` stopped, top-matches returns 503 promptly, not a hang.
 - [ ] The 422 too-few-skills behaviour is unchanged (Day 04's test, unedited).
 - [ ] A top-matches trace spans four hops: gateway, matching, identity, jobs.

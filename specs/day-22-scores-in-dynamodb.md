@@ -90,7 +90,7 @@ contract classes pass unedited.
 - Dropping `matching.job_match_scores`, the service's datasource, Flyway, the JDBC and Postgres
   dependencies, its `DB_*` in compose and the harness, the `matching` role and schema — Day 23.
   The table drop is a `db/matching` V2 applied by the service, not an app migration; and app's
-  `V14__move_matching_tables.sql:22-27` raises if the `matching` role or schema is missing, so
+  `V14__move_matching_tables.sql:4-12` raises if the `matching` role or schema is missing, so
   the harness keeps creating them. Day 23's spec-change PR decides both, and its overlap with
   Day 24's "no datasource" criterion (`day-24:33`).
 - A span on the store call. Days 05 and 38 left JDBC spans to "Phase 4, if it shows a query worth
@@ -269,7 +269,7 @@ docker compose -p day22 down -v
 - **Hand-offs this day leaves. Day 23's, 24's and 32's specs name none of them yet:**
   - **Day 23:** `matching.job_match_scores` (a `db/matching` V2, applied by the service), the
     service's datasource, Flyway, JDBC and Postgres dependencies, its `DB_*` in compose and the
-    harness, and the `matching` role and schema, which `V14__move_matching_tables.sql:22-27`
+    harness, and the `matching` role and schema, which `V14__move_matching_tables.sql:4-12`
     raises without. Its spec is still the provisional "nosql-cutover" draft, written for a dual
     write this day did not do; its spec-change PR starts from these.
   - **Day 24:** the profile cache, retry, the existence answer; and its "no datasource"
