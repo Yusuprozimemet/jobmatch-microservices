@@ -78,33 +78,63 @@ main side, compose and the harness, keeping `org.postgresql` in test scope; B2 t
 Postgres, after B1.
 
 ## Acceptance criteria
-- [ ] **new** (Track A) — On a fresh database the app's migrations leave schema `matching`
+- [x] **new** (Track A) — On a fresh database the app's migrations leave schema `matching`
       empty: `BackendApplicationTests` asserts `tablesIn("matching")` is empty. Red today: V10
       creates the table and V14 moves it there; the assertion fails listing
       `job_match_scores matching_user`.
-- [ ] **hold** (Track A, broken in Track B) — `ModuleConnectionsIT`'s `matching` cases pass
+      #245: `BackendApplicationTests` asserts `tablesIn("matching")` is empty; V15 drops the table.
+      Seen red: V15 without its `DROP`, `Expecting empty but was: ["job_match_scores matching_user"]`.
+      The same break left `ModuleMigrationsIT` green (it starts the service before the app migrates),
+      so `BackendApplicationTests` is the one check on the drop.
+- [x] **hold** (Track A, broken in Track B) — `ModuleConnectionsIT`'s `matching` cases pass
       unedited: `noModuleCanReadAnothersSchema` ("applications, matching.job_match_scores": still
       "permission denied for schema matching", which Postgres reports before it looks up the
       table) and `noModuleSchemaGrantsWhatIsCreatedLaterToAnyoneElse`. Broken on purpose, once
       the service's V1 no longer runs: V15 without its revokes; record what each reported.
-- [ ] **new** (Track B) — `git grep -n -i "datasource\|flyway\|org\.postgresql\|testcontainers-postgresql\|jdbc\|PostgresContainer\|DB_HOST\|DB_PORT\|DB_NAME\|DB_MATCHING" -- services/matching-service`
+      #245 (V15 with the revokes) and #246 (the service's V1 gone); `ModuleConnectionsIT` 10 of 10, no
+      assertion edited, only its wait and the comment naming the service's container (#246). Seen red
+      in #246, V15's revoke block removed: 2 of 10 red. `noModuleCanReadAnothersSchema` got
+      `relation "matching.job_match_scores" does not exist` where it expects "permission denied for
+      schema matching"; `noModuleSchemaGrantsWhatIsCreatedLaterToAnyoneElse` was not empty, listing
+      `identity_user`, `applications_user` and `jobs_user` on `matching`. Not tried in #245: until
+      #246 the service's V1 still revoked the same grants.
+- [x] **new** (Track B) — `git grep -n -i "datasource\|flyway\|org\.postgresql\|testcontainers-postgresql\|jdbc\|PostgresContainer\|DB_HOST\|DB_PORT\|DB_NAME\|DB_MATCHING" -- services/matching-service`
       finds nothing. Red today: 56 lines in 8 files. (Not plain `postgres`: the prompts and API
       docs use it as a skill name, `MatchScorer.java:119`.)
-- [ ] **new** (Track B) — `git grep -n "DB_" -- backend/app/src/test/java/nl/hackyourfuture/project/backend/support/MatchingService.java`
+      #246 (the main side) and #247 (the test side): the grep finds nothing (exit 1) on e00f1a0.
+      Seen red at e95b65b, before both: 56 lines in 8 files, as the spec counted; after #246, 21
+      lines, all on the test side.
+- [x] **new** (Track B) — `git grep -n "DB_" -- backend/app/src/test/java/nl/hackyourfuture/project/backend/support/MatchingService.java`
       finds nothing, and `docker compose --env-file .env.example config --format json` has no
       `DB_*` key in `matching-service`'s environment. Red today: six lines; five keys
       (`DB_HOST`, `DB_MATCHING_PASSWORD`, `DB_MATCHING_USER`, `DB_NAME`, `DB_PORT`).
-- [ ] **new** (Track B) — The harness's matching-service container starts with no database to
+      #246. **Not met as written; see Notes.** The grep for `DB_` matches `SCORES_DYNAMODB_ENDPOINT`
+      (Day 22's line, `MatchingService.java:83`), so it exits 0 on e00f1a0, and the spec's "six lines"
+      red counted that line. Anchored on the quote, `git grep -n '"DB_'` finds nothing (exit 1); the
+      compose check prints `[]`. Seen red at e95b65b, before #246: the anchored grep, 5 lines; the
+      compose check, `['DB_HOST', 'DB_MATCHING_PASSWORD', 'DB_MATCHING_USER', 'DB_NAME', 'DB_PORT']`.
+- [x] **new** (Track B) — The harness's matching-service container starts with no database to
       reach: the suite passes with it. Red today: its Flyway connects at startup; the five
       `DB_*` lines out of `support/MatchingService` alone, the container fails to start. Record
       what it reported in Track B's PR.
-- [ ] **hold** — `MatchScoreCacheIT` (6), `MatchTopMatchesIT` (8) and `MatchRankingIT` (8) pass
+      #246: the suite passes with this image (428 run, 0 failures). Seen red on main's image, the five
+      `DB_*` lines out of `support/MatchingService` alone: the container exited with code 1,
+      `FlywaySqlUnableToConnectToDbException: Unable to obtain connection from database`.
+- [x] **hold** — `MatchScoreCacheIT` (6), `MatchTopMatchesIT` (8) and `MatchRankingIT` (8) pass
       unedited, directly and through the gateway (`-Dharness.gateway=true`). Broken on purpose
       in Track B: `findScores` returning `Map.of()`; record what it reported.
-- [ ] **new** (Track C) — `ServiceJwksIT` passes through the gateway:
+      Unedited (0 lines in `contract/` this day), green directly and through the gateway in #245–#248
+      and at the close. Seen red in #246, `findScores` returning `Map.of()`: 4 of 6 red in
+      `MatchScoreCacheIT`, expected 1 model call, was 2, directly and through the gateway alike.
+      `MatchTopMatchesIT` and `MatchRankingIT` stayed green under that break: neither depends on a
+      cache hit.
+- [x] **new** (Track C) — `ServiceJwksIT` passes through the gateway:
       `./mvnw -B -pl app verify -Dharness.gateway=true -Dtest=ServiceJwksIT`, 5 run, 0 failures,
       0 errors; and `grep -c ServiceJwksIT .github/workflows/backend-ci-cd.yaml` is 1. Red today:
       5 run, 3 failures, 1 error (the spec-auditor's run); the grep finds 0.
+      #248: 5 run, 0 failures, 0 errors through the gateway; the grep is 1. Seen red in #248, the old
+      file (all `anonymous()`) through the gateway: 5 run, 3 failures, 1 error, as the spec's red; the
+      grep was 0 before. #248's first CI comment named the class and made the grep 2; reworded.
 
 ## Verify
 ```bash
@@ -151,3 +181,69 @@ docker compose -p day23 down -v
   `anonymous()` requests to a path the gateway does not route, so it fails under
   `-Dharness.gateway=true`; CI's list does not run it, which is how it stayed red. Day 22's
   Notes recorded it; Track C fixes it.
+- **Track order: A (#245), B1 (#246), B2 (#247), C (#248).** B split as the tracks section
+  allowed: B1 the main side, compose and the harness, keeping `org.postgresql` in test scope; B2
+  the test side. C depends on neither and went last.
+- **Departures, each recorded in its PR:**
+  - **`ModuleMigrationsIT` changed in Track A (#245), not B.** V15 broke two of its assertions:
+    `appKeepsTheHistoryOfEverythingBefore` (`expected 14 but was 15`) and matching's
+    `andItStartsAtTheBaseline` (`["1 SQL"]` against `0 BASELINE|1 SQL`: the service's Flyway
+    baselines only a schema that holds something, and V15 empties it). B1 then removed matching's
+    history cases and added `matchingKeepsNoHistoryOfItsOwn`.
+  - **Compose's `matching-service` lost `depends_on: db`** (#246), which In scope did not name;
+    the harness container also lost the Postgres port it exposed.
+  - **`org.testcontainers:testcontainers` added in test scope** (#247): `DynamoDbContainer`'s
+    `GenericContainer` came only through `testcontainers-postgresql`. Without it, `clean
+    test-compile` fails with `package org.testcontainers.containers does not exist`.
+  - **Criterion 4 ticked on a grep anchored on the quote** (`'"DB_'`), at the close. As written
+    it cannot print clean; see the defect below.
+- **Defect** — found: Track A · cause: spec · the list of harness tests the change breaks missed
+  `ModuleMigrationsIT`'s app history count and its matching baseline case (#245).
+- **Defect** — found: Track B2 · cause: spec · removing `testcontainers-postgresql` also removed
+  the only path to `GenericContainer`; In scope named no replacement (#247).
+- **Defect** — found: break on purpose · cause: process · #247's first break, the new dependency
+  removed, passed without `clean`: the incremental compile skipped the unchanged sources. A
+  dependency check without `clean` checks nothing.
+- **Defect** — found: close · cause: spec · criterion 4's `git grep -n "DB_"` matches
+  `SCORES_DYNAMODB_ENDPOINT` (`support/MatchingService.java:83`, Day 22's), so it cannot print
+  clean. Its "six lines" red counted that line beside the five `DB_*` keys, and neither the
+  spec change nor its audit saw it. The anchored grep goes from 5 lines (e95b65b) to none.
+- **Defect** — found: review · cause: implementation · V15's header comment, from the
+  implementer on Haiku, said `matching_user` no longer needs Postgres; the role stays (Out of
+  scope). Rewritten before #245.
+- **Defect** — found: self · cause: implementation · #248's first CI comment named `ServiceJwksIT`,
+  making criterion 7's grep 2, not 1: the grep-versus-comment pitfall. Reworded before the PR.
+- **Fixed at the close:** `backend/README.md`'s `docker run` example and its two login rows
+  listed `DB_MATCHING_*` for the backend, which has not read them since Day 21 (found in #246).
+- **The close's Verify, on e00f1a0:** the job-service, matching-service and api-gateway harness
+  images rebuilt; `clean verify` 428 tests, 0 failures, 0 errors, 1 skipped, counted from the
+  reports after deleting them; `checkstyle:check` 0 violations; through the gateway 428, 0
+  failures, 0 errors, `ServiceJwksIT` included; matching-service `clean verify checkstyle:check` 69, 0 failures, no violations; the
+  service-wide grep nothing (exit 1); the CI grep 1; the compose check `[]`. `up -d --build
+  --wait` in a project of its own (`day23`): every service running, matching-service healthy with
+  `depends_on` only `dynamodb` and `jwt-key`; app's history ends at
+  `15|drop job match scores|t`, and schema `matching` holds no table, not even a Flyway history.
+  Then `down -v` on that project, which also removed the shared network `finalproject`, as on
+  Day 22.
+- **Found, not owned:**
+  - `ScoreTableStartupTest` is still in package `…backend.matching` (Day 22's slip); the
+    service's other tests are in `…matchingservice`.
+  - `matching.flyway_schema_history` stays on databases the service's Flyway ran on, as Out of
+    scope decided; nothing reads it.
+  - The `matching` role and schema, `MATCHING_DB_PASSWORD`, and their lines in `db-init`,
+    `db-setup.py` and the harness stay because `V14__move_matching_tables.sql:4-12` raises
+    without them. Removing them needs V14 rewritten; no day owns that.
+- **The estimate:** 5 PRs expected, 6 if Track B split; it did. Took 6: the spec change (#244),
+  4 track PRs (#245–#248) and this close. The tracks came to 510 changed lines (75, 194, 221,
+  20). No `Oversized:` line.
+- **Tests:** `contract/` unchanged; `support/` +1 −7 (`MatchingService`, the `DB_*` env).
+  Outside both: `BackendApplicationTests` +3 −2, `ModuleMigrationsIT` +14 −13,
+  `ModuleConnectionsIT` −9 (its wait and comment), `ServiceJwksIT` +7 −6. In matching-service,
+  `PostgresContainer`, `PostgresContainerTest` and the schema fixture deleted (−196),
+  `MatchingServiceTest` +3 −6, `DynamoDbContainer` +5 −1. Backend tests 429 → 428 (matching's
+  two history cases out, one new); matching-service 72 → 69.
+- **Hand-offs this day leaves:**
+  - **Day 24:** its `hold` "no datasource and no Flyway configuration" (`day-24:33`) is true now;
+    Day 23's grep finds nothing in `services/matching-service`.
+  - **Day 32:** matching-service needs no database in Terraform; only the DynamoDB table (Day
+    22's hand-off).
