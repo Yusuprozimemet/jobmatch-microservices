@@ -32,7 +32,9 @@ import java.util.function.Supplier;
  * <p>No retry: the read is idempotent, but a retry on the 2 s read timeout doubles the wait on the
  * path the phase exists to protect, and the breaker already covers an outage. Day 24 measured
  * it across the network: 160 calls in compose, mean 5.7-7.2 ms, no error of any kind, so no
- * transient error a retry would have saved; no retry. Whether to cache the profile is Track B's
+ * transient error a retry would have saved; no retry. As for {@link UserExistenceClient}, the
+ * JDK {@code HttpClient} under {@code InternalClients} sends this GET a second time by itself
+ * when the connection closes with no answer (seen on Day 24 for the existence call). Whether to cache the profile is Track B's
  * question on Day 24 (the call was 16% of top-matches' server time without the model, above the
  * spec's 10% threshold), not this client's.
  */
