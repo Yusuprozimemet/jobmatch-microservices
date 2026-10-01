@@ -19,6 +19,7 @@ class BackendApplicationTests extends IntegrationTest {
     // role. Until then this asserted all seven were in app; it changed with the layout it pins.
     // Day 12 added refresh_tokens, identity's first table of its own, decided before the work;
     // Day 14 added pending_google_links, the Google identities the session used to hold.
+    // Day 23 dropped job_match_scores (V15); matching keeps its schema and role, now empty.
     @Test
     void flywayHasMovedEachModulesTablesIntoItsOwnSchema() {
         assertThat(tablesIn("identity")).containsExactly(
@@ -29,10 +30,10 @@ class BackendApplicationTests extends IntegrationTest {
                 "user_profiles identity_user",
                 "users identity_user");
         assertThat(tablesIn("applications")).containsExactly("saved_jobs applications_user");
-        assertThat(tablesIn("matching")).containsExactly("job_match_scores matching_user");
+        assertThat(tablesIn("matching")).isEmpty();
     }
 
-    // Only Flyway's history of V1-V14 stays behind.
+    // Only Flyway's history of V1-V15 stays behind.
     @Test
     void theAppSchemaHoldsNothingButFlywaysHistory() {
         assertThat(jdbc()
