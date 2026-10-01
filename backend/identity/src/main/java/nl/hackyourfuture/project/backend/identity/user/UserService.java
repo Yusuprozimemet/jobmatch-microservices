@@ -1,10 +1,12 @@
 package nl.hackyourfuture.project.backend.identity.user;
 
 import lombok.RequiredArgsConstructor;
+import nl.hackyourfuture.project.backend.identity.outbox.Outbox;
 import nl.hackyourfuture.project.backend.identity.user.dto.*;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
@@ -14,6 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final Outbox outbox;
 
     // The account comes from the session, so nobody can edit someone else's.
     // The email in the request is ignored: it is what the user logs in with.
@@ -59,12 +62,15 @@ public class UserService {
     }
 
     // Deletes the caller's own account. Every table pointing at users cascades with it.
+    // The outbox row and the delete commit together or not at all.
+    @Transactional("identityTransactionManager")
     public void deleteUserByEmail(String email) {
         var user = userRepository.getUserByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         if (!userRepository.deleteUser(user.getId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
+        outbox.add(Outbox.USER_DELETED, user.getId());
     }
 
     // For the deleted-user rule: a service that trusts a token's sub asks this before acting (Day 39).
