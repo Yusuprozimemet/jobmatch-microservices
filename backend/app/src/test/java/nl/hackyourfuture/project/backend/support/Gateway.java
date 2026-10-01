@@ -55,6 +55,15 @@ public final class Gateway {
         return "http://" + gateway.getHost() + ":" + gateway.getMappedPort(PORT);
     }
 
+    /** Everything every gateway has logged this run, for the trace a request was forwarded under. */
+    public static String logs() {
+        return BY_ROUTES.values().stream()
+                .map(GenericContainer::getLogs)
+                .filter(log -> !log.isEmpty())
+                .reduce((first, second) -> first + "\n" + second)
+                .orElse("");
+    }
+
     private static GenericContainer<?> start(Key key) {
         int applicationPort = key.applicationPort();
         Map<String, String> serviceUrls = key.serviceUrls();
@@ -67,6 +76,10 @@ public final class Gateway {
                 .withEnv("MATCHING_SERVICE_URL", insideContainer(Services.url(Services.MATCHING_SERVICE, applicationPort, serviceUrls)))
                 // The suite logs in from one address far more than ten times a minute.
                 .withEnv("RATE_LIMIT_AUTH_PER_MINUTE", "1000000")
+                // One line per request, method and path, which the gateway's log pattern prefixes
+                // with [traceId,spanId]: what a test reads to see which trace a request arrived under.
+                .withEnv("SPRING_APPLICATION_JSON",
+                        "{\"logging.level.org.springframework.web.servlet.DispatcherServlet\":\"DEBUG\"}")
                 .withExposedPorts(PORT, MANAGEMENT_PORT)
                 // Ready, not just listening. The gateway's port accepts requests before its proxy
                 // has its header filters, and one arriving in between is answered 500: a login in
