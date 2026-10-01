@@ -29,9 +29,10 @@ class ModuleMigrationsIT extends IntegrationTest {
     }
 
     // identity's history gained its first migration on Day 12, as the spec decided before the work,
-    // and its second on Day 14. Day 38's revokes are the third, and the first of the other two.
+    // and its second on Day 14. Day 38's revokes are the third, and the first of the other two;
+    // Day 26's outbox is the fourth.
     @ParameterizedTest
-    @CsvSource({"identity, 0 BASELINE|1 SQL|2 SQL|3 SQL", "applications, 0 BASELINE|1 SQL"})
+    @CsvSource({"identity, 0 BASELINE|1 SQL|2 SQL|3 SQL|4 SQL", "applications, 0 BASELINE|1 SQL"})
     void andItStartsAtTheBaseline(String module, String history) {
         assertThat(jdbc()
                 .sql("SELECT version || ' ' || type FROM " + module + ".flyway_schema_history ORDER BY installed_rank")

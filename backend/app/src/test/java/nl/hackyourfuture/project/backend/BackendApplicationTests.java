@@ -20,9 +20,11 @@ class BackendApplicationTests extends IntegrationTest {
     // Day 12 added refresh_tokens, identity's first table of its own, decided before the work;
     // Day 14 added pending_google_links, the Google identities the session used to hold.
     // Day 23 dropped job_match_scores (V15); matching keeps its schema and role, now empty.
+    // Day 26 added outbox, the user.deleted events waiting for the relay.
     @Test
     void flywayHasMovedEachModulesTablesIntoItsOwnSchema() {
         assertThat(tablesIn("identity")).containsExactly(
+                "outbox identity_user",
                 "password_reset_tokens identity_user",
                 "pending_google_links identity_user",
                 "refresh_tokens identity_user",
