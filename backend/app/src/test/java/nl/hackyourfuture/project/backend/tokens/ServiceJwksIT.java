@@ -19,7 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * {@code GET /.well-known/service-jwks.json} publishes the key service tokens are verified with,
- * and only its public half (Day 39).
+ * and only its public half (Day 39). Asked of the application with {@code direct()}: the gateway
+ * does not route the path, on purpose, and its own {@code SecurityTest} checks that.
  */
 class ServiceJwksIT extends IntegrationTest {
 
@@ -35,7 +36,7 @@ class ServiceJwksIT extends IntegrationTest {
 
     @Test
     void isPublicAndServesOneRsaSigningKey() throws JOSEException {
-        ApiResponse response = anonymous().get("/.well-known/service-jwks.json");
+        ApiResponse response = direct().get("/.well-known/service-jwks.json");
 
         assertThat(response.status()).isEqualTo(200);
         JsonNode keys = response.at("/keys");
@@ -50,8 +51,8 @@ class ServiceJwksIT extends IntegrationTest {
 
     @Test
     void isNotTheUserKey() {
-        JsonNode userKey = anonymous().get("/.well-known/jwks.json").at("/keys/0");
-        JsonNode serviceKeyNode = anonymous().get("/.well-known/service-jwks.json").at("/keys/0");
+        JsonNode userKey = direct().get("/.well-known/jwks.json").at("/keys/0");
+        JsonNode serviceKeyNode = direct().get("/.well-known/service-jwks.json").at("/keys/0");
 
         assertThat(serviceKeyNode.path("kid").asString())
                 .isNotEqualTo(userKey.path("kid").asString());
@@ -59,7 +60,7 @@ class ServiceJwksIT extends IntegrationTest {
 
     @Test
     void neverContainsThePrivateKey() {
-        JsonNode key = anonymous().get("/.well-known/service-jwks.json").at("/keys/0");
+        JsonNode key = direct().get("/.well-known/service-jwks.json").at("/keys/0");
 
         for (String member : PRIVATE_MEMBERS) {
             assertThat(key.has(member)).as("private member %s in the service JWKS", member).isFalse();
@@ -69,7 +70,7 @@ class ServiceJwksIT extends IntegrationTest {
     @Test
     void aMintedTokenVerifiesAgainstIt() throws ParseException, JOSEException {
         String token = serviceToken.mint();
-        ApiResponse response = anonymous().get("/.well-known/service-jwks.json");
+        ApiResponse response = direct().get("/.well-known/service-jwks.json");
         JWKSet jwkSet = JWKSet.parse(response.body());
 
         SignedJWT jwt = (SignedJWT) JWTParser.parse(token);
