@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Each module keeps its own migration history, in its own schema, under its own role (Day 11).
  *
- * <p>app's history holds V1-V14, including the moves that brought each module's tables in. Each
+ * <p>app's history holds V1-V15, including the moves that brought each module's tables in. Each
  * module's own Flyway then baselines at 0, so what a module migrates from here, starting with
  * Day 12's {@code identity.refresh_tokens}, is recorded where only that module's login can write.
  */
@@ -39,8 +39,11 @@ class ModuleMigrationsIT extends IntegrationTest {
 
     // identity's history gained its first migration on Day 12, as the spec decided before the work,
     // and its second on Day 14. Day 38's revokes are the third, and the first of the other two.
+    // matching has no baseline since Day 23: its Flyway baselines only a schema that holds
+    // something, and the service finds matching empty whether it starts before V10 or after V15.
+    // Before V15 it depended on which started first.
     @ParameterizedTest
-    @CsvSource({"identity, 0 BASELINE|1 SQL|2 SQL|3 SQL", "applications, 0 BASELINE|1 SQL", "matching, 0 BASELINE|1 SQL"})
+    @CsvSource({"identity, 0 BASELINE|1 SQL|2 SQL|3 SQL", "applications, 0 BASELINE|1 SQL", "matching, 1 SQL"})
     void andItStartsAtTheBaseline(String module, String history) {
         assertThat(jdbc()
                 .sql("SELECT version || ' ' || type FROM " + module + ".flyway_schema_history ORDER BY installed_rank")
@@ -55,6 +58,6 @@ class ModuleMigrationsIT extends IntegrationTest {
                 .sql("SELECT max(version::int) FROM app.flyway_schema_history WHERE success")
                 .query(Integer.class)
                 .single())
-                .isEqualTo(14);
+                .isEqualTo(15);
     }
 }
