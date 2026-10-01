@@ -6,7 +6,11 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * The one dynamodb-local container the test suite shares, for the score table (Day 22). A static
- * singleton for the reason {@link PostgresContainer} gives; Ryuk removes it when the JVM exits.
+ * singleton rather than a {@code @Bean} or {@code @Container} field on purpose: Spring caches
+ * test contexts per configuration, so a container a context owns starts once per context, and a
+ * second context, which any {@code @MockitoBean} or extra property creates, quietly starts a
+ * second container. This one starts once per JVM and is never stopped; Ryuk removes it when the
+ * JVM exits.
  *
  * <p>Unlike the harness's, this table is the service's own: its tests run with table creation on,
  * so they check the table and its TTL as the service makes them. The region and the emulator's

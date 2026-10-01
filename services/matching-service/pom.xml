@@ -58,12 +58,6 @@
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
-		<!-- PostgreSQL JDBC driver, for the test Postgres until it goes (Day 23 Track B2). -->
-		<dependency>
-			<groupId>org.postgresql</groupId>
-			<artifactId>postgresql</artifactId>
-			<scope>test</scope>
-		</dependency>
 		<!-- The OpenAPI annotations the controller and its dto carry. -->
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
@@ -100,10 +94,10 @@
 			<version>1.4.1</version>
 			<scope>test</scope>
 		</dependency>
-		<!-- The test Postgres (PostgresContainer). -->
+		<!-- The test dynamodb-local (DynamoDbContainer). -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>
-			<artifactId>testcontainers-postgresql</artifactId>
+			<artifactId>testcontainers</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
