@@ -29,6 +29,12 @@ import java.util.function.Supplier;
  * {@code ResponseStatusException} with 503: matching without postings is meaningless, and the
  * answer is never an empty list, which would be indistinguishable from "no matches found". A 4xx is
  * a bug on this side, not an outage, so it is not caught and the caller answers 500.
+ *
+ * <p>No retry: the call is a POST, but only a read, so it is idempotent; still, a retry on the
+ * 2 s read timeout doubles the wait on the path the phase exists to protect, and the breaker
+ * already covers an outage. Day 19 left the decision to Day 24, which measured it across the
+ * network: 160 calls in compose, mean 8.2-10.5 ms, no error of any kind, so no transient error a
+ * retry would have saved; no retry.
  */
 @Component
 @Primary

@@ -29,7 +29,8 @@ import java.util.function.Supplier;
  *
  * <p>No retry: the read is idempotent, but a retry on the 2 s read timeout doubles the wait on
  * the path the phase exists to protect, and the breaker already covers an outage. Day 24
- * measures whether that still holds across the network.
+ * measured it across the network: 160 calls in compose, mean 5.7-7.5 ms, no error of any kind,
+ * so no transient error a retry would have saved; no retry.
  */
 @Component
 class UserExistenceClient {

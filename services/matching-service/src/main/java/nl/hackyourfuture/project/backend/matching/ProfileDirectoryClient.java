@@ -30,8 +30,11 @@ import java.util.function.Supplier;
  * and the caller answers 500.
  *
  * <p>No retry: the read is idempotent, but a retry on the 2 s read timeout doubles the wait on the
- * path the phase exists to protect, and the breaker already covers an outage. Day 24 measures
- * whether that still holds across the network.
+ * path the phase exists to protect, and the breaker already covers an outage. Day 24 measured
+ * it across the network: 160 calls in compose, mean 5.7-7.2 ms, no error of any kind, so no
+ * transient error a retry would have saved; no retry. Whether to cache the profile is Track B's
+ * question on Day 24 (the call was 16% of top-matches' server time without the model, above the
+ * spec's 10% threshold), not this client's.
  */
 @Component
 @Primary
