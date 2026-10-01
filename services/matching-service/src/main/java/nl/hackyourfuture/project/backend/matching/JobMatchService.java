@@ -20,6 +20,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 // Ranks open postings against the user's profile in two steps:
@@ -42,15 +43,17 @@ public class JobMatchService {
     private final PostingShortlist postingShortlist;
     private final JobMatchScoreRepository jobMatchScoreRepository;
     private final ProfileDirectory profileDirectory;
+    private final ProfileCache profiles;
     private final MatchScorer matchScorer;
     private final Counter hits;
     private final Counter misses;
 
     public JobMatchService(PostingShortlist postingShortlist, JobMatchScoreRepository jobMatchScoreRepository,
-                           ProfileDirectory profileDirectory, MatchScorer matchScorer, MeterRegistry registry) {
+                           ProfileDirectory profileDirectory, ProfileCache profiles, MatchScorer matchScorer, MeterRegistry registry) {
         this.postingShortlist = postingShortlist;
         this.jobMatchScoreRepository = jobMatchScoreRepository;
         this.profileDirectory = profileDirectory;
+        this.profiles = profiles;
         this.matchScorer = matchScorer;
         this.hits = Counter.builder("jobmatch.scores.lookups")
                 .description("Postings looked up in the score store, by whether a fresh score was found")
@@ -63,7 +66,8 @@ public class JobMatchService {
     }
 
     public List<JobMatchResponse> getTopMatches(UUID userId) {
-        ProfileSnapshot profile = profileDirectory.forUser(userId).orElseThrow(JobMatchService::noProfile);
+        Optional<ProfileSnapshot> cached = profiles.get(userId);
+        ProfileSnapshot profile = cached.orElseGet(() -> profileDirectory.forUser(userId).orElseThrow(JobMatchService::noProfile));
         List<String> skills = canonicalise(profile.skills());
 
         if (skills.size() < MINIMUM_PROFILE_SKILLS) {
@@ -71,6 +75,11 @@ public class JobMatchService {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "Add at least " + MINIMUM_PROFILE_SKILLS + " skills to your profile to see matches. You have "
                             + skills.size() + ".");
+        }
+
+        // Only a rankable profile is cached, so a just-fixed profile is not refused on the old one.
+        if (cached.isEmpty()) {
+            profiles.put(userId, profile);
         }
 
         List<ShortlistedPosting> shortlist =
