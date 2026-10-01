@@ -51,6 +51,9 @@ app:
     reasoning-effort: ${LLM_REASONING_EFFORT:low}
     # How long a stored score stays valid; reads skip older ones.
     score-retention-days: ${LLM_SCORE_RETENTION_DAYS:1}
+  # How long a rankable profile is reused before identity is asked again (Day 24, ProfileCache).
+  profile-cache:
+    window: ${PROFILE_CACHE_WINDOW:10s}
 
 # Observability. Actuator listens on its own port, which compose does not publish, so nothing
 # here is reachable from the internet.
