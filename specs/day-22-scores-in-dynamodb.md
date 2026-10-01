@@ -121,9 +121,9 @@ is small; B splits along client-and-creation / repository if it passes 400.
       finds 0 files.
       #237 and #239: `ScoreTableCreatedTest` (key schema; `DescribeTimeToLive` `ENABLED` on `ttl`)
       and `ScoresStoredTest` (one item per scored posting, its attributes, `ttl` = `scored_at` +
-      86 400). Red before: no table, and the grep found no file (#232, at c091bed). Broken on purpose:
-      TTL never enabled (#237), `expected: ENABLED but was: DISABLED`; `ttl` without the retention
-      (#239), off by exactly 86 400.
+      86 400). Red before: no table, and the grep found no file (#232, at c091bed). Broken on
+      purpose: TTL never enabled (#237), `expected: ENABLED but was: DISABLED`; `ttl` without the
+      retention (#239), off by exactly 86 400.
 - [x] **hold** (Track 0) — A score older than the retention window is not served: after one
       request, `ScoreStore.ageAll(2 days)`, the same request asks the model again (`callCount` 2,
       not 1). Broken on purpose: the read filter removed, on Postgres (line 54) and again on
@@ -137,44 +137,45 @@ is small; B splits along client-and-creation / repository if it passes 400.
       `reset()` not emptying the table, and `findScores` returning `Map.of()`; record what each
       reported.
       #236 (the table, its reset) and #239 (the repository); the three classes unedited, as all of
-      `contract/` (0 lines since Day 21). Through the gateway in #236, #239 and #242: all green but
-      `ServiceJwksIT` (see Notes). Broken on purpose: `ScoreTable.empty()` out of `reset()` (#236),
-      `ScoreTableTest.theResetEmptiesIt` `expected: 0 but was: 3`; `findScores` returning `Map.of()`
-      (#239), 4 of `MatchScoreCacheIT`'s 6 red, expected 1 model call, was 2.
+      `contract/` (0 lines since Day 21). Through the gateway in #236, #239 and #242: all green
+      but `ServiceJwksIT` (see Notes). Broken on purpose: `ScoreTable.empty()` out of `reset()`
+      (#236), `ScoreTableTest.theResetEmptiesIt` `expected: 0 but was: 3`; `findScores` returning
+      `Map.of()` (#239), 4 of `MatchScoreCacheIT`'s 6 red, expected 1 model call, was 2.
 - [x] **new** — With the store unreachable (endpoint on a closed port), and again with it hung
       (the container paused), top-matches answers 200 with `aiScored` true and the model called,
       and the hung case within 3 s of the unreachable one. Red: the repository with the read's
       catch removed answers 500; with a 30 s `apiCallTimeout`, the hung case takes over 30 s.
       #239: `ScoreStoreUnreachableTest` and `ScoreStoreHungTest`; the hung case asserts under 3 s
-      in total, stricter than "within 3 s of the unreachable one". Broken on purpose: the read's catch
-      removed, both `top-matches answered 500`; `api-call-timeout` 30 s, `ScoreStoreHungTest` 60 645 ms
-      against 3 000 (a 30 s read and a 30 s write).
+      in total, stricter than "within 3 s of the unreachable one". Broken on purpose: the read's
+      catch removed, both failed, `top-matches answered 500`; `api-call-timeout` 30 s,
+      `ScoreStoreHungTest` 60 645 ms against 3 000 (a 30 s read and a 30 s write).
 - [x] **hold** — `HungModelIT` answers under 30 s with the new sum (model read 13 s). Broken on
       purpose: `LLM_TIMEOUT_SECONDS` 30; it should report over 30 s.
       #237: `LLM_TIMEOUT_SECONDS` 13, the sum beside it; `ConfigurationTest` pins 13. Broken on
-      purpose: 30 again, `HungModelIT` reported `45.7318191S` against less than `30S`; at 13, 3 of 3
-      passed.
+      purpose: 30 again, `HungModelIT` failed, reporting `45.7318191S` against less than `30S`; at
+      13, 3 of 3 passed.
 - [x] **new** — `git grep -n "JobMatchScoreCleanup\|SchedulingConfig\|deleteExpired\|@EnableScheduling\|@Scheduled\|score-purge-cron" -- '*.java' '*.yaml' '*.yml'`
       finds nothing. Red today: 8 lines in 4 files (`git grep -c` with the same pattern).
-      #238 deleted them; on b00abd9 the grep finds nothing (exit 1). Red before: 8 lines in 4 files
-      (#232, at c091bed). Broken on purpose at the close: `import …EnableScheduling;` and `@EnableScheduling` on
-      `MatchingServiceApplication`: the grep found that one line (exit 0); reverted, nothing (exit
-      1). Written fully qualified, the grep missed it; see Notes.
+      #238 deleted them; on b00abd9 the grep finds nothing (exit 1). Red before: 8 lines in 4
+      files (#232, at c091bed). Broken on purpose at the close: `import …EnableScheduling;` and
+      `@EnableScheduling` on `MatchingServiceApplication`: the grep printed that one line (exit
+      0); reverted, nothing (exit 1). Written fully qualified, the grep missed it; see Notes.
 - [x] **new** — After two identical requests for a shortlist of n postings, matching-service's
       `/actuator/prometheus` shows `jobmatch_scores_lookups_total{result="miss"}` n and
       `{result="hit"}` n; `grep -c job_name observability/prometheus.yml` is 4; `jobmatch.json`
       has a panel querying `jobmatch_scores_lookups_total`. Red today: no counter, 3 jobs.
       #241: `ScoreLookupsCountedTest`, two identical requests for 3 postings, 3 misses then 3 hits
-      and 1 model call; the `jobmatch-matching-service` scrape job (4 `job_name`s, promtool `SUCCESS`);
-      the hit-rate panel; the latency panel's label 13 s. Broken on purpose: `hits.increment` removed,
-      expected 3, was 0; the counting moved after the early return, expected 3, was 0. Red before: 3
-      jobs (#232).
+      and 1 model call; the `jobmatch-matching-service` scrape job (4 `job_name`s, promtool
+      `SUCCESS`); the hit-rate panel; the latency panel's label 13 s. Broken on purpose, the test
+      failed both times: the hits counter's increment removed, expected 3, was 0; the counting
+      moved after the early return, expected 3, was 0. Red before: 3 jobs (#232).
 - [x] **new** — `docker compose --env-file .env.example config --format json` has a `dynamodb`
       service on `amazon/dynamodb-local:3.3.1` with no `ports`, and matching-service's
       environment has `SCORES_DYNAMODB_ENDPOINT`. Red today: no `dynamodb` key under `services`.
       #242: the check prints `amazon/dynamodb-local:3.3.1 False`. Red before: no `dynamodb`
-      service (#232, at c091bed). Broken on purpose at the close: `ports: ["8000:8000"]` on `dynamodb`: the check printed
-      `amazon/dynamodb-local:3.3.1 True`; reverted, `False`, and `SCORES_DYNAMODB_ENDPOINT` present.
+      service (#232, at c091bed). Broken on purpose at the close: `ports: ["8000:8000"]` on
+      `dynamodb`: the check printed `amazon/dynamodb-local:3.3.1 True`; reverted, `False`, and
+      `SCORES_DYNAMODB_ENDPOINT` present.
 
 ## Verify
 ```bash
