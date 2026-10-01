@@ -58,12 +58,11 @@ public final class MatchingService {
         // Ensure ScoreTable is started so its network is ready
         ScoreTable.client();
 
-        int postgresPort = PostgresContainer.instance().getMappedPort(5432);
         int jobServicePort = JobService.port();
         int jobServiceRelayPort = JobService.relayPort();
         int stubLlmPort = URI.create(StubLlm.instance().baseUrl()).getPort();
 
-        Testcontainers.exposeHostPorts(postgresPort, jobServiceRelayPort, jobServicePort, stubLlmPort);
+        Testcontainers.exposeHostPorts(jobServiceRelayPort, jobServicePort, stubLlmPort);
 
         GenericContainer<?> matchingService = new GenericContainer<>(DockerImageName.parse(IMAGE))
                 // A local build, never a pull: an image by this name on a registry is not ours.
@@ -80,11 +79,6 @@ public final class MatchingService {
                 .withEnv("LLM_BASE_URL",
                         "http://host.testcontainers.internal:" + stubLlmPort)
                 .withEnv("LLM_API_KEY", "test-key")
-                .withEnv("DB_HOST", "host.testcontainers.internal")
-                .withEnv("DB_PORT", String.valueOf(postgresPort))
-                .withEnv("DB_NAME", PostgresContainer.instance().getDatabaseName())
-                .withEnv("DB_MATCHING_USER", "matching_user")
-                .withEnv("DB_MATCHING_PASSWORD", PostgresContainer.rolePassword())
                 // DynamoDB scores (Day 22): the table is the harness's, so create is false
                 .withEnv("SCORES_DYNAMODB_ENDPOINT", ScoreTable.NETWORK_ENDPOINT)
                 .withEnv("AWS_REGION", "eu-west-1")

@@ -4,15 +4,6 @@ spring:
   threads:
     virtual:
       enabled: true
-  # Flyway applies db/matching to the service's schema, on the same role and history table as
-  # the monolith did. An existing database sees V1 already applied.
-  flyway:
-    locations: classpath:db/matching
-    schemas: matching
-    create-schemas: false
-    baseline-on-migrate: true
-    baseline-version: 0
-    baseline-description: "tables moved in by V12-V14 in app"
 
 server:
   port: 8080
@@ -25,13 +16,6 @@ logging:
     correlation: "[%X{traceId:-},%X{spanId:-}] "
 
 app:
-  # One login per module: matching_user on the matching schema, where matching-service reads and
-  # writes job_match_scores and applies its migrations.
-  datasource:
-    matching:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=matching
-      username: ${DB_MATCHING_USER:matching_user}
-      password: ${DB_MATCHING_PASSWORD:password}
   # Required, no default on purpose (InternalUrls): empty meant "this process" in the monolith,
   # and this process serves none of identity's or job-service's routes.
   internal:
