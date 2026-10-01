@@ -1,8 +1,6 @@
 package nl.hackyourfuture.project.backend.database;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
-import nl.hackyourfuture.project.backend.support.MatchingService;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -19,15 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ModuleMigrationsIT extends IntegrationTest {
 
-    // matching's history is written by matching-service's container since Day 21, into the same
-    // table: started here, so it exists whichever test ran first.
-    @BeforeAll
-    static void matchingServiceHasMigratedItsSchema() {
-        MatchingService.port();
-    }
-
     @ParameterizedTest
-    @ValueSource(strings = {"identity", "applications", "matching"})
+    @ValueSource(strings = {"identity", "applications"})
     void eachModuleHasItsOwnHistoryOwnedByItsRole(String module) {
         assertThat(jdbc()
                 .sql("SELECT tableowner FROM pg_tables WHERE schemaname = :schema AND tablename = 'flyway_schema_history'")
@@ -39,11 +30,8 @@ class ModuleMigrationsIT extends IntegrationTest {
 
     // identity's history gained its first migration on Day 12, as the spec decided before the work,
     // and its second on Day 14. Day 38's revokes are the third, and the first of the other two.
-    // matching has no baseline since Day 23: its Flyway baselines only a schema that holds
-    // something, and the service finds matching empty whether it starts before V10 or after V15.
-    // Before V15 it depended on which started first.
     @ParameterizedTest
-    @CsvSource({"identity, 0 BASELINE|1 SQL|2 SQL|3 SQL", "applications, 0 BASELINE|1 SQL", "matching, 1 SQL"})
+    @CsvSource({"identity, 0 BASELINE|1 SQL|2 SQL|3 SQL", "applications, 0 BASELINE|1 SQL"})
     void andItStartsAtTheBaseline(String module, String history) {
         assertThat(jdbc()
                 .sql("SELECT version || ' ' || type FROM " + module + ".flyway_schema_history ORDER BY installed_rank")
@@ -59,5 +47,15 @@ class ModuleMigrationsIT extends IntegrationTest {
                 .query(Integer.class)
                 .single())
                 .isEqualTo(15);
+    }
+
+    // matching-service has had no Flyway since Day 23: its schema is migrated by app's V15 alone.
+    @Test
+    void matchingKeepsNoHistoryOfItsOwn() {
+        assertThat(jdbc()
+                .sql("SELECT to_regclass('matching.flyway_schema_history') IS NULL")
+                .query(Boolean.class)
+                .single())
+                .isTrue();
     }
 }

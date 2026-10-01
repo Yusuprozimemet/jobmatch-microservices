@@ -118,8 +118,6 @@ matching-service's settings (Day 21), in its
 
 | Variable | Default | |
 | --- | --- | --- |
-| `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `project_db` | The `matching` schema is still in the monolith's database, until Day 23 |
-| `DB_MATCHING_USER` / `DB_MATCHING_PASSWORD` | `matching_user` / `password` | Its own login; its Flyway applies `db/matching` as it. Compose passes `MATCHING_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-matching-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
 | `INTERNAL_IDENTITY_URL` | none | Where it asks whether a user exists (`/internal/users/{id}`) and for their profile (`/internal/profiles/{userId}`): the backend, `http://backend:8080` in compose. **Required**: it does not start without it |
 | `INTERNAL_JOBS_URL` | none | Where it asks for the shortlist (`/internal/postings/shortlist`): job-service, `http://job-service:8080` in compose. **Required** |
@@ -321,8 +319,8 @@ What must be set beyond the defaults, in one place:
 
 - [ ] `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER=app_user`, `DB_PASSWORD`, and each module's login:
       `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER` with their `_PASSWORD`s — the `prod` profile has no
-      fallbacks, and the backend does not start without them. job-service's `DB_JOBS_*` and
-      matching-service's `DB_MATCHING_*` are set on those services
+      fallbacks, and the backend does not start without them. job-service's `DB_JOBS_*` are set on
+      that service
 - [ ] `JWT_PRIVATE_KEY_FILE`, pointing at a key from the secret store — the backend does not start
       without it. Replacing the key later signs every user out
 - [ ] `SERVICE_JWT_PRIVATE_KEY_FILE`, pointing at the service key from the secret store — the

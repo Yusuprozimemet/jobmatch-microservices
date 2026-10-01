@@ -58,25 +58,11 @@
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
-		<!-- Matching's datasource, reading job_match_scores and its own schema. -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-jdbc</artifactId>
-		</dependency>
-		<!-- Flyway applies db/matching to the service's schema. -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-flyway</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-database-postgresql</artifactId>
-		</dependency>
-		<!-- PostgreSQL JDBC driver. -->
+		<!-- PostgreSQL JDBC driver, for the test Postgres until it goes (Day 23 Track B2). -->
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
+			<scope>test</scope>
 		</dependency>
 		<!-- The OpenAPI annotations the controller and its dto carry. -->
 		<dependency>

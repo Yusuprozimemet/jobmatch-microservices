@@ -124,11 +124,6 @@ services:
   matching-service:
     build: ./services/matching-service
     environment:
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_NAME: ${POSTGRES_DB}
-      DB_MATCHING_USER: matching_user
-      DB_MATCHING_PASSWORD: ${MATCHING_DB_PASSWORD:-password}
       # The score store (Day 22): the emulator above, whose table the service creates. The keys are
       # the emulator's dummies; on AWS a task role (Phase 7).
       SCORES_DYNAMODB_ENDPOINT: http://dynamodb:8000
@@ -158,8 +153,6 @@ services:
       start_period: 30s
       start_interval: 1s
     depends_on:
-      db:
-        condition: service_healthy
       jwt-key:
         condition: service_completed_successfully
       dynamodb:
