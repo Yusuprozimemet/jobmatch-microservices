@@ -114,34 +114,67 @@ A lands before B: without the reset, criterion 3 goes red. B and C may merge int
 is small; B splits along client-and-creation / repository if it passes 400.
 
 ## Acceptance criteria
-- [ ] **new** — After one top-matches request in the service's tests, the table holds one item per
+- [x] **new** — After one top-matches request in the service's tests, the table holds one item per
       scored posting, keyed and attributed as the table above, with `ttl` = `scored_at` + 86 400
       at the default retention, and `DescribeTimeToLive` reports `ENABLED` on `ttl`. Red today:
       no table, and `git grep -il dynamodb -- backend services docker-compose.yml .github scripts`
       finds 0 files.
-- [ ] **hold** (Track 0) — A score older than the retention window is not served: after one
+      #237 and #239: `ScoreTableCreatedTest` (key schema; `DescribeTimeToLive` `ENABLED` on `ttl`)
+      and `ScoresStoredTest` (one item per scored posting, its attributes, `ttl` = `scored_at` +
+      86 400). Red before: no table, and the grep found no file (#232, at c091bed). Broken on purpose:
+      TTL never enabled (#237), `expected: ENABLED but was: DISABLED`; `ttl` without the retention
+      (#239), off by exactly 86 400.
+- [x] **hold** (Track 0) — A score older than the retention window is not served: after one
       request, `ScoreStore.ageAll(2 days)`, the same request asks the model again (`callCount` 2,
       not 1). Broken on purpose: the read filter removed, on Postgres (line 54) and again on
       DynamoDB; the test should report 1 against 2 both times.
-- [ ] **hold** — `MatchScoreCacheIT` (6), `MatchTopMatchesIT` (8) and `MatchRankingIT` (8) pass
+      `matching/ExpiredScoreIT`, written on Postgres in Track 0 (#233). Broken on purpose: the
+      `scored_at` line replaced by `AND :retentionDays > 0` (#233), `expected: 2 but was: 1`; the same
+      again in Track C (#238), the same report; the `ttl` filter removed on DynamoDB (#239), expected
+      2, was 1.
+- [x] **hold** — `MatchScoreCacheIT` (6), `MatchTopMatchesIT` (8) and `MatchRankingIT` (8) pass
       unedited, directly and through the gateway (`-Dharness.gateway=true`). Broken on purpose:
       `reset()` not emptying the table, and `findScores` returning `Map.of()`; record what each
       reported.
-- [ ] **new** — With the store unreachable (endpoint on a closed port), and again with it hung
+      #236 (the table, its reset) and #239 (the repository); the three classes unedited, as all of
+      `contract/` (0 lines since Day 21). Through the gateway in #236, #239 and #242: all green but
+      `ServiceJwksIT` (see Notes). Broken on purpose: `ScoreTable.empty()` out of `reset()` (#236),
+      `ScoreTableTest.theResetEmptiesIt` `expected: 0 but was: 3`; `findScores` returning `Map.of()`
+      (#239), 4 of `MatchScoreCacheIT`'s 6 red, expected 1 model call, was 2.
+- [x] **new** — With the store unreachable (endpoint on a closed port), and again with it hung
       (the container paused), top-matches answers 200 with `aiScored` true and the model called,
       and the hung case within 3 s of the unreachable one. Red: the repository with the read's
       catch removed answers 500; with a 30 s `apiCallTimeout`, the hung case takes over 30 s.
-- [ ] **hold** — `HungModelIT` answers under 30 s with the new sum (model read 13 s). Broken on
+      #239: `ScoreStoreUnreachableTest` and `ScoreStoreHungTest`; the hung case asserts under 3 s
+      in total, stricter than "within 3 s of the unreachable one". Broken on purpose: the read's catch
+      removed, both `top-matches answered 500`; `api-call-timeout` 30 s, `ScoreStoreHungTest` 60 645 ms
+      against 3 000 (a 30 s read and a 30 s write).
+- [x] **hold** — `HungModelIT` answers under 30 s with the new sum (model read 13 s). Broken on
       purpose: `LLM_TIMEOUT_SECONDS` 30; it should report over 30 s.
-- [ ] **new** — `git grep -n "JobMatchScoreCleanup\|SchedulingConfig\|deleteExpired\|@EnableScheduling\|@Scheduled\|score-purge-cron" -- '*.java' '*.yaml' '*.yml'`
+      #237: `LLM_TIMEOUT_SECONDS` 13, the sum beside it; `ConfigurationTest` pins 13. Broken on
+      purpose: 30 again, `HungModelIT` reported `45.7318191S` against less than `30S`; at 13, 3 of 3
+      passed.
+- [x] **new** — `git grep -n "JobMatchScoreCleanup\|SchedulingConfig\|deleteExpired\|@EnableScheduling\|@Scheduled\|score-purge-cron" -- '*.java' '*.yaml' '*.yml'`
       finds nothing. Red today: 8 lines in 4 files (`git grep -c` with the same pattern).
-- [ ] **new** — After two identical requests for a shortlist of n postings, matching-service's
+      #238 deleted them; on b00abd9 the grep finds nothing (exit 1). Red before: 8 lines in 4 files
+      (#232, at c091bed). Broken on purpose at the close: `import …EnableScheduling;` and `@EnableScheduling` on
+      `MatchingServiceApplication`: the grep found that one line (exit 0); reverted, nothing (exit
+      1). Written fully qualified, the grep missed it; see Notes.
+- [x] **new** — After two identical requests for a shortlist of n postings, matching-service's
       `/actuator/prometheus` shows `jobmatch_scores_lookups_total{result="miss"}` n and
       `{result="hit"}` n; `grep -c job_name observability/prometheus.yml` is 4; `jobmatch.json`
       has a panel querying `jobmatch_scores_lookups_total`. Red today: no counter, 3 jobs.
-- [ ] **new** — `docker compose --env-file .env.example config --format json` has a `dynamodb`
+      #241: `ScoreLookupsCountedTest`, two identical requests for 3 postings, 3 misses then 3 hits
+      and 1 model call; the `jobmatch-matching-service` scrape job (4 `job_name`s, promtool `SUCCESS`);
+      the hit-rate panel; the latency panel's label 13 s. Broken on purpose: `hits.increment` removed,
+      expected 3, was 0; the counting moved after the early return, expected 3, was 0. Red before: 3
+      jobs (#232).
+- [x] **new** — `docker compose --env-file .env.example config --format json` has a `dynamodb`
       service on `amazon/dynamodb-local:3.3.1` with no `ports`, and matching-service's
       environment has `SCORES_DYNAMODB_ENDPOINT`. Red today: no `dynamodb` key under `services`.
+      #242: the check prints `amazon/dynamodb-local:3.3.1 False`. Red before: no `dynamodb`
+      service (#232, at c091bed). Broken on purpose at the close: `ports: ["8000:8000"]` on `dynamodb`: the check printed
+      `amazon/dynamodb-local:3.3.1 True`; reverted, `False`, and `SCORES_DYNAMODB_ENDPOINT` present.
 
 ## Verify
 ```bash
@@ -177,3 +210,77 @@ docker compose -p day22 down -v
 - Day 04's contract comments (`MatchScoreCacheIT.java:15-17`, `MatchTopMatchesIT.java:16-17`)
   name Days 22 and 23. They stay: what they assert is when a model call happens, not where the
   score was kept.
+- **Track order: B1 (#237), C (#238), B2 (#239).** B2's repository drops `deleteExpired`, which
+  C's cleanup job called, so C went between the halves. B split along client-and-creation /
+  repository, as the tracks section allowed; B2 is 399 changed lines.
+- **Defect** — found: self · cause: process · #237's branch was `track-b-…`, not `track-b1-…`,
+  so `spec-drift.py` counted it as all of Track B and reported C next with B half done. #239 is
+  `track-b2-…`.
+- **Two departures from the spec, both the main session's call, each recorded in its PR:**
+  - **#240 fixed in Track E (#242), not in a PR of its own.** Table creation shared the request
+    path's 500 ms `apiCallTimeout`; a cold dynamodb-local failed the context load (3 of 10
+    single-class runs locally, 32 errors of 70 in one full run; CI passed every run). Logged
+    during Track D (#241) for a later PR; compose, which E added, is where it would show first.
+    Creation's calls now carry 5 s each and retry the describe for up to 30 s on
+    `SdkClientException`; the request path stays at 500 ms. `ScoreTableStartupTest` pins both:
+    without the 5 s, `ApiCallTimeoutException … 500 millis`; without the retry,
+    `SdkClientException: Unable to execute HTTP request`.
+  - **Criterion 4's hung case asserts under 3 s in total** (#239), stricter than "within 3 s of
+    the unreachable one".
+- **Defect** — found: self · cause: spec · #232's first draft pinned criterion 6's grep at 9
+  lines; it finds 8. Corrected before the PR.
+- **Defect** — found: review · cause: implementation · five tracks' first drafts, all by the
+  implementer on Haiku: an order-dependent reset test, at 390 lines (#236); the TTL status
+  compared as a string, accepting `ENABLING` (#237); the read filtered on `scored_at`, not `ttl`,
+  and a `null` reason, which DynamoDB refuses and which would drop a whole 25-item batch (#239,
+  no test covers it); `ScoreLookupsCountedTest` loosened to "some hits" instead of finding why
+  only 1 of 3 scores was stored, which was `MatchScorer.shortId` cutting `lookups-1/2/3` to one
+  id (#241); and the doc edits reverted in the working tree after being told not to touch them
+  (#242).
+- **Defect** — found: break on purpose · cause: implementation · both criterion-4 tests first set
+  `app.scores.endpoint`, which the test base overrides, so they talked to the healthy store and
+  stayed green with the read's catch removed (#239; now `test.scores.*`). #242's first
+  slow-store test delayed only the first answer, and its late-store test started the store at
+  1.5 s, inside the SDK's own retries: both passed without the fix. Each was rewritten before the PR.
+- **A store with no span**, as Out of scope decided: `TopMatchesTracedIT` still sees the model
+  and job-service.
+- **The close's Verify, on b00abd9:** the job-service, matching-service and api-gateway harness images
+  rebuilt; `clean verify` 429 tests, 0 failures, 0 errors, 1 skipped, counted from the reports
+  after deleting them; `checkstyle:check` 0 violations; through the gateway 429, only
+  `ServiceJwksIT` red (3 failures, 1 error); matching-service `verify checkstyle:check` 72, 0
+  failures; the deletions grep nothing (exit 1); `job_name` 4; the compose check
+  `amazon/dynamodb-local:3.3.1 False`; `up -d --build --wait` in a project of its own (`day22`):
+  every service running, matching-service healthy after "Created the score table
+  job_match_scores", then `down -v` on that project.
+- **Found, not owned:**
+  - `ServiceJwksIT` still fails through the gateway (3 failures, 1 error, 401 on
+    `/.well-known/service-jwks.json`), the same on `main` before each of #233, #236, #239 and
+    #242; CI's gateway run leaves it out. Day 21 left it to "any day that touches the gateway's
+    key sets"; still none does.
+  - `ScoreTableStartupTest` (#242) is in package `…backend.matching`, the service's other tests
+    in `…matchingservice`. It runs (the name ends in `Test`); the package is a slip.
+- **The estimate:** 8 PRs expected (6 tracks, the spec change, the close). Took 7 track PRs
+  (#233, #236, #237, #238, #239, #241, #242), 1 spec change (#232) and this close, 9. The tracks
+  came to 1,289 changed lines against the table's 960–1,470. No `Oversized:` line.
+- **Tests:** `contract/` unchanged; `support/` +194 −3 (`ScoreTable` 94, its self-test 53,
+  `ScoreStore` 32, `MatchingService` +12 −1, `TestDatabase` +3 −2); outside both, one new class,
+  `ExpiredScoreIT` (36). No existing test was edited.
+- **Hand-offs this day leaves. Day 23's, 24's and 32's specs name none of them yet:**
+  - **Day 23:** `matching.job_match_scores` (a `db/matching` V2, applied by the service), the
+    service's datasource, Flyway, JDBC and Postgres dependencies, its `DB_*` in compose and the
+    harness, and the `matching` role and schema, which `V14__move_matching_tables.sql:22-27`
+    raises without. Its spec is still the provisional "nosql-cutover" draft, written for a dual
+    write this day did not do; its spec-change PR starts from these.
+  - **Day 24:** the profile cache, retry, the existence answer; and its "no datasource"
+    criterion (`day-24:33`), which holds only after Day 23.
+  - **Day 32:** the scores table in Terraform, partition `skills_hash`, sort `posting_scorer`,
+    TTL on `ttl`, with `app.scores.create-table` false in production.
+  - **Phase 7:** a task role in place of compose's dummy `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`.
+  - **Any day that touches the gateway's key sets:** `ServiceJwksIT` through the gateway.
+- **Defect** — found: close · cause: spec · criterion 6's grep cannot see a fully qualified
+  annotation. The close's first break inserted `@org.springframework.scheduling.annotation.EnableScheduling`
+  on `MatchingServiceApplication` and the grep still found nothing (exit 1). Imported and written
+  `@EnableScheduling`, it found the line (exit 0). Code normally imports it, so the check stands;
+  the blind spot is recorded here.
+- **Defect** — found: close · cause: process · criteria 6 and 8 had a red before the change (#232)
+  but no break in any track; both were first broken at the close, as recorded above.
