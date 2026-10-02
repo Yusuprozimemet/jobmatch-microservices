@@ -67,34 +67,59 @@ Order A, B, C1, C2; B needs no bus and may go first. C1's relay-off default keep
 reading their rows. No Track 0: the test that holds through the day exists.
 
 ## Acceptance criteria
-- [ ] **hold** — `contract/AccountDeletionIT`, unedited, 3 of 3 green after every track: the
+- [x] **hold** — `contract/AccountDeletionIT`, unedited, 3 of 3 green after every track: the
       key still deletes the saved jobs, and the outbox write must not break the delete or end
       the session differently (`plan.md`: green "through every day of the phase"). Broken on
       purpose in this spec change: `UserRepository.deleteUser` ran `DELETE ... AND false` and
       answered as if it had deleted; `deletingTheAccountRemovesItsSavedJobs` reported
       `expected: 0L but was: 2L`. The other two stayed green (see Notes). Reverted.
-- [ ] **new** — Deleting an account through `DELETE /api/users/me` leaves exactly one outbox row
+- [x] **new** — Deleting an account through `DELETE /api/users/me` leaves exactly one outbox row
       for that user with type `user.deleted` (relay off). Red today:
       `relation "identity.outbox" does not exist`.
-- [ ] **new** — The row and the delete commit together, tested both ways: a `DELETE` that fails
+- [x] **new** — The row and the delete commit together, tested both ways: a `DELETE` that fails
       (a test-only table keyed to `identity.users` without cascade, as
       `ModuleConnectionsIT.norATableAModuleCreatesLater` creates one) leaves no outbox row; an
       outbox insert that fails (a test-only trigger) leaves the user and their saved jobs. Red
       today: no outbox table. Broken on purpose: the `@Transactional` removed; one case must fail
       whichever statement runs first.
-- [ ] **new** — After a delete, a message for that `userId` arrives on both queues within 5 s,
+- [x] **new** — After a delete, a message for that `userId` arrives on both queues within 5 s,
       and the outbox row is gone. Red today: no topic, no relay.
-- [ ] **new** — The message body has exactly the five v1 fields, `version` is `1`, and
+- [x] **new** — The message body has exactly the five v1 fields, `version` is `1`, and
       `docs/events/user-deleted.md` names them and the consumer rules. Red today: no message,
       no page. Broken on purpose: `email` added to the body; the test must name it.
-- [ ] **new** — With the emulator container paused, the delete still answers 204 and the row
+- [x] **new** — With the emulator container paused, the delete still answers 204 and the row
       stays; unpaused, the message arrives on both queues. Red today: no relay.
-- [ ] **new** — A relay pass that publishes and then fails before deleting the row publishes it
+- [x] **new** — A relay pass that publishes and then fails before deleting the row publishes it
       again on the next pass: two messages with one `eventId`, a duplicate by design. Red today:
       no relay.
-- [ ] **new** — `docker compose -p day26 config --images | grep -x 'localstack/localstack:4.14.0'`
+- [x] **new** — `docker compose -p day26 config --images | grep -x 'localstack/localstack:4.14.0'`
       prints one line, the service publishes no port, and after `up` the commands in Verify list
       the topic and the four queues. Red today: the grep prints nothing (8 images, none SNS/SQS).
+      #256 (`localstack` alone); at the close, on 25d561d, the full `up -d --build --wait` in
+      `-p day26`: all services healthy, the grep one line of 9 images, `docker port` empty, the
+      topic `user-deleted` and the two queues with their two DLQs listed. Torn down after.
+      #256, #257, #258, #259: 3 of 3 after each track, the file unedited
+      (`git diff 120cfdf^1 HEAD -- .../contract/` is empty). Seen red in #255 as above.
+      #257: `events/UserDeletedOutboxIT.deletingTheAccountLeavesOneUserDeletedRow`. Seen red:
+      `outbox.add` removed, the row count `0`, and the trigger case `expected: 500 but was: 204`.
+      #257: `aDeleteThatFailsLeavesNoOutboxRow` and
+      `anOutboxInsertThatFailsLeavesTheUserAndTheirSavedJobs`. Seen red, `@Transactional`
+      removed: delete first, the insert case (`Expecting value to be true but was false`, the
+      user gone); insert moved first, the delete case (`Expecting empty but was:
+      ["user.deleted"]`).
+      #258: `events/UserDeletedRelayIT.aDeletedAccountArrivesOnBothQueuesAndLeavesTheOutbox`,
+      5 s on each queue. Seen red: the row never deleted, `expected: 0L but was: 1L`; a missing
+      topic, `no message for user … on applications-user-deleted within 5000 ms`.
+      #258: `theMessageIsVersionOneOfTheEventPage` reads the body and
+      `docs/events/user-deleted.md`. Seen red: `email` added to the body, listed under "keys
+      not expected".
+      #259: `aDeleteWhileTheBusIsDownIsPublishedOnceItIsBack` (`EventBus.pause()`). Seen red:
+      the publish failure swallowed inside the transaction, `expected: 1L but was: 0L`, the row
+      gone and the event lost.
+      #259: `aPublishThatFailsBeforeTheDeleteIsPublishedAgainWithTheSameEventId` (a trigger
+      that refuses one delete, counted by a sequence). Seen red: a new `eventId` per publish,
+      `expected: "ce94e453-…" but was: "2f47de5b-…"`; the row deleted before the publish,
+      `Expected size: 2 but was: 1`.
 
 ## Verify
 ```bash
@@ -124,6 +149,40 @@ docker compose -p day26 down -v                 # a project of its own: never th
   could not fail if the code deleted before inserting; every cached context would run a relay;
   "four module pools" (two: identity, applications) hid the named transaction manager; the
   compose check had no command. Fixed before this spec change opened.
+- **Track order: A (#256), B (#257), C1 (#258), C2 (#259),** the spec's. Six PRs as estimated.
+- **Departures, each recorded in its PR:**
+  - **The SNS SDK moved from `app`'s test scope to `identity`'s compile scope** (#258), not
+    added beside it: `app`'s direct `<scope>test</scope>` would have overridden the transitive
+    compile scope and left SNS out of the packaged jar.
+  - **The topic ARN has no default** (#258): with the relay on, the application refuses to start
+    without one, so production never falls back to a LocalStack ARN. Compose sets it.
+  - **`UserDeletedRelayIT` closes its context after the class** (`@DirtiesContext`, #258), which
+    the spec did not name: a cached context would keep its scheduler and take later classes'
+    rows.
+  - **Track A checked compose with `localstack` alone;** the full `up --build --wait` was left to
+    the close, which ran it (criterion 8).
+- **Defect** — found: Track B · cause: spec · In scope did not name the two harness tests that
+  pin identity's tables and migration history, `BackendApplicationTests` and
+  `ModuleMigrationsIT`; V4 turned both red, and #257 added the outbox to each. Neither is a Day
+  1–4 test.
+- **Defect** — found: review (Track A) · cause: implementation · the implementer's queue cleanup
+  deleted the next message on the queue, not the one it had received, which the spec forbids on
+  shared queues; a client read before it was started; a "started" guard set before the topic and
+  queues existed. Fixed in #256.
+- **Defect** — found: review (Track C1) · cause: implementation · the implementer caught the
+  publish exception inside the transaction, so a failed publish would commit the row's delete and
+  lose the event; it also made a LocalStack ARN the production default, put a test profile in
+  `src/main/resources`, and matched the `userId` on one queue of two. Fixed in #258; the first
+  is the break #259 records for criterion 6.
+- **Defect** — found: break on purpose · cause: process · #257's first two scripted runs of the
+  breaks never started Maven: Python's `shell=True` went through cmd.exe, then WSL's bash. A
+  third, from Git Bash, produced the record above.
+- **Defect** — found: Track A · cause: spec · compose's default network has the fixed name
+  `finalproject`, so a `-p day26` project shares it with the maintainer's. The Verify's
+  `down -v` touches no volume of theirs, but removes the network if their stack is down.
+- **What the event costs:** the relay's context is one more cached context in the run, at two
+  pools; every other context runs with the relay off, so a row written in a test stays until the
+  test reads it.
 - **Hand-offs this day leaves:**
   - **Day 27:** the consumers, held to `docs/events/user-deleted.md`; the poison-message path;
     the decision on Day 39's record of deleted ids.
