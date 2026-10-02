@@ -7,18 +7,43 @@ on:
       - "services/matching-service/**"
       - "backend/checkstyle.xml"
       - ".github/workflows/matching-service-ci-cd.yaml"
+  # Every pull request, so the gate below always reports: a required check that never starts
+  # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
-    paths:
-      - "services/matching-service/**"
-      - "backend/checkstyle.xml"
-      - ".github/workflows/matching-service-ci-cd.yaml"
 
 concurrency:
   group: docker-build-matching-service-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      # A pull request's checkout is its merge commit, whose first parent is the base.
+      - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      # The same paths as the push trigger's filter, which has already decided on a push.
+      - name: Compare with the base
+        id: diff
+        env:
+          PATHS: '^(services/matching-service/|backend/checkstyle\.xml$|\.github/workflows/matching-service-ci-cd\.yaml$)'
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ]; then
+            echo run=true >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(git diff --name-only HEAD^1 HEAD)
+          if grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
+          echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+
   lint-and-test:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -43,7 +68,8 @@ jobs:
         run: backend/mvnw -B -f services/matching-service/pom.xml verify
 
   build:
-    needs: lint-and-test
+    needs: [changes, lint-and-test]
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -82,3 +108,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=matching-service
           cache-to: type=gha,scope=matching-service,mode=max
+
+  # The required check, named per workflow so the four do not share one name. It runs even when a
+  # job before it failed or was skipped, since a skipped required check counts as passed: skipped
+  # jobs pass here, failed or cancelled ones do not.
+  gate:
+    name: Matching Service gate
+    if: always()
+    needs: [changes, lint-and-test, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or had nothing to do
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
+          done
