@@ -70,6 +70,12 @@
 			<artifactId>dynamodb</artifactId>
 			<version>2.46.7</version>
 		</dependency>
+		<!-- SQS client for the user.deleted consumer (Day 27). -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>sqs</artifactId>
+			<version>2.46.7</version>
+		</dependency>
 		<!-- Short-lived profile cache (Day 24, Track B). -->
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>
