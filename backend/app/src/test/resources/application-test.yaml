@@ -37,11 +37,12 @@ app:
     jobs-url: ${harness.job-service-url:}
   events:
     relay:
-      # Off: the run caches several contexts, and each one's relay would take another test's
-      # outbox row. Only UserDeletedRelayIT turns it on, in a context it closes after itself.
-      enabled: false
+      # On: a deleted account's user.deleted reaches the bus as in production. Every cached
+      # context runs a relay, which is safe: a relay claims each row with a lock and skips rows
+      # another holds.
+      enabled: true
     consumer:
-      # Off, as the relay is: a live consumer in a cached context would take the messages
+      # Off: a live consumer in a cached context would take the messages
       # UserDeletedRelayIT waits for on the shared queues; only ApplicationsUserDeletedConsumerIT
       # turns it on, on queues of its own.
       enabled: false

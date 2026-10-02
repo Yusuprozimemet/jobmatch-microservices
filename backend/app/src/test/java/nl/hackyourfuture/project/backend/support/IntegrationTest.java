@@ -69,6 +69,11 @@ public abstract class IntegrationTest {
         // The monolith's postings clients call the container; application-test.yaml maps
         // app.internal.jobs-url to it, so a failure test's own app.internal.jobs-url still wins.
         registry.add("harness.job-service-url", JobService::baseUrl);
+        // The event bus (Day 26): every context's relay publishes to the shared topic.
+        registry.add("app.events.sns.endpoint", () -> EventBus.endpoint().toString());
+        registry.add("app.events.user-deleted-topic-arn", EventBus::topicArn);
+        registry.add("app.events.sns.access-key", () -> "dummy");
+        registry.add("app.events.sns.secret-key", () -> "dummy");
     }
 
     @BeforeEach

@@ -7,10 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
 import software.amazon.awssdk.services.sqs.model.Message;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -33,10 +29,8 @@ import static org.assertj.core.api.Assertions.fail;
  * The relay publishes a deleted account's outbox row to the event bus (Day 26): one message per
  * queue, the v1 body of docs/events/user-deleted.md, and the row gone once SNS took it.
  *
- * <p>The only context with the relay on. It is closed after this class, or its scheduler would
- * go on taking other classes' outbox rows.
- *
- * <p>The queues are shared with the rest of the run, so a test takes only the messages for its
+ * <p>The relay is on in every harness context since Day 25, and a row may be published by any of
+ * them. The queues are shared with the rest of the run, so a test takes only the messages for its
  * own {@code userId}. A receive raises the receive count of every message it sees: each receive
  * hides nothing ({@code visibilityTimeout 0}), and no test reads a dead-letter queue.
  *
@@ -44,22 +38,12 @@ import static org.assertj.core.api.Assertions.fail;
  * a pass that publishes and then fails to delete the row publishes it again on the next pass,
  * with the same {@code eventId}, a duplicate by design.
  */
-@TestPropertySource(properties = "app.events.relay.enabled=true")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class UserDeletedRelayIT extends IntegrationTest {
 
     private static final JsonMapper JSON = new JsonMapper();
     private static final long WAIT_MILLIS = 5_000;
 
     @Autowired @Qualifier("identityDataSource") private DataSource identity;
-
-    @DynamicPropertySource
-    static void useTheEventBus(DynamicPropertyRegistry registry) {
-        registry.add("app.events.sns.endpoint", () -> EventBus.endpoint().toString());
-        registry.add("app.events.user-deleted-topic-arn", EventBus::topicArn);
-        registry.add("app.events.sns.access-key", () -> "dummy");
-        registry.add("app.events.sns.secret-key", () -> "dummy");
-    }
 
     @Test
     void aDeletedAccountArrivesOnBothQueuesAndLeavesTheOutbox() throws InterruptedException {

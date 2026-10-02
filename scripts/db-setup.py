@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Set up the Postgres databases, their schemas, roles and permissions.
 
-Creates two databases. 'project_db' has the 'app' schema, owned by 'app_user'. 'jobs_db'
+Creates three databases. 'project_db' has the 'app' schema, owned by 'app_user'. 'jobs_db'
 (Day 20) has the marts: 'analytics', owned by 'analytics_user', and 'analytics_dev', owned
 by 'analytics_dev_user'. Only those two roles and 'jobs_user' may connect to 'jobs_db'.
+'apps_db' (Day 25) has 'applications', owned by 'applications_user'; only it may connect.
 Each role has full access to the schemas it owns and read-only access to the others in
 the same database, for both existing and future objects, except the module schemas below,
 which only their owner reads.
@@ -57,6 +58,7 @@ except ImportError:
 
 NEW_DATABASE = "project_db"  # the primary database this script creates
 JOBS_DATABASE = "jobs_db"  # the analytics mart database
+APPS_DATABASE = "apps_db"  # application-service's database (Day 25)
 MAINTENANCE_DATABASE = "postgres"  # the database connected to while creating it
 
 APP_SCHEMA = "app"
@@ -77,6 +79,10 @@ ROLES = (APP_ROLE, ANALYTICS_ROLE, ANALYTICS_DEV_ROLE, *MODULE_ROLES, JOBS_ROLE)
 # Roles that can connect to jobs_db (job-service, the pipeline and trainees).
 JOBS_ROLES = (ANALYTICS_ROLE, ANALYTICS_DEV_ROLE, JOBS_ROLE)
 
+# Roles that can connect to apps_db (application-service).
+APPLICATIONS_ROLE = "applications_user"
+APPS_ROLES = (APPLICATIONS_ROLE,)
+
 # Schemas in project_db, and the role that owns each: app and the module schemas.
 # A role gets full access to schemas it owns and read-only access to the others,
 # so adding a schema here is the only edit needed.
@@ -89,6 +95,11 @@ SCHEMA_OWNERS = {
 JOBS_SCHEMA_OWNERS = {
     ANALYTICS_SCHEMA: ANALYTICS_ROLE,
     ANALYTICS_DEV_SCHEMA: ANALYTICS_DEV_ROLE,
+}
+
+# Schemas in apps_db: application-service's tables.
+APPS_SCHEMA_OWNERS = {
+    "applications": APPLICATIONS_ROLE,
 }
 
 
@@ -329,12 +340,16 @@ def report(args: argparse.Namespace, passwords: dict[str, str | None]) -> None:
     unchanged = "(unchanged)"
     print(f"\n✅ Setup complete on {args.host}:{args.port}\n")
     print(f"  {NEW_DATABASE} : {', '.join(SCHEMA_OWNERS)}")
-    print(f"  {JOBS_DATABASE:<{len(NEW_DATABASE)}} : {', '.join(JOBS_SCHEMA_OWNERS)}\n")
+    print(f"  {JOBS_DATABASE:<{len(NEW_DATABASE)}} : {', '.join(JOBS_SCHEMA_OWNERS)}")
+    print(f"  {APPS_DATABASE:<{len(NEW_DATABASE)}} : {', '.join(APPS_SCHEMA_OWNERS)}\n")
     for role in ROLES:
         full, read_only = [], []
         for database, owners in ((NEW_DATABASE, SCHEMA_OWNERS),
-                                 (JOBS_DATABASE, JOBS_SCHEMA_OWNERS)):
+                                 (JOBS_DATABASE, JOBS_SCHEMA_OWNERS),
+                                 (APPS_DATABASE, APPS_SCHEMA_OWNERS)):
             if database == JOBS_DATABASE and role not in JOBS_ROLES:
+                continue
+            if database == APPS_DATABASE and role not in APPS_ROLES:
                 continue
             for schema, owner in owners.items():
                 if owner == role:
@@ -361,6 +376,7 @@ def main() -> None:
 
         create_database(conn, NEW_DATABASE)
         create_database(conn, JOBS_DATABASE)
+        create_database(conn, APPS_DATABASE)
 
         # Roles live in the cluster, not in the database, so create them here.
         step("Creating roles: %s", ", ".join(roles))
@@ -374,9 +390,12 @@ def main() -> None:
         done("'%s' is a member of %s", APP_ROLE, ", ".join(MODULE_ROLES))
 
         # Database-level grants. project_db: all roles. jobs_db: only analytics roles and jobs_user.
+        # apps_db: only applications_user.
         grant_connect(conn, NEW_DATABASE, roles)
         revoke_connect(conn, JOBS_DATABASE)
         grant_connect(conn, JOBS_DATABASE, list(JOBS_ROLES))
+        revoke_connect(conn, APPS_DATABASE)
+        grant_connect(conn, APPS_DATABASE, list(APPS_ROLES))
 
     with connect(args, NEW_DATABASE) as conn:
         step("Creating schemas in %s:", NEW_DATABASE)
@@ -407,6 +426,17 @@ def main() -> None:
                     grant_access(conn, schema, role, FULL_ACCESS, creators)
                 else:
                     grant_access(conn, schema, role, READ_ONLY, creators)
+
+    with connect(args, APPS_DATABASE) as conn:
+        step("Creating schemas in %s:", APPS_DATABASE)
+        for schema, owner in APPS_SCHEMA_OWNERS.items():
+            create_schema(conn, schema, owner)
+
+        step("Granting schema privileges in %s", APPS_DATABASE)
+        # The admin and applications_user are the creators here.
+        creators = [args.admin_user, *APPS_ROLES]
+        for schema, owner in APPS_SCHEMA_OWNERS.items():
+            grant_access(conn, schema, owner, FULL_ACCESS, creators)
 
     report(args, passwords)
 

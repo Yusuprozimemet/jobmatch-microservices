@@ -43,6 +43,16 @@ public final class StatementCounter {
         return mentioning(PostgresContainer.JOBS_DATABASE, fragment);
     }
 
+    /**
+     * Executions since the last {@link #reset()} of statements in the apps database whose text
+     * contains {@code fragment}, a table name as a rule. Leaves out this class's own queries,
+     * which contain it too. {@code pg_stat_statements} is cluster-wide, so each count filters
+     * to one database.
+     */
+    public static long appsStatementsMentioning(String fragment) {
+        return mentioning(PostgresContainer.APPS_DATABASE, fragment);
+    }
+
     private static long mentioning(String database, String fragment) {
         return TestDatabase.jdbc().sql("""
                         SELECT COALESCE(SUM(calls), 0)

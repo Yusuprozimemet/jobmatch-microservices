@@ -1,6 +1,7 @@
 package nl.hackyourfuture.project.backend.events;
 
 import nl.hackyourfuture.project.backend.support.ApiClient;
+import nl.hackyourfuture.project.backend.support.EventBus;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The failures are made in the database, through identity's own pool so that identity_user
  * owns what the test creates, as {@code ModuleConnectionsIT} does. Each case fails one of the two
  * statements, so whichever of them the code runs first, one case catches a missing transaction.
+ * The relay is on in every harness context (Day 25), so the first test holds the bus down while
+ * it counts the row; a relay in another context would otherwise publish it and take it away.
  */
 class UserDeletedOutboxIT extends IntegrationTest {
 
@@ -32,9 +35,16 @@ class UserDeletedOutboxIT extends IntegrationTest {
     void deletingTheAccountLeavesOneUserDeletedRow() {
         TestUser user = aUser().create();
 
-        assertThat(authenticatedAs(user).delete("/api/users/me").status()).isEqualTo(204);
+        // The relays are on in every context, so the bus is held down from before the delete until
+        // the row is counted: every publish fails and the row stays.
+        EventBus.pause();
+        try {
+            assertThat(authenticatedAs(user).delete("/api/users/me").status()).isEqualTo(204);
 
-        assertThat(outboxTypesOf(user.id())).containsExactly("user.deleted");
+            assertThat(outboxTypesOf(user.id())).containsExactly("user.deleted");
+        } finally {
+            EventBus.unpause();
+        }
     }
 
     // A key without ON DELETE refuses to let the user go.
