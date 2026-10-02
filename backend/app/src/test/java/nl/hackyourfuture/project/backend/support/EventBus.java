@@ -179,4 +179,25 @@ public final class EventBus {
         return createQueueWithDeadLetter(sqsClient, queueName,
                 Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "1"));
     }
+
+    /**
+     * Approximate count of visible and in-flight messages in a queue.
+     */
+    public static int approximateCount(String queueUrl) {
+        ensureStarted();
+        var attrs = sqsClient.getQueueAttributes(r -> r
+                .queueUrl(queueUrl)
+                .attributeNames(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES,
+                        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE))
+                .attributes();
+        int visible = Integer.parseInt(attrs.get(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES));
+        int notVisible = Integer.parseInt(attrs.get(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE));
+        return visible + notVisible;
+    }
+
+    /** The URL of a queue by its name, via getQueueUrl. */
+    public static String queueUrlOf(String queueName) {
+        ensureStarted();
+        return sqsClient.getQueueUrl(r -> r.queueName(queueName)).queueUrl();
+    }
 }
