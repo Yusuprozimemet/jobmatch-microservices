@@ -57,4 +57,25 @@ class ScoresStoredTest extends MatchingServiceTest {
             assertThat(Long.parseLong(item.get("ttl").n())).isEqualTo(scoredAt + 86_400);
         }
     }
+
+    /**
+     * Day 27: user.deleted has nothing to erase in this table because no attribute
+     * names a user.
+     */
+    @Test
+    void anItemHoldsExactlyTheScoreAttributesAndNoUser() throws Exception {
+        TopMatchesCall call = TopMatchesCall.forNewUser(port, "attrs-1", "attrs-2");
+        model().willScoreInPromptOrder(70, 60);
+
+        call.send();
+
+        List<Map<String, AttributeValue>> items = dynamo.scan(scan -> scan.tableName(TABLE)).items().stream()
+                .filter(item -> item.get("posting_scorer").s().startsWith("attrs-"))
+                .toList();
+        assertThat(items).hasSize(2);
+        for (Map<String, AttributeValue> item : items) {
+            assertThat(item.keySet()).containsExactlyInAnyOrder("skills_hash", "posting_scorer", "score",
+                    "scored_at", "ttl", "reason");
+        }
+    }
 }

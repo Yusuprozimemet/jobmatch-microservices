@@ -134,6 +134,28 @@ class ProfileCacheTest extends MatchingServiceTest {
         assertThat(StubUpstream.instance().calls("/internal/profiles/" + userId)).isEqualTo(2);
     }
 
+    /**
+     * Day 27: the existence call runs before the profile cache, so a user deleted
+     * while their profile is cached is refused at once and not served from the cache.
+     */
+    @Test
+    void aCachedProfileDoesNotLetAUserIdentityNoLongerKnowsIn() throws IOException, InterruptedException {
+        UUID userId = UUID.randomUUID();
+        knownUser(userId);
+        rankable(userId, "deleted-after-cache-1", "Deleted After Cache Job");
+
+        HttpResponse<String> first = topMatches(userId);
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(StubUpstream.instance().calls("/internal/profiles/" + userId)).isEqualTo(1);
+
+        StubUpstream.instance().refuse("/internal/users/" + userId, 404);
+
+        HttpResponse<String> second = topMatches(userId);
+        assertThat(second.statusCode()).isEqualTo(422);
+        assertThat(StubUpstream.instance().calls("/internal/users/" + userId)).isEqualTo(2);
+        assertThat(StubUpstream.instance().calls("/internal/profiles/" + userId)).isEqualTo(1);
+    }
+
     /** Everything after the existence call answers: a posting, a five-skill profile and the model. */
     private void rankable(UUID userId, String postingId, String title) {
         stubPosting(postingId, title, "java", "sql");
