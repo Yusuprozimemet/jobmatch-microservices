@@ -54,6 +54,18 @@ app:
   # How long a rankable profile is reused before identity is asked again (Day 24, ProfileCache).
   profile-cache:
     window: ${PROFILE_CACHE_WINDOW:10s}
+  # The user.deleted consumer (Day 27) evicts a deleted user's cached profile. On by default, so
+  # a deployment without the queue URL fails to start rather than keep a deleted user's skills;
+  # tests and the backend harness turn it off. Empty keys mean the SDK's default credentials.
+  events:
+    consumer:
+      enabled: ${EVENTS_CONSUMER_ENABLED:true}
+    sqs:
+      endpoint: ${EVENTS_SQS_ENDPOINT:}
+      region: ${EVENTS_SQS_REGION:eu-west-1}
+      access-key: ${EVENTS_SQS_ACCESS_KEY:}
+      secret-key: ${EVENTS_SQS_SECRET_KEY:}
+    user-deleted-queue-url: ${EVENTS_USER_DELETED_QUEUE_URL:}
 
 # Observability. Actuator listens on its own port, which compose does not publish, so nothing
 # here is reachable from the internet.

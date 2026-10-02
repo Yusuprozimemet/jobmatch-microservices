@@ -85,6 +85,9 @@ public final class MatchingService {
                 .withEnv("AWS_ACCESS_KEY_ID", "dummy")
                 .withEnv("AWS_SECRET_ACCESS_KEY", "dummy")
                 .withEnv("SCORES_CREATE_TABLE", "false")
+                // The matching consumer stays off in the backend harness (Day 27); its tests are
+                // matching-service's own.
+                .withEnv("EVENTS_CONSUMER_ENABLED", "false")
                 // One line per request, method and path, which matching-service's log pattern prefixes
                 // with [traceId,spanId]: what a test reads to see which trace a request arrived under.
                 // As JSON, not LOGGING_LEVEL_*: an environment variable's name is lowercased, and
