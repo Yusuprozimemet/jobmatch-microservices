@@ -77,6 +77,11 @@ services:
       EVENTS_USER_DELETED_TOPIC_ARN: arn:aws:sns:eu-west-1:000000000000:user-deleted
       EVENTS_SNS_ACCESS_KEY: test
       EVENTS_SNS_SECRET_KEY: test
+      # Day 27: the user.deleted consumer reads the applications queue on the same emulator.
+      EVENTS_SQS_ENDPOINT: http://localstack:4566
+      EVENTS_SQS_ACCESS_KEY: test
+      EVENTS_SQS_SECRET_KEY: test
+      EVENTS_USER_DELETED_QUEUE_URL: http://localstack:4566/000000000000/applications-user-deleted
     volumes:
       - jwt-keys:/run/keys:ro
     # No published port (Day 16): the gateway below is the way in, on 8080. 9090, the management
@@ -129,7 +134,8 @@ services:
 
   # The event bus (Day 26): SNS topic user-deleted fanning out to one SQS queue per consumer,
   # each with a dead-letter queue and redrive policy after 5 receives. Created by the ready.d
-  # hook; in memory; no published port; no reader until Day 27.
+  # hook; in memory; no published port; the backend reads applications-user-deleted (Day 27);
+  # matching-user-deleted has no reader until Day 27 Track B.
   localstack:
     image: localstack/localstack:4.14.0
     environment:

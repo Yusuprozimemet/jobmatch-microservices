@@ -40,6 +40,11 @@ app:
       # Off: the run caches several contexts, and each one's relay would take another test's
       # outbox row. Only UserDeletedRelayIT turns it on, in a context it closes after itself.
       enabled: false
+    consumer:
+      # Off, as the relay is: a live consumer in a cached context would take the messages
+      # UserDeletedRelayIT waits for on the shared queues; only ApplicationsUserDeletedConsumerIT
+      # turns it on, on queues of its own.
+      enabled: false
 
 management:
   server:

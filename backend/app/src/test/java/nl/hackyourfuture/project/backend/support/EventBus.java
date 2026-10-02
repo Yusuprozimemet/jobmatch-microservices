@@ -146,6 +146,11 @@ public final class EventBus {
 
     /** Creates a queue and its dead-letter queue with a redrive policy, returns the queue URL. */
     static String createQueueWithDeadLetter(SqsClient client, String queueName) {
+        return createQueueWithDeadLetter(client, queueName, Map.of());
+    }
+
+    /** Creates a queue and its DLQ, merging extra attributes into the main queue, returns the queue URL. */
+    static String createQueueWithDeadLetter(SqsClient client, String queueName, Map<QueueAttributeName, String> extra) {
         String dlqName = deadLetterQueue(queueName);
 
         String dlqUrl = client.createQueue(r -> r.queueName(dlqName)).queueUrl();
@@ -156,9 +161,22 @@ public final class EventBus {
                 .get(QueueAttributeName.QUEUE_ARN);
 
         String redrivePolicy = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"" + MAX_RECEIVES + "\"}";
+        Map<QueueAttributeName, String> attrs = new HashMap<>(extra);
+        attrs.put(QueueAttributeName.REDRIVE_POLICY, redrivePolicy);
         return client.createQueue(r -> r
                 .queueName(queueName)
-                .attributes(Map.of(QueueAttributeName.REDRIVE_POLICY, redrivePolicy)))
+                .attributes(attrs))
                 .queueUrl();
+    }
+
+    /**
+     * Creates a queue and its dead-letter queue for a consumer's own test, returns the queue URL.
+     * 1 s visibility timeout so a failed message reaches the DLQ in about 5 s instead of over 2
+     * minutes; neither takes nor is slowed by the shared queues.
+     */
+    public static String createOwnQueue(String queueName) {
+        ensureStarted();
+        return createQueueWithDeadLetter(sqsClient, queueName,
+                Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "1"));
     }
 }

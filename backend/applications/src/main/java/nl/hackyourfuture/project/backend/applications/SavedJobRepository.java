@@ -67,6 +67,14 @@ public class SavedJobRepository {
         return rowsAffected > 0;
     }
 
+    // Delete all saved jobs for a user, return the number of rows deleted
+    public int removeAllSavedJobs(UUID userId) {
+        String sql = "DELETE FROM saved_jobs WHERE user_id = ?";
+        return jdbcClient.sql(sql)
+                .params(userId)
+                .update();
+    }
+
     // Fetch count of saved jobs grouped by their state for dashboard stats
     public Map<JobState, Integer> getJobStats(UUID userId) {
         String sql = "SELECT job_state, COUNT(*) as count FROM saved_jobs WHERE user_id = ? GROUP BY job_state";
