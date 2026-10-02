@@ -37,7 +37,8 @@ account still removes them, now only by `user.deleted`.
   `savedJobsOf` reads `apps_db` through a `support/` helper and waits up to 10 s for the expected
   count; `leavesEveryoneElsesSavedJobsAlone` first waits for the deleted user's rows to reach zero
   (Day 26's break showed it passes when nothing is deleted). Its three tests and their assertions
-  stay.
+  stay. The class Javadoc's "Day 27 replaces the key" is corrected in the same edit (Day 27's
+  Notes).
 - `queries/JobSavedCountQueriesIT` expires: it counts statements in `project_db`. Rewritten
   against `apps_db` in application-service's own tests.
 - Day 41's hand-off: `queries/CurrentUserQueriesIT.savingAJobLooksTheUserUpOnce` goes through the
