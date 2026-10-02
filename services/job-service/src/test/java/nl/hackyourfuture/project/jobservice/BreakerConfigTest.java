@@ -47,3 +47,4 @@ class BreakerConfigTest extends JobServiceTest {
                 "Bad Request", null, null, null))).isTrue();
     }
 }
+
