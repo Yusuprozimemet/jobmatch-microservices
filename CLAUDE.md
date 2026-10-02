@@ -59,6 +59,17 @@ Output that lands in the main session is re-read by every later reply. Keep it s
 - Read the part of a file you need (`offset`/`limit`, `grep -n`), not the whole file, unless the
   step changes all of it. Diffs: `--stat` first, then the files that matter.
 
+## The dev loop
+
+From Day 27 Track B, steps can run headless: [`scripts/dev-loop.py`](scripts/dev-loop.py) starts
+one fresh `claude -p` session per step, waits for CI and the merge, and writes the run log; the
+design is [`docs/agentic-loop.md`](docs/agentic-loop.md). A session the loop starts does exactly
+the step it is given, opens its PR, and ends with `STATUS: PR <url>` or `STATUS: STOP <reason>`;
+the driver, not the session, waits for "merged". The rest of Phase 5 runs attended (the
+maintainer merges); Phase 6 is the unattended condition. A session never edits this file,
+`plan.md`, `.claude/`, `.github/` or `scripts/`: the Agent guard fails the PR, and the loop
+stops.
+
 ## The auditors
 
 `.claude/agents/plan-auditor.md` and `.claude/agents/spec-auditor.md`. Separate agents with their
