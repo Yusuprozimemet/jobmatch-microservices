@@ -1,0 +1,96 @@
+name: Agent guard
+
+# The checks an agent cannot switch off from inside its own pull request (docs/agentic-loop.md).
+#
+# pull_request_target runs this file as it is on main, never the PR's copy, and the job never
+# checks out or runs the PR's code: it reads the diff and the check runs through the API. So a PR
+# that edits this file, or anything else, is judged by the rules main already has.
+#
+# Two gates:
+#
+# 1. Protected changes. Every PR not opened by the maintainer fails if it touches the rules or
+#    the evidence: CLAUDE.md, plan.md, .claude/, .github/, scripts/, any pom.xml, a contract test,
+#    an existing migration; adds @Disabled, @Ignore or an assumption; or removes more @Test
+#    methods than it adds. A file whose diff GitHub does not return fails too (fail closed).
+#    Override: the maintainer approves the PR's current commit, then re-runs this job.
+#
+# 2. Every other check is green. Most workflows are path-filtered and report nothing on a PR
+#    that misses their paths, so none of them can be a required check. This job waits for all
+#    the check runs on the PR's head and fails if any did not pass; it is the one required check.
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+
+jobs:
+  guard:
+    name: Agent guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const MAINTAINER = 'Yusuprozimemet';
+            const SELF = 'Agent guard';
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const sha = pr.head.sha;
+
+            const PROTECTED = [/^CLAUDE\.md$/, /^plan\.md$/, /^\.claude\//, /^\.github\//,
+                               /^scripts\//, /(^|\/)pom\.xml$/, /\/src\/test\/.*\/contract\//];
+            const MIGRATION = /\/src\/main\/resources\/db\//;
+            const SKIPPING = /@Disabled|@Ignore\b|\bAssumptions\.|\bassume(True|False|That)\s*\(/;
+            const TEST = /@Test\b/;
+
+            const problems = [];
+            if (pr.user.login !== MAINTAINER) {
+              const files = await github.paginate(github.rest.pulls.listFiles,
+                { owner, repo, pull_number: pr.number, per_page: 100 });
+              let added = 0, removed = 0;
+              for (const f of files) {
+                const names = [f.filename, f.previous_filename].filter(Boolean);
+                if (names.some(n => PROTECTED.some(p => p.test(n)))) problems.push(`protected path: ${f.filename}`);
+                if (names.some(n => MIGRATION.test(n)) && f.status !== 'added') problems.push(`existing migration changed: ${f.filename}`);
+                if (!/\.(java|kt)$/.test(f.filename)) continue;
+                if (f.patch === undefined) { problems.push(`diff not returned, cannot inspect: ${f.filename}`); continue; }
+                for (const line of f.patch.split('\n')) {
+                  if (line.startsWith('+') && SKIPPING.test(line)) problems.push(`skips a test: ${f.filename}: ${line.slice(1).trim()}`);
+                  if (line.startsWith('+') && TEST.test(line)) added++;
+                  if (line.startsWith('-') && TEST.test(line)) removed++;
+                }
+              }
+              if (removed > added) problems.push(`removes ${removed - added} more @Test methods than it adds`);
+
+              const reviews = await github.paginate(github.rest.pulls.listReviews,
+                { owner, repo, pull_number: pr.number, per_page: 100 });
+              const approved = reviews.some(r => r.user.login === MAINTAINER && r.state === 'APPROVED' && r.commit_id === sha);
+              if (problems.length && approved) {
+                problems.forEach(p => core.warning(`approved by the maintainer: ${p}`));
+                problems.length = 0;
+              }
+            }
+            problems.forEach(p => core.error(p));
+
+            // Give path-filtered workflows time to queue, then wait for every other check run.
+            await new Promise(r => setTimeout(r, 120_000));
+            const deadline = Date.now() + 140 * 60_000;
+            let runs;
+            for (;;) {
+              runs = (await github.paginate(github.rest.checks.listForRef, { owner, repo, ref: sha, per_page: 100 }))
+                .filter(r => r.name !== SELF);
+              if (runs.every(r => r.status === 'completed') || Date.now() > deadline) break;
+              await new Promise(r => setTimeout(r, 60_000));
+            }
+            for (const r of runs) {
+              if (r.status !== 'completed') problems.push(`check still running at the deadline: ${r.name}`);
+              else if (!['success', 'skipped', 'neutral'].includes(r.conclusion)) problems.push(`check did not pass: ${r.name} (${r.conclusion})`);
+            }
+            core.summary.addHeading('Agent guard').addList(problems.length ? problems : ['all clear']);
+            await core.summary.write();
+            if (problems.length) core.setFailed(problems.join('\n'));
