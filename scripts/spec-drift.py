@@ -29,6 +29,7 @@ import argparse
 import collections
 import datetime
 import fnmatch
+import hashlib
 import json
 import math
 import os
@@ -78,11 +79,42 @@ IMPORT = re.compile(r"^import\s+(?:static\s+)?nl\.hackyourfuture\.project\.backe
 FINISHED = ("done", "closed")
 CHANCE_DRAWS = 50
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
+# What git said about each merge, kept between runs: every call cached here names commits only by
+# SHA, so its output never changes. Keyed on this script's text too, so a change here starts over.
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, ".spec-drift-cache.json")
+CACHE = {}
 
 
 def run(*args):
     return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
                           errors="replace", check=True).stdout
+
+
+def at_commits(*args):
+    """git with only commit SHAs for revisions: the output is fixed, so it comes from the cache."""
+    key = "\0".join(args)
+    out = CACHE.setdefault("git", {}).get(key)
+    if out is None:
+        out = CACHE["git"][key] = run("git", *args)
+    return out
+
+
+def load_cache(path):
+    with open(__file__, "rb") as f:
+        version = hashlib.sha256(f.read().replace(b"\r\n", b"\n")).hexdigest()
+    try:
+        with open(path, encoding="utf-8") as f:
+            cached = json.load(f)
+    except (OSError, ValueError):
+        cached = {}
+    CACHE.clear()
+    CACHE.update(cached if cached.get("version") == version else dict(version=version))
+
+
+def save_cache(path):
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(CACHE, f, separators=(",", ":"))
+    os.replace(path + ".tmp", path)
 
 
 class Blobs:
@@ -272,7 +304,7 @@ def trajectory(snaps, blobs, order=()):
     Day 38 the unbuilt Days 17-37 are not reached; with no order, by number."""
     rank = ranker(order)
     for s in snaps:
-        names = run("git", "ls-tree", "-r", "--name-only", s["sha"], "--", "plan.md", "specs").split()
+        names = at_commits("ls-tree", "-r", "--name-only", s["sha"], "--", "plan.md", "specs").split()
         s["texts"] = {n: blobs.read(s["sha"], n) for n in names if n.endswith(".md")}
     first_seen = {}
     for i, s in enumerate(snaps):
@@ -296,6 +328,11 @@ def trajectory(snaps, blobs, order=()):
         return c
 
     def code_counts(sha):
+        """A merge's counts need only the names the specs had used by then (later ones are masked
+        by born), and a SHA fixes its history, so counts cached under it stay right."""
+        cached = CACHE.setdefault("code", {}).get(sha)
+        if cached is not None:
+            return np.array([cached.get(v, 0) for v in vocab], dtype=float)
         out = subprocess.run(["git", "grep", "-h", "-I", "-w", "-F", "-f", "-", sha, "--", ".",
                               ":(exclude)*.md", ":(exclude)data", ":(exclude)screenshots", ":(exclude)docs/dashboard",
                               ":(exclude)**/package-lock.json"], input=patterns,
@@ -304,13 +341,14 @@ def trajectory(snaps, blobs, order=()):
         for line in out.splitlines():
             for tok in code_names(line, index):
                 c[index[tok]] += 1
+        CACHE["code"][sha] = {vocab[k]: int(n) for k, n in enumerate(c) if n}
         return c
 
     origin = collections.Counter(w for t in snaps[0]["texts"].values() for w in WORD.findall(t.lower()))
     idf = rarity(snaps[0]["texts"])
     prev, day, rows, vectors = origin, 0, [], []
     for i, s in enumerate(snaps):
-        touched = run("git", "diff", "--name-only", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").split() if i else []
+        touched = at_commits("diff", "--name-only", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").split() if i else []
         s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"], touched)
         m = re.match(r"day-(\d+)/", s["branch"])
         if m and s["kind"] in ("code", "close"):
@@ -319,20 +357,20 @@ def trajectory(snaps, blobs, order=()):
         spec, code = spec_counts(s["texts"]), code_counts(s["sha"])
         reached = spec_counts({f: t for f, t in s["texts"].items() if day_of(f) and rank(day_of(f)) <= rank(max(day, 1))})
         added = deleted = 0
-        for line in run("git", "diff", "--numstat", snaps[0]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
+        for line in at_commits("diff", "--numstat", snaps[0]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
             a, d, _ = line.split("\t")
             added, deleted = added + int(a), deleted + int(d)
         spec_files, churn, work = {}, 0, dict.fromkeys(WORK_KINDS, 0)
         if i:
-            for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"]).splitlines():
+            for line in at_commits("diff", "--numstat", snaps[i - 1]["sha"], s["sha"]).splitlines():
                 a, d, f = line.split("\t")
                 w = work_kind(renamed_to(f))
                 if a != "-" and w:
                     work[w] += int(a) + int(d)
-            for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
+            for line in at_commits("diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
                 a, d, f = line.split("\t")
                 spec_files[f] = int(a) + int(d)
-            for line in run("git", "diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", ".", ":(exclude)*.md",
+            for line in at_commits("diff", "--numstat", snaps[i - 1]["sha"], s["sha"], "--", ".", ":(exclude)*.md",
                                 ":(exclude)docs/dashboard").splitlines():
                 a, d, _ = line.split("\t")
                 churn += 0 if a == "-" else int(a) + int(d)
@@ -369,7 +407,7 @@ def boundaries(rows, snaps, blobs):
     seen = {}
     for r, s in zip(rows, snaps):
         placed, crossed = {}, collections.Counter()
-        for line in run("git", "ls-tree", "-r", s["sha"]).splitlines():
+        for line in at_commits("ls-tree", "-r", s["sha"]).splitlines():
             meta, path = line.split("\t", 1)
             m = OWN_PACKAGE.search(path)
             if not path.endswith(".java") or not m or m.group(1) not in SERVICE:
@@ -543,7 +581,7 @@ def test_state(tests, sha, blobs, moved=None):
     goes quiet only by its test leaving the tree or being switched off. A class that has left
     the tree is looked for under the name it moved to by then (moved: old to new)."""
     files = collections.defaultdict(list)
-    for path in run("git", "ls-tree", "-r", "--name-only", sha).splitlines():
+    for path in (line.split("\t", 1)[1] for line in at_commits("ls-tree", "-r", sha).splitlines()):
         if path.endswith((".java", ".kt")):
             files[os.path.splitext(os.path.basename(path))[0]].append(path)
     out = {}
@@ -677,7 +715,7 @@ def removal_history(days, snaps, blobs):
         if not live:
             continue
         tree = [(meta.split()[2], path) for meta, path in (line.split("\t", 1) for line in
-                run("git", "ls-tree", "-r", s["sha"]).splitlines()) if meta.split()[1] == "blob"]
+                at_commits("ls-tree", "-r", s["sha"]).splitlines()) if meta.split()[1] == "blob"]
         for c in live:
             rx, paths, include = c["rule"]
             if "base" not in c:
@@ -801,10 +839,14 @@ def main():
     out = ap.add_mutually_exclusive_group()
     out.add_argument("--out", default="spec-drift.json")
     out.add_argument("--build", help="write docs/dashboard/ here as one page, with the data inlined")
+    ap.add_argument("--cache", default=CACHE_FILE, help="what earlier runs read from git (default: %(default)s)")
+    ap.add_argument("--no-cache", action="store_true", help="read everything from git, and keep nothing")
     args = ap.parse_args()
+    if not args.no_cache:
+        load_cache(args.cache)
     listed = json.loads(run("gh", "pr", "list", "--state", "all", "--limit", "500",
                             "--json", "number,title,headRefName,state,url,body"))
-    runs = json.loads(run("gh", "run", "list", "--limit", "5000",
+    runs = json.loads(run("gh", "run", "list", "--event", "pull_request", "--limit", "5000",
                           "--json", "headBranch,headSha,conclusion,event,workflowName"))
     prs = {p["number"]: p for p in listed}
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
@@ -835,6 +877,8 @@ def main():
         data = build(data)
     with open(target, "w", encoding="utf-8") as f:
         f.write(data)
+    if not args.no_cache:
+        save_cache(args.cache)
     print(f"{target}: {len(rows)} snapshots, {len(days)} days, next: {now['next_step']}")
 
 

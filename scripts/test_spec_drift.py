@@ -78,6 +78,26 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(rows[0]["gap_full"], 90.0)
         self.assertLess(rows[1]["gap_full"], 90.0)
 
+    def test_a_run_from_the_cache_reads_what_a_fresh_one_does(self):
+        # Merge 1 is cached before any spec names BazClient; merge 2's spec does, which shifts
+        # every name's place in the vocabulary.
+        self.addCleanup(sd.CACHE.clear)
+        self.repo.merge({"src/Baz.java": "class BazClient { FooService f; }\n"})
+        sd.CACHE.clear()
+        self.repo.rows()
+        self.repo.merge({"specs/day-01-x.md": DAY + "It calls `BazClient`.\n", "src/Use.java": "BazClient b;\n"})
+        calls, real = [], sd.run
+        sd.run = lambda *a: calls.append(a) or real(*a)
+        try:
+            cached = self.repo.rows()
+            sd.CACHE.clear()
+            fresh_from = len(calls)
+            fresh = self.repo.rows()
+        finally:
+            sd.run = real
+        self.assertEqual(cached, fresh)
+        self.assertLess(fresh_from, len(calls) - fresh_from)
+
     def test_a_comment_naming_a_spec_name_is_not_code(self):
         rows = self.repo.merge({"src/Foo.java": "// FooService comes later\n /* FooService */\n",
                                 "src/V1.sql": "-- bar_table comes later\nSELECT 1; -- bar_table\n",

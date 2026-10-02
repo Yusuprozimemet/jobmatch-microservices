@@ -233,3 +233,6 @@ airflow_settings.yaml
 # --- data track: local secrets ---
 data/.env
 data/airflow/.env
+
+# --- dashboard: what scripts/spec-drift.py read from git, kept between runs ---
+.spec-drift-cache.json
