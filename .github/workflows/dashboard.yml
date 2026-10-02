@@ -40,6 +40,15 @@ jobs:
 
       - run: pip install numpy
 
+      # What earlier runs read from git, by commit SHA (scripts/spec-drift.py, CACHE_FILE): only the
+      # new merge is read again. A save needs a key no run has used, so each run saves its own and
+      # restores the latest; a change to the script starts the cache over by itself.
+      - uses: actions/cache@v4
+        with:
+          path: .spec-drift-cache.json
+          key: spec-drift-${{ github.run_id }}
+          restore-keys: spec-drift-
+
       - name: Measure and build
         env:
           GH_TOKEN: ${{ github.token }}
