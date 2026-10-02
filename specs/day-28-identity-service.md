@@ -28,7 +28,12 @@ The last module leaves `backend/`. Five services, no monolith.
   day owns, each kept, dropped or handed to the Days 29–37 rewrite:
   - the `matching` role and schema, `MATCHING_DB_PASSWORD` and the grants to `matching_user`
     in V12–V15 (Days 23–24); V14 raises without the role, so it cannot simply be dropped;
-  - the DLQ depth alarm, and the topic, queues and DynamoDB table in Terraform (Days 22, 26);
+  - the `applications` role and schema left in `project_db` after `saved_jobs` moved: V13
+    raises without them, V12 and V14 grant to the role (Day 25);
+  - `jobs_user`'s CONNECT on `project_db`, and `DB_JOBS_USER` still in
+    `backend/docs/configuration.md` (Day 20);
+  - the DLQ depth alarm, the DLQs' retention (SQS's default, 4 days, holds a failed message's
+    `userId`), and the topic, queues and DynamoDB table in Terraform (Days 22, 26, 27);
   - matching-service's `PROFILE_CACHE_WINDOW` and a task role in place of dummy AWS keys
     (Days 22, 24);
   - matching-service's `nl.hackyourfuture.project.backend.*` packages and
