@@ -1,5 +1,6 @@
 package nl.hackyourfuture.project.backend.support;
 
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
@@ -36,6 +37,7 @@ public final class EventBus {
     private static final StaticCredentialsProvider CREDENTIALS =
             StaticCredentialsProvider.create(AwsBasicCredentials.create("dummy", "dummy"));
 
+    private static volatile GenericContainer<?> container;
     private static volatile SnsClient snsClient;
     private static volatile SqsClient sqsClient;
     private static volatile String topicArnValue;
@@ -80,12 +82,24 @@ public final class EventBus {
         return endpointUri;
     }
 
+    /** Pauses the emulator: the bus is down, and a call to it hangs until it is unpaused. */
+    public static void pause() {
+        ensureStarted();
+        DockerClientFactory.instance().client().pauseContainerCmd(container.getContainerId()).exec();
+    }
+
+    /** Unpauses the emulator. */
+    public static void unpause() {
+        ensureStarted();
+        DockerClientFactory.instance().client().unpauseContainerCmd(container.getContainerId()).exec();
+    }
+
     private static synchronized void ensureStarted() {
         if (queueUrls != null) {
             return;
         }
 
-        GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(IMAGE))
+        container = new GenericContainer<>(DockerImageName.parse(IMAGE))
                 .withEnv("SERVICES", "sns,sqs")
                 .withEnv("AWS_DEFAULT_REGION", "eu-west-1")
                 .withExposedPorts(PORT)
