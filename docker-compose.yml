@@ -134,8 +134,8 @@ services:
 
   # The event bus (Day 26): SNS topic user-deleted fanning out to one SQS queue per consumer,
   # each with a dead-letter queue and redrive policy after 5 receives. Created by the ready.d
-  # hook; in memory; no published port; the backend reads applications-user-deleted (Day 27);
-  # matching-user-deleted has no reader until Day 27 Track B.
+  # hook; in memory; no published port; the backend reads
+  # applications-user-deleted and matching-service matching-user-deleted (Day 27).
   localstack:
     image: localstack/localstack:4.14.0
     environment:
@@ -176,6 +176,12 @@ services:
       LLM_MODEL: ${LLM_MODEL:-gemini-flash-lite-latest}
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
+      # Day 27: the user.deleted consumer evicts a deleted user's cached profile; it reads its own
+      # queue on the emulator above.
+      EVENTS_SQS_ENDPOINT: http://localstack:4566
+      EVENTS_SQS_ACCESS_KEY: test
+      EVENTS_SQS_SECRET_KEY: test
+      EVENTS_USER_DELETED_QUEUE_URL: http://localstack:4566/000000000000/matching-user-deleted
     volumes:
       - jwt-keys:/run/keys:ro
     healthcheck:
@@ -190,6 +196,8 @@ services:
         condition: service_completed_successfully
       dynamodb:
         condition: service_started
+      localstack:
+        condition: service_healthy
 
   # The API gateway (Day 15), the only way in to the backend: published on 8080, where the
   # backend used to be (Day 16). It listens on 8081 inside the network.

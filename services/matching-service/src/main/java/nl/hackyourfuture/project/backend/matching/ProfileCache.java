@@ -21,7 +21,8 @@ import java.util.UUID;
  * not refused on the old one. The price: a profile edit to an already rankable profile is not
  * seen by matching for up to the window. The existence call is never cached (InternalUserController:
  * a cached answer lets a deleted user in), and it runs before this cache is read. Written on
- * first fetch only, never refreshed on a hit, so the window is from the fetch.
+ * first fetch only, never refreshed on a hit, so the window is from the fetch. The user.deleted
+ * consumer (Day 27) evicts a deleted user's entry.
  */
 @Component
 class ProfileCache {
@@ -42,5 +43,10 @@ class ProfileCache {
 
     void put(UUID userId, ProfileSnapshot profile) {
         cache.put(userId, profile);
+    }
+
+    /** A no-op for a user not cached, so a repeated user.deleted is a success. */
+    void evict(UUID userId) {
+        cache.invalidate(userId);
     }
 }

@@ -10,7 +10,8 @@ import org.springframework.test.context.DynamicPropertySource;
  * test sets per path, and identity's user key set is pinned to {@code TestIdentity}, since it
  * would otherwise be looked up at the stub. The score store is {@link DynamoDbContainer}
  * (Day 22), and the model is {@code StubLlm}, with a key, since a blank one turns the model call
- * off.
+ * off. The user.deleted consumer is off (Day 27): only UserDeletedConsumerTest turns it on, on
+ * queues of its own, in a context it closes after itself.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 abstract class MatchingServiceTest {
@@ -29,6 +30,9 @@ abstract class MatchingServiceTest {
         // test.scores.* instead, which these defer to.
         registry.add("app.scores.endpoint", () -> "${test.scores.endpoint:" + DynamoDbContainer.endpoint() + "}");
         registry.add("app.scores.create-table", () -> "${test.scores.create-table:true}");
+        // Off: a live consumer in a cached context would keep polling after its test. A consumer test
+        // sets test.events.consumer.enabled, which this defers to, as the scores lines do.
+        registry.add("app.events.consumer.enabled", () -> "${test.events.consumer.enabled:false}");
     }
 
     protected StubLlm model() {
