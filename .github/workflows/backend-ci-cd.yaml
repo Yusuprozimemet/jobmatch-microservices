@@ -11,6 +11,8 @@ on:
       - "services/job-service/**"
       # The harness starts matching-service from its image (Day 21), so a change to it runs the suite.
       - "services/matching-service/**"
+      # The harness starts application-service from its image (Day 25), so a change to it runs the suite.
+      - "services/application-service/**"
       - ".github/workflows/backend-ci-cd.yaml"
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
@@ -42,7 +44,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(backend/|services/(api-gateway|job-service|matching-service)/|\.github/workflows/backend-ci-cd\.yaml$)'
+          PATHS: '^(backend/|services/(api-gateway|job-service|matching-service|application-service)/|\.github/workflows/backend-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
             echo run=true >> "$GITHUB_OUTPUT"; exit 0
@@ -78,6 +80,10 @@ jobs:
       # The harness starts matching-service from this image (Day 21), never pulled.
       - name: Build the matching-service image
         run: docker build -t jobmatch-matching-service:harness services/matching-service
+
+      # The harness starts application-service from this image (Day 25), never pulled.
+      - name: Build the application-service image
+        run: docker build -t jobmatch-application-service:harness services/application-service
 
       # Pull the DynamoDB emulator (Day 22): the harness's score table.
       - name: Pull the DynamoDB emulator
