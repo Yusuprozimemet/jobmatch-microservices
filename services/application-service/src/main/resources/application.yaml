@@ -38,6 +38,9 @@ app:
   internal:
     identity-url: ${INTERNAL_IDENTITY_URL:}
     jobs-url: ${INTERNAL_JOBS_URL:}
+  # identity's public key set for user tokens (Day 12), at identity's URL unless set.
+  identity:
+    jwks-url: ${IDENTITY_JWKS_URL:${app.internal.identity-url}/.well-known/jwks.json}
 
 # Observability. Actuator listens on its own port, which compose does not publish, so nothing
 # here is reachable from the internet.
