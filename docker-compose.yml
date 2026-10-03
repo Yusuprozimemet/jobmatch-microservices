@@ -31,7 +31,7 @@ services:
   # pulled.
   jwt-key:
     image: eclipse-temurin:25-jre
-    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem && sh /jwt-key.sh /keys/job-service.pem && sh /jwt-key.sh /keys/matching-service.pem"]
+    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem && sh /jwt-key.sh /keys/job-service.pem && sh /jwt-key.sh /keys/matching-service.pem && sh /jwt-key.sh /keys/application-service.pem"]
     volumes:
       - jwt-keys:/keys
       - ./scripts/jwt-key.sh:/jwt-key.sh:ro
