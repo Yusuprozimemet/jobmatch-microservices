@@ -7,7 +7,7 @@ import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.MatchingService;
-import nl.hackyourfuture.project.backend.support.MatchingServiceKey;
+import nl.hackyourfuture.project.backend.support.ServiceKey;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +33,7 @@ class MatchingServiceHarnessIT extends IntegrationTest {
 
         assertThat(response.status()).isEqualTo(200);
         JWKSet containerKeySet = JWKSet.parse(response.body());
-        ApiResponse monolithKeyResponse = ApiClient.at(MatchingServiceKey.jwksUrl()).get("");
+        ApiResponse monolithKeyResponse = ApiClient.at(ServiceKey.MATCHING.jwksUrl()).get("");
         JWKSet monolithKeySet = JWKSet.parse(monolithKeyResponse.body());
 
         assertThat(containerKeySet.getKeys()).isNotEmpty();

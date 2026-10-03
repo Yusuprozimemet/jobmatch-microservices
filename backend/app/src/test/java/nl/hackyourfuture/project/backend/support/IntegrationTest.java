@@ -64,8 +64,11 @@ public abstract class IntegrationTest {
         registry.add("app.internal.trusted-issuers[1].name", () -> "jobmatch-job-service");
         registry.add("app.internal.trusted-issuers[1].key-set-url", () -> JobService.baseUrl() + "/.well-known/service-jwks.json");
         // matching-service (Day 21). A supplier: its key server is up before a context needs it.
-        registry.add("app.internal.trusted-issuers[2].name", () -> MatchingServiceKey.ISSUER);
-        registry.add("app.internal.trusted-issuers[2].key-set-url", () -> MatchingServiceKey.jwksUrl());
+        registry.add("app.internal.trusted-issuers[2].name", () -> ServiceKey.MATCHING.issuer());
+        registry.add("app.internal.trusted-issuers[2].key-set-url", () -> ServiceKey.MATCHING.jwksUrl());
+        // application-service (Day 25). A supplier: its key server is up before a context needs it.
+        registry.add("app.internal.trusted-issuers[3].name", () -> ServiceKey.APPLICATION.issuer());
+        registry.add("app.internal.trusted-issuers[3].key-set-url", () -> ServiceKey.APPLICATION.jwksUrl());
         // The monolith's postings clients call the container; application-test.yaml maps
         // app.internal.jobs-url to it, so a failure test's own app.internal.jobs-url still wins.
         registry.add("harness.job-service-url", JobService::baseUrl);

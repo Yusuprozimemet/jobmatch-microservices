@@ -10,7 +10,7 @@ import java.net.URI;
 
 /**
  * matching-service in a container, one for the whole run (Day 21), started on first use from an image
- * built beforehand; signs with {@link MatchingServiceKey}'s key; reaches identity through job-service's
+ * built beforehand; signs with {@link ServiceKey#MATCHING}'s key; reaches identity through job-service's
  * relay, job-service at its container, the model at {@link StubLlm}; reads scores from {@link ScoreTable}
  * (Day 22); Ryuk removes it.
  */
@@ -68,7 +68,7 @@ public final class MatchingService {
                 // A local build, never a pull: an image by this name on a registry is not ours.
                 .withImagePullPolicy(name -> false)
                 // Readable by the image's user 1000: a temp file on Linux is 0600, and the copy is root's.
-                .withCopyFileToContainer(MountableFile.forHostPath(MatchingServiceKey.pemPath(), 0444),
+                .withCopyFileToContainer(MountableFile.forHostPath(ServiceKey.MATCHING.pemPath(), 0444),
                         "/run/keys/matching-service.pem")
                 .withNetwork(ScoreTable.network())
                 .withEnv("SERVICE_JWT_PRIVATE_KEY_FILE", "/run/keys/matching-service.pem")

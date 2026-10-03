@@ -25,46 +25,56 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 
 /**
- * matching-service's test key (Day 21), trusted by the monolith ({@link IntegrationTest}) and the
- * job-service container ({@link JobService}). The key set is served from this JVM, so a context
- * can trust matching-service without starting its container, and the container ({@link MatchingService})
- * signs with this same key from {@link #pemPath()}.
+ * A service's test key: matching-service (Day 21) and application-service (Day 25), each
+ * trusted by the monolith ({@link IntegrationTest}) and the job-service container ({@link JobService}).
+ * The key set is served from this JVM, so a context can trust a service without starting its container,
+ * and the service's container signs with this same key from {@link #pemPath()}: {@link MatchingService}
+ * for matching; application-service's container comes in Track C2.
  *
- * <p>One key per JVM, lazily started and synchronized like {@link JobService#ensureStarted()};
+ * <p>One key per service, lazily started and synchronized per service instance;
  * the key is generated with its RFC 7638 thumbprint as the key id, as the real service publishes
  * its key.
  */
-public final class MatchingServiceKey {
+public final class ServiceKey {
+
+    public static final ServiceKey MATCHING = new ServiceKey("jobmatch-matching-service");
+    public static final ServiceKey APPLICATION = new ServiceKey("jobmatch-application-service");
 
     private static final String AUDIENCE = "jobmatch-internal";
-    public static final String ISSUER = "jobmatch-matching-service";
 
-    private static volatile HttpServer server;
-    private static RSAKey key;
-    private static Path pemFile;
+    private final String issuer;
+    private volatile HttpServer server;
+    private RSAKey key;
+    private Path pemFile;
 
-    private MatchingServiceKey() {
+    private ServiceKey(String issuer) {
+        this.issuer = issuer;
+    }
+
+    /** The service's issuer name. */
+    public String issuer() {
+        return issuer;
     }
 
     /** The key server's port, for {@link org.testcontainers.Testcontainers#exposeHostPorts}. */
-    public static int port() {
+    public int port() {
         ensureStarted();
         return server.getAddress().getPort();
     }
 
     /** Where this JVM's contexts reach the public key set; a container needs {@link #port()}. */
-    public static String jwksUrl() {
+    public String jwksUrl() {
         ensureStarted();
         return "http://127.0.0.1:" + port() + "/.well-known/service-jwks.json";
     }
 
-    /** A token minted with matching-service's own key, as if matching-service itself had signed it. */
-    public static String mintToken() {
+    /** A token minted with this service's own key, as if the service itself had signed it. */
+    public String mintToken() {
         ensureStarted();
         Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .subject(ISSUER)
-                .issuer(ISSUER)
+                .subject(issuer)
+                .issuer(issuer)
                 .audience(AUDIENCE)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plus(Duration.ofMinutes(5))))
@@ -74,18 +84,18 @@ public final class MatchingServiceKey {
         try {
             token.sign(new RSASSASigner(key));
         } catch (JOSEException e) {
-            throw new IllegalStateException("Could not sign a token as matching-service", e);
+            throw new IllegalStateException("Could not sign a token as " + issuer, e);
         }
         return token.serialize();
     }
 
-    /** The private key as a PEM file, written once, which MatchingService copies into the container. */
-    public static Path pemPath() {
+    /** The private key as a PEM file, written once, which the service copies into its container. */
+    public Path pemPath() {
         ensureStarted();
         return pemFile;
     }
 
-    private static synchronized void ensureStarted() {
+    private synchronized void ensureStarted() {
         if (server != null) {
             return;
         }
@@ -97,7 +107,7 @@ public final class MatchingServiceKey {
             key = new RSAKey.Builder(generated).keyID(keyId).build();
             pemFile = TestSigningKey.write(TestSigningKey.pem(key.toPrivateKey().getEncoded()));
         } catch (JOSEException e) {
-            throw new IllegalStateException("Could not generate matching-service's test key", e);
+            throw new IllegalStateException("Could not generate " + issuer + "'s test key", e);
         }
 
         byte[] body = new JWKSet(key.toPublicJWK()).toString().getBytes(StandardCharsets.UTF_8);
