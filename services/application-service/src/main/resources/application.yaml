@@ -38,6 +38,10 @@ app:
   internal:
     identity-url: ${INTERNAL_IDENTITY_URL:}
     jobs-url: ${INTERNAL_JOBS_URL:}
+    # Who may call /internal/** (Day 39, Day 25). job-service has a property of its own, so an
+    # environment list cannot wipe it; other callers are a list: APP_INTERNAL_TRUSTEDISSUERS_0_NAME
+    # and APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL. Compose and the harness set them (Tracks C1, C2).
+    job-service-key-set-url: ${JOB_SERVICE_KEY_SET_URL:}
   # identity's public key set for user tokens (Day 12), at identity's URL unless set.
   identity:
     jwks-url: ${IDENTITY_JWKS_URL:${app.internal.identity-url}/.well-known/jwks.json}
