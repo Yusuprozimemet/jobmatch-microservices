@@ -23,8 +23,6 @@ import java.util.UUID;
  * Production gets these from {@code scripts/db-setup.py}; the harness creates them here, as
  * {@code backend/app/src/test/.../PostgresContainer} does for project_db's module roles
  * (Day 20).
- *
- * <p>B3 grows this into the service's full test base (StubUpstream, SqsContainer).
  */
 final class PostgresContainer {
 
