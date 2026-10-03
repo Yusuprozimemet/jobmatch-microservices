@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: jobmatch-application-service
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+  error:
+    include-stacktrace: never
+    include-message: never
+
+logging:
+  pattern:
+    correlation: "[%X{traceId:-},%X{spanId:-}] "
+
+app:
+  # Required, no default on purpose (InternalUrls): empty meant "this process" in the monolith,
+  # and this process serves none of identity's or job-service's routes.
+  internal:
+    identity-url: ${INTERNAL_IDENTITY_URL:}
+    jobs-url: ${INTERNAL_JOBS_URL:}
+
+# Observability. Actuator listens on its own port, which compose does not publish, so nothing
+# here is reachable from the internet.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      show-components: always
+  tracing:
+    sampling:
+      probability: ${TRACING_PROBABILITY:1.0}
+    export:
+      enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  otlp:
+    metrics:
+      export:
+        enabled: ${OTEL_METRICS_ENABLED:false}
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
