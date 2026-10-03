@@ -95,6 +95,19 @@
 			<artifactId>testcontainers-postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- The test LocalStack (SqsContainer, Day 25). -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Test scope until the user.deleted consumer moves here (Day 25, E1). -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>sqs</artifactId>
+			<version>2.46.7</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
