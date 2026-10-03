@@ -26,6 +26,19 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
 		</dependency>
+		<!-- The saved-jobs requests' @Valid, as backend/applications has it (Track B2a). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+		<!-- The OpenAPI annotations the copied PageResponse carries (Track B2a), at the
+		     version the monolith's springdoc 3.1.0 resolves. Only the annotations: application-service serves no
+		     docs of its own. Boot does not manage its version. -->
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-annotations-jakarta</artifactId>
+			<version>2.2.52</version>
+		</dependency>
 		<!-- Traces and metrics as job-service's: Micrometer tracing exporting OTLP, and Prometheus on a
 		     management port compose does not publish. -->
 		<dependency>
