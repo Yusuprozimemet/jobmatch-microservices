@@ -22,9 +22,10 @@ import java.util.List;
  *
  * <p>The mart is created here, immediately after start and before Spring boots, in its own
  * {@code jobs_db} beside {@code project_db}, where job-service reads it and nothing creates it
- * but the publish. So are
- * the module roles and their schemas, which production gets from {@code scripts/db-setup.py}
- * and compose from {@code scripts/db-init/}: a precondition of the migrations, not their work.
+ * but the publish. The application-service database, {@code apps_db}, is created here as well
+ * (Day 25). So are the module roles and their schemas, which production gets from
+ * {@code scripts/db-setup.py} and compose from {@code scripts/db-init/}: a precondition of the
+ * migrations, not their work.
  */
 public final class PostgresContainer {
 
@@ -44,12 +45,16 @@ public final class PostgresContainer {
     /** The database where job-service and the mart live. */
     public static final String JOBS_DATABASE = "jobs_db";
 
+    /** The database where application-service's tables live (Day 25). */
+    public static final String APPS_DATABASE = "apps_db";
+
     // The one password every module role has here. Test-only; compose and production set their own.
     private static final String ROLE_PASSWORD = "password";
 
     private static final PostgreSQLContainer CONTAINER;
     private static final DataSource DATA_SOURCE;
     private static final DataSource JOBS_DATA_SOURCE;
+    private static final DataSource APPS_DATA_SOURCE;
 
     static {
         CONTAINER = new PostgreSQLContainer(DockerImageName.parse(IMAGE))
@@ -64,12 +69,14 @@ public final class PostgresContainer {
         CONTAINER.start();
         DATA_SOURCE = buildDataSource();
         JOBS_DATA_SOURCE = buildJobsDataSource();
+        APPS_DATA_SOURCE = buildAppsDataSource();
         // In public, not a module schema: the connection's first schema would otherwise get the
         // extension's view inside the schema Flyway owns.
         execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA public");
         execute("CREATE SCHEMA IF NOT EXISTS app");
         createModuleRoles();
         createJobsDatabase();
+        createAppsDatabase();
     }
 
     private PostgresContainer() {
@@ -97,6 +104,11 @@ public final class PostgresContainer {
         return JOBS_DATA_SOURCE;
     }
 
+    /** The same, onto the apps database: application-service's tables. */
+    public static DataSource appsDataSource() {
+        return APPS_DATA_SOURCE;
+    }
+
     /** JDBC URL looking in every module schema and then {@code app}: the harness's own view. */
     public static String jdbcUrl() {
         return jdbcUrl(String.join(",", TABLE_SCHEMAS));
@@ -112,6 +124,12 @@ public final class PostgresContainer {
     public static String jobsJdbcUrl(String schema) {
         return "jdbc:postgresql://" + CONTAINER.getHost() + ":" + CONTAINER.getMappedPort(5432) + "/"
                 + JOBS_DATABASE + "?currentSchema=" + schema;
+    }
+
+    /** JDBC URL onto the apps database with one schema as the search path, as application-service connects. */
+    public static String appsJdbcUrl(String schema) {
+        return "jdbc:postgresql://" + CONTAINER.getHost() + ":" + CONTAINER.getMappedPort(5432) + "/"
+                + APPS_DATABASE + "?currentSchema=" + schema;
     }
 
     /** The password every module role has in the test container. */
@@ -136,6 +154,16 @@ public final class PostgresContainer {
             statement.execute(sql);
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to run SQL against the jobs database", e);
+        }
+    }
+
+    /** The same, on the apps database. */
+    public static void executeInApps(String sql) {
+        try (Connection connection = APPS_DATA_SOURCE.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to run SQL against the apps database", e);
         }
     }
 
@@ -188,6 +216,18 @@ public final class PostgresContainer {
                 + "RESET ROLE");
     }
 
+    /**
+     * application-service's own database (Day 25): only applications_user may connect. The admin
+     * makes the schema because applications_user has no CREATE on the database.
+     */
+    private static void createAppsDatabase() {
+        // Alone: CREATE DATABASE cannot run inside a transaction.
+        execute("CREATE DATABASE " + APPS_DATABASE);
+        execute("REVOKE CONNECT ON DATABASE " + APPS_DATABASE + " FROM PUBLIC;\n"
+                + "GRANT CONNECT ON DATABASE " + APPS_DATABASE + " TO applications_user");
+        executeInApps("CREATE SCHEMA applications AUTHORIZATION applications_user");
+    }
+
     private static String othersThan(String schema) {
         List<String> roles = new ArrayList<>();
         for (String other : MODULE_SCHEMAS) {
@@ -212,6 +252,15 @@ public final class PostgresContainer {
         var dataSource = new SimpleDriverDataSource();
         dataSource.setDriverClass(org.postgresql.Driver.class);
         dataSource.setUrl(jobsJdbcUrl("analytics"));
+        dataSource.setUsername(CONTAINER.getUsername());
+        dataSource.setPassword(CONTAINER.getPassword());
+        return dataSource;
+    }
+
+    private static DataSource buildAppsDataSource() {
+        var dataSource = new SimpleDriverDataSource();
+        dataSource.setDriverClass(org.postgresql.Driver.class);
+        dataSource.setUrl(appsJdbcUrl("applications"));
         dataSource.setUsername(CONTAINER.getUsername());
         dataSource.setPassword(CONTAINER.getPassword());
         return dataSource;
