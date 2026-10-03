@@ -44,7 +44,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>Its key is generated here, so a test can mint job-service's tokens. It trusts
  * {@code jobmatch-backend} at a key set served here from {@link TestSigningKey#servicePath()},
  * which every context signs with, {@code jobmatch-test-caller} at {@link TestServiceCaller}'s,
- * and {@code jobmatch-matching-service} at {@link MatchingServiceKey}'s.
+ * {@code jobmatch-matching-service} at {@link ServiceKey#MATCHING}'s and
+ * {@code jobmatch-application-service} at {@link ServiceKey#APPLICATION}'s.
  *
  * <p>Its counts calls go to a relay in this JVM: one container serves every context, so its
  * applications URL names the relay, and {@link IntegrationTest} points the relay at the running
@@ -165,7 +166,8 @@ public final class JobService {
 
         int postgresPort = PostgresContainer.instance().getMappedPort(5432);
         Testcontainers.exposeHostPorts(postgresPort, backendKeyServer.getAddress().getPort(),
-                relay.getAddress().getPort(), testCallerPort(), MatchingServiceKey.port());
+                relay.getAddress().getPort(), testCallerPort(), ServiceKey.MATCHING.port(),
+                ServiceKey.APPLICATION.port());
 
         GenericContainer<?> jobService = new GenericContainer<>(DockerImageName.parse(IMAGE))
                 // A local build, never a pull: an image by this name on a registry is not ours.
@@ -183,9 +185,12 @@ public final class JobService {
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_0_NAME", TestServiceCaller.ISSUER)
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL",
                         "http://host.testcontainers.internal:" + testCallerPort() + "/.well-known/service-jwks.json")
-                .withEnv("APP_INTERNAL_TRUSTEDISSUERS_1_NAME", MatchingServiceKey.ISSUER)
+                .withEnv("APP_INTERNAL_TRUSTEDISSUERS_1_NAME", ServiceKey.MATCHING.issuer())
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL",
-                        "http://host.testcontainers.internal:" + MatchingServiceKey.port() + "/.well-known/service-jwks.json")
+                        "http://host.testcontainers.internal:" + ServiceKey.MATCHING.port() + "/.well-known/service-jwks.json")
+                .withEnv("APP_INTERNAL_TRUSTEDISSUERS_2_NAME", ServiceKey.APPLICATION.issuer())
+                .withEnv("APP_INTERNAL_TRUSTEDISSUERS_2_KEYSETURL",
+                        "http://host.testcontainers.internal:" + ServiceKey.APPLICATION.port() + "/.well-known/service-jwks.json")
                 .withEnv("INTERNAL_APPLICATIONS_URL", "http://host.testcontainers.internal:" + relay.getAddress().getPort())
                 // One line per request, method and path, which job-service's log pattern prefixes
                 // with [traceId,spanId]: what a test reads to see which trace a request arrived under.

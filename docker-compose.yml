@@ -23,8 +23,8 @@ services:
       timeout: 5s
       retries: 10
 
-  # Writes identity's user key, the monolith's service key, job-service's key and matching-service's
-  # (Day 39, Day 17, Day 21).
+  # Writes identity's user key, the monolith's service key, job-service's key, matching-service's
+  # and application-service's (Day 39, Day 17, Day 21, Day 25).
   # Runs and exits: it writes keys into the jwt-keys volume on the first start and keeps them after
   # that, until `docker compose down -v`. Never in git, and never made by the services, which do not
   # start without them. The backend's own runtime image, because it already has openssl and is already
@@ -60,6 +60,9 @@ services:
       # Day 21: matching-service calls identity's /internal/users and /internal/profiles.
       APP_INTERNAL_TRUSTEDISSUERS_1_NAME: jobmatch-matching-service
       APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL: http://matching-service:8080/.well-known/service-jwks.json
+      # Day 25: application-service calls identity's /internal/users.
+      APP_INTERNAL_TRUSTEDISSUERS_2_NAME: jobmatch-application-service
+      APP_INTERNAL_TRUSTEDISSUERS_2_KEYSETURL: http://application-service:8080/.well-known/service-jwks.json
       # Tracing is opt-in: empty means no exporter, so the application still starts with
       # nowhere to send spans. Point it at the Tempo below to turn it on:
       #
@@ -109,6 +112,9 @@ services:
       # Day 21: matching-service calls the shortlist route.
       APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-matching-service
       APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL: http://matching-service:8080/.well-known/service-jwks.json
+      # Day 25: application-service calls the posting batch route.
+      APP_INTERNAL_TRUSTEDISSUERS_1_NAME: jobmatch-application-service
+      APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL: http://application-service:8080/.well-known/service-jwks.json
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     volumes:
@@ -198,6 +204,39 @@ services:
         condition: service_started
       localstack:
         condition: service_healthy
+
+  # application-service (Day 25): saved jobs and the tracker, on apps_db. No published port,
+  # and not routed yet: the gateway and job-service's counts still go to the backend until Track E2.
+  application-service:
+    build: ./services/application-service
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${APPS_DB_NAME:-apps_db}
+      DB_APPLICATIONS_USER: applications_user
+      DB_APPLICATIONS_PASSWORD: ${APPLICATIONS_DB_PASSWORD:-password}
+      SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/application-service.pem
+      # identity is still the monolith's; user tokens are checked against its key set there.
+      INTERNAL_IDENTITY_URL: http://backend:8080
+      INTERNAL_JOBS_URL: http://job-service:8080
+      # job-service calls /internal/saved-counts here once E2 points it at this service.
+      JOB_SERVICE_KEY_SET_URL: http://job-service:8080/.well-known/service-jwks.json
+      TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
+      OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
+    volumes:
+      - jwt-keys:/run/keys:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
+    depends_on:
+      db:
+        condition: service_healthy
+      jwt-key:
+        condition: service_completed_successfully
 
   # The API gateway (Day 15), the only way in to the backend: published on 8080, where the
   # backend used to be (Day 16). It listens on 8081 inside the network.
