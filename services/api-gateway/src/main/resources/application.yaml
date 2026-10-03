@@ -62,6 +62,10 @@ gateway:
   # Where top-matches goes (Day 21): matching-service, http://matching-service:8080 in compose from
   # Track E2. The backend default suits a backend that still serves it, as it does until Track E1.
   matching-service-url: ${MATCHING_SERVICE_URL:${gateway.backend-url}}
+  # Where saved jobs go (Day 25): application-service, http://application-service:8080 in compose
+  # from Track E2. The backend default suits a backend that still serves them, as it does until
+  # Track E1.
+  application-service-url: ${APPLICATION_SERVICE_URL:${gateway.backend-url}}
   # The key set access tokens are verified with; the backend publishes it.
   jwks-url: ${gateway.backend-url}/.well-known/jwks.json
   rate-limit:
