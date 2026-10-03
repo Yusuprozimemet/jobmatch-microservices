@@ -8,6 +8,7 @@ import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,7 +43,7 @@ class EventBusTest {
 
     @Test
     void eachQueueIsSubscribedRawWithADeadLetterQueueAfterFiveReceives() throws Exception {
-        for (String queueName : EventBus.QUEUES) {
+        for (String queueName : Stream.concat(EventBus.QUEUES.stream(), EventBus.CONTAINER_QUEUES.stream()).toList()) {
             String queueUrl = EventBus.queueUrl(queueName);
 
             String redrivePolicy = EventBus.sqs().getQueueAttributes(r -> r

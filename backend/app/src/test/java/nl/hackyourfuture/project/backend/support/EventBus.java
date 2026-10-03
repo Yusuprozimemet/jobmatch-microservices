@@ -15,13 +15,15 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * The event bus (Day 26): a LocalStack container with SNS and SQS, one for the whole run,
  * Ryuk removes it. The bus creates the topic and queues, so tests only publish and poll.
  * Queues are NOT purged by {@link TestDatabase#reset()} on purpose: tests on the shared
  * queues match their own {@code userId} and {@code eventId} and delete only what they
- * receive. A receive raises the receive count of every message it sees.
+ * receive. A receive raises the receive count of every message it sees. Service containers
+ * have queues of their own, not shared with harness tests.
  */
 public final class EventBus {
 
@@ -30,7 +32,17 @@ public final class EventBus {
     public static final String TOPIC = "user-deleted";
     public static final String APPLICATIONS_QUEUE = "applications-user-deleted";
     public static final String MATCHING_QUEUE = "matching-user-deleted";
+    public static final String APPLICATION_SERVICE_QUEUE = "application-service-user-deleted";
+    /**
+     * The shared queues the harness's own tests receive from.
+     */
     public static final List<String> QUEUES = List.of(APPLICATIONS_QUEUE, MATCHING_QUEUE);
+    /**
+     * Queues a service container consumes (Day 25: application-service's, so its consumer never
+     * takes the messages UserDeletedRelayIT and EventBusTest receive on the shared queues);
+     * subscribed like QUEUES, but no harness test receives from them.
+     */
+    public static final List<String> CONTAINER_QUEUES = List.of(APPLICATION_SERVICE_QUEUE);
     public static final int MAX_RECEIVES = 5;
 
     private static final int PORT = 4566;
@@ -124,7 +136,7 @@ public final class EventBus {
         topicArnValue = snsClient.createTopic(t -> t.name(TOPIC)).topicArn();
 
         Map<String, String> local = new HashMap<>();
-        for (String queueName : QUEUES) {
+        for (String queueName : Stream.concat(QUEUES.stream(), CONTAINER_QUEUES.stream()).toList()) {
             String url = createQueueWithDeadLetter(sqsClient, queueName);
             local.put(queueName, url);
 
