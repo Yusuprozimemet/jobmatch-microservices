@@ -41,7 +41,7 @@ class ManagementPortTest extends ApplicationServiceTest {
 
     @Test
     void aRequestIsCountedForPrometheus() throws Exception {
-        // No user token is read yet (Track A1b), so the application port answers 401.
+        // No user token is read yet (Track A1c), so the application port answers 401.
         assertThat(get(port, "/api/saved-jobs").statusCode()).isEqualTo(401);
 
         HttpResponse<String> metrics = get(managementPort, "/actuator/prometheus");
