@@ -15,8 +15,7 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
 /**
  * Who may call application-service (Day 25): the scraper for actuator, other services for its
- * service key set, and logged-in users for saved jobs. The {@code /internal/**} chain, for
- * service tokens, comes with Track B1c as {@code @Order(2)}.
+ * service key set and saved-count requests with service tokens, and logged-in users for saved jobs.
  */
 @Configuration
 @EnableWebSecurity
@@ -34,6 +33,30 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 // Nothing here reads a cookie, and the scraper does not have one.
                 .csrf(AbstractHttpConfigurer::disable);
+        return http.build();
+    }
+
+    /**
+     * Service tokens only (Day 25): the bearer header never the cookie. CSRF off because a bearer
+     * token is not sent by a browser on its own. Ordered ahead of the user chain because the first
+     * matching chain wins.
+     */
+    @Bean
+    @Order(2)
+    public SecurityFilterChain internalFilterChain(HttpSecurity http, InternalCallers callers) throws Exception {
+        http
+                .securityMatcher("/internal/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .oauth2ResourceServer(rs -> rs
+                        .authenticationManagerResolver(callers.resolver())
+                        // No bearerTokenResolver: the default reads only the Authorization header,
+                        // so the user's access_token cookie is ignored here as intended.
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
         return http.build();
     }
 
