@@ -4,6 +4,23 @@ spring:
   threads:
     virtual:
       enabled: true
+  # Its own database (Day 25): apps_db, where only applications_user may connect
+  # (scripts/db-init/30-apps-db.sh, scripts/db-setup.py). The admin creates the schema;
+  # applications_user owns it and has no CREATE on the database.
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:apps_db}?currentSchema=applications
+    username: ${DB_APPLICATIONS_USER:applications_user}
+    password: ${DB_APPLICATIONS_PASSWORD:password}
+    # Small: the test run caches several contexts on one Postgres.
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+  # Its own migrations, as applications_user, with the history table in the schema they write.
+  # The schema exists already, empty, so there is nothing to baseline.
+  flyway:
+    schemas: applications
+    create-schemas: false
+    locations: classpath:db/applications
 
 server:
   port: 8080
