@@ -21,6 +21,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
+		<!-- The internal clients: identity's existence check and job-service's posting lookup (Track B2b). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-restclient</artifactId>
+		</dependency>
 		<!-- User tokens, verified against identity's key set (Track A1c); service tokens (Track B1). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
