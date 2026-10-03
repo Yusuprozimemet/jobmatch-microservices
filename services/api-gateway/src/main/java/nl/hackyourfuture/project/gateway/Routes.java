@@ -26,11 +26,12 @@ import static org.springframework.web.servlet.function.RequestPredicates.POST;
 import static org.springframework.web.servlet.function.RequestPredicates.path;
 
 /**
- * Where requests go. Job search and top-matches each have an upstream of their own,
- * {@code gateway.job-service-url} and {@code gateway.matching-service-url}, both the backend until
- * set. Everything else is the backend's. The credential routes are rate limited ahead of the rest.
- * Nothing else is routed, the backend's actuator included; a path outside these is the gateway's
- * own answer: 401 without a token, 404 with one.
+ * Where requests go. Job search, top-matches and saved jobs each have an upstream of their own,
+ * {@code gateway.job-service-url}, {@code gateway.matching-service-url} and
+ * {@code gateway.application-service-url}, each the backend until set. Everything else is the
+ * backend's. The credential routes are rate limited ahead of the rest. Nothing else is routed,
+ * the backend's actuator included; a path outside these is the gateway's own answer: 401 without
+ * a token, 404 with one.
  */
 @Configuration(proxyBeanMethods = false)
 class Routes {
@@ -42,6 +43,7 @@ class Routes {
     RouterFunction<ServerResponse> backend(@Value("${gateway.backend-url}") String backendUrl,
                                            @Value("${gateway.job-service-url}") String jobServiceUrl,
                                            @Value("${gateway.matching-service-url}") String matchingServiceUrl,
+                                           @Value("${gateway.application-service-url}") String applicationServiceUrl,
                                            @Value("${gateway.rate-limit.auth-per-minute}") long perMinute,
                                            @Value("${gateway.trusted-proxies}") String trustedProxies) {
         // Where a password is guessed or an account made; not refresh, logout or the password change.
@@ -73,7 +75,15 @@ class Routes {
                 .before(userId())
                 .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build();
-        return credentials.and(matching).and(jobs).and(route("backend")
+        // Saved jobs and the tracker are application-service's (Day 25). Ahead of /api/**, which
+        // would take them.
+        RouterFunction<ServerResponse> applications = route("application-service")
+                .route(path("/api/saved-jobs").or(path("/api/saved-jobs/**")), http())
+                .before(uri(applicationServiceUrl))
+                .before(userId())
+                .onError(ResourceAccessException.class, Routes::backendFailed)
+                .build();
+        return credentials.and(matching).and(jobs).and(applications).and(route("backend")
                 .route(path("/api/**").or(path("/.well-known/jwks.json")), http())
                 .before(uri(backendUrl))
                 .before(userId())
