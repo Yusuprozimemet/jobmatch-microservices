@@ -41,6 +41,10 @@ app:
   # identity's public key set for user tokens (Day 12), at identity's URL unless set.
   identity:
     jwks-url: ${IDENTITY_JWKS_URL:${app.internal.identity-url}/.well-known/jwks.json}
+  # The key application-service signs its service tokens with (Day 39, ServiceSigningKey): required,
+  # no default; it does not start without one.
+  service-jwt:
+    private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
 
 # Observability. Actuator listens on its own port, which compose does not publish, so nothing
 # here is reachable from the internet.
