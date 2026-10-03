@@ -84,3 +84,27 @@ management:
       export:
         enabled: ${OTEL_METRICS_ENABLED:false}
         url: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+
+# The internal clients' breakers, as the monolith's (Day 19): both exception lists named, since
+# without them a 4xx counts as a failure, or with record-exceptions alone as a success. The two
+# are application-service's clients: postingLookup (job-service), userExistence (identity).
+resilience4j:
+  circuitbreaker:
+    configs:
+      internal:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        record-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+    instances:
+      postingLookup:
+        base-config: internal
+      userExistence:
+        base-config: internal
