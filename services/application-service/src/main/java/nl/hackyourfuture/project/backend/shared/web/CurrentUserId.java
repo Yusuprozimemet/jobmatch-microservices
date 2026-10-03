@@ -21,9 +21,8 @@ import java.lang.annotation.Target;
  * user deleted while their token is still valid.
  *
  * <p>application-service's copy (Day 25): its image is built from its own folder and sees nothing of
- * {@code backend/}. Here identity is another service: the resolver that fills it from the token's
- * {@code sub} and identity's existence check arrives with the existence client, before the controller
- * moves in.
+ * {@code backend/}. Here identity is another service: {@code CurrentUserIdResolver} fills it from the
+ * token's {@code sub} after asking identity whether the user still exists.
  */
 @Documented
 @Target(ElementType.PARAMETER)
