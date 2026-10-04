@@ -31,6 +31,10 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
   - The proof goes in the PR that first runs the check: the spec-change PR if the check exists
     already, the track's PR if a track adds it (a Track 0). The closing PR links it when it
     ticks the box.
+  - The record is one line of its own: `broken: <what was broken> → <what the check reported>`,
+    or `broken: none → <why>` in a PR that broke nothing. The PR that ran the break carries it
+    in its description; the closing PR copies it under the criterion it ticks. `spec-drift.py`
+    reads no other wording as a break (from #310 on).
 - **Tracks inside a day run in parallel. Days run in order.** Day N assumes N-1 is merged.
 - **Record every defect in the day's *Notes* when it is found**, from Day 21 on, one `Defect`
   line each: where it was found and its cause, exactly one of `spec` (wrong, missing a case, or

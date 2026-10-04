@@ -157,18 +157,20 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(sd.renamed_to("src/{ => job}/X.java"), "src/job/X.java")
         self.assertEqual(sd.renamed_to("a.txt => b/a.txt"), "b/a.txt")
 
-    def test_a_pr_records_a_break_by_its_label_and_the_checklist_is_not_read(self):
+    def test_a_pr_records_a_break_in_one_fixed_line_and_nothing_else(self):
         checklist = "- [x] Spec changes only: each check has been seen to fail (see `specs/README.md`)\n"
-        for body, state in [("**Broken on purpose:** `ISSUER` back. It fails 2 of 8.\n", "recorded"),
-                            ("**Seen red on purpose, each alone, then reverted:**\n", "recorded"),
-                            ("**Seen failing:** the test ran before the bean existed.\n", "recorded"),
-                            ("so I broke it deliberately. Failures: 3\n", "recorded"),
-                            ("Uppercasing the email on purpose (so no user is found) failed.\n", "recorded"),
-                            ("with `AccessLog` delayed (a temporary break, reverted), it failed\n", "recorded"),
-                            ("**Nothing was broken on purpose:** this track adds no test.\n", "none"),
-                            ("It passes today, on purpose.\n", "silent"), ("", "silent"), (None, "silent")]:
-            self.assertEqual(sd.break_state(body and body + checklist), state, body)
-        self.assertEqual(sd.break_state(checklist), "silent")
+        for body, state in [("broken: `ISSUER` back → `AuthIT` failed 2 of 8\n", "recorded"),
+                            ("- broken: the guard removed -> expected: 401 but was: 200\n", "recorded"),
+                            ("broken: none → this track adds no test\nbroken: the sort reversed → 3 red\n", "recorded"),
+                            ("broken: none → this track adds no test\n", "none"),
+                            # The free text the regexes read before #310 is not the line.
+                            ("**Broken on purpose:** `ISSUER` back. It fails 2 of 8.\n", "silent"),
+                            ("Seen red, broken: the guard removed → it failed\n", "silent"),
+                            ("broken: the guard removed\n", "silent"),
+                            ("", "silent"), (None, "silent")]:
+            self.assertEqual(sd.break_state(body and body + checklist, 310), state, body)
+        self.assertEqual(sd.break_state(checklist, 310), "silent")
+        self.assertEqual(sd.break_state("broken: the guard removed → 401\n", 309), "not measured")
 
     def test_ci_counts_each_pushed_commit_once_and_only_pull_request_runs(self):
         run = lambda sha, result, flow="PR checks", event="pull_request": dict(
@@ -223,7 +225,8 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(rows[2]["gap_chance"], rows[1]["gap_chance"])  # the same counts, shuffled
 
 CRITERIA = """- [x] **hold** — Refused: `contract/FooIT` passes. Broken on purpose: the check removed.
-      #2: `FooIT.refuses`. Red with the guard removed (`expected: 401 but was: 200`).
+      #2: `FooIT.refuses`.
+      broken: the guard removed → `expected: 401 but was: 200`
 - [x] **new** — Saved in `BarIT`, or a case added to `FooIT`. Red today: no table.
       #3: a case in `FooIT.saves`.
 - [ ] **new** — Not started.
@@ -259,34 +262,17 @@ class EvidenceTest(unittest.TestCase):
         self.assertEqual((tagged["id"], tagged["kind"], tagged["claim"]), ("C28.3", "new", "`FooIT` refuses."))
         self.assertEqual((untagged["id"], untagged["claim"]), (None, "C28.3 holds."))
 
-    def test_a_break_seen_red_is_told_from_a_claim_that_it_is_red_today(self):
-        seen = ["Red as named", "Red without the chain", "`savedJobs` went red", "turned two red, not one"]
-        for text in seen:
-            self.assertTrue(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
-        self.assertFalse(sd.criteria("- [x] **new** — X. Red today: the route does not exist.\n")[0]["red"])
-
-    def test_every_phrasing_the_specs_record_a_break_in_is_seen_red(self):
-        # From Days 08-40: the template's own "Broken on purpose: <what the check reported>", and
-        # the ways the days wrote it without "Red with".
-        seen = ["Red again with the migration's revoke removed", "Seen red on Day 15 (#100, #101)",
-                "Red, 2 of 4, with `redeem` ignoring `revoked_at`", "#174: 3 of 10 red, expected 200",
-                "81 of 190 contract tests red", "the `USAGE` grant turned `noModuleCanReadAnothersSchema[2]` red",
-                "`InternalCallersTest.theListBindsFromEnvironmentVariables` (#168), red with the list bound",
-                "Red in the full direct run with that request removed",
-                "Broken\n      on purpose in #63: an uppercased principal email failed `ProfileIT` (8)",
-                "Broken on purpose in #66 by dropping the foreign key: 2 rows left",
-                "Broken on purpose in #75: the backend exited naming `JWT_PRIVATE_KEY_FILE`",
-                "Broken on purpose in #51: a lookup per posting gave 2, 3 and 7 statements",
-                "Broken on purpose in #68: an edit to a comment in V1 showed at once",
-                "Broken on purpose in #74: the auth tests reported `Tests run: 49, Failures: 8`",
-                "Broken as named: the application did not start (`permission denied`), 293 of 306 errors"]
-        for text in seen:
-            self.assertTrue(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
-        # A baseline, or a break the spec plans but no one has reported yet, is not a break seen red.
-        unseen = ["Red before the work: 9 lines in 5 files", "Red before #69",
-                  "Broken on purpose in Track C's PR: the request removed, so the metric test goes red"]
-        for text in unseen:
-            self.assertFalse(sd.criteria(f"- [x] **hold** — X. {text}.\n")[0]["red"], text)
+    def test_a_criterion_is_seen_red_only_by_a_broken_line_with_what_it_reported(self):
+        red = lambda text: sd.criteria(f"- [x] C28.1 **hold** — X. #2: `FooIT`.\n      {text}\n")[0]["red"]
+        self.assertTrue(red("broken: the guard removed → `FooIT` failed 1 of 3"))
+        self.assertTrue(red("broken: the sort reversed -> 31 of 31 red"))
+        # A baseline, a break planned but not reported, a `none`, or the free text the regexes read
+        # before #310 is not a break seen red.
+        for text in ["Red today: the route does not exist.", "broken: the guard removed",
+                     "broken: none → the grep is the check",
+                     "Broken on purpose in #74: the auth tests reported `Tests run: 49, Failures: 8`.",
+                     "Red again with the migration's revoke removed. broken: x → y"]:
+            self.assertFalse(red(text), text)
 
     def test_a_spec_with_no_criterion_tagged_predates_the_evidence_format(self):
         self.assertFalse(sd.in_evidence_format(sd.criteria("- [x] Login returns 200.\n- [x] Logout clears it.\n")))

@@ -97,6 +97,8 @@ implementer never commits or pushes.
   from an earlier run looks like a pass.
 - A test that passes before and after a change proves nothing until it has been seen to fail.
   Break the code on purpose, run it, record what it reported, revert. The break never merges.
+  Record it in one line, `broken: <what> → <what it reported>` (`specs/README.md`): the
+  dashboard reads no other wording.
 - The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
   split the PR along a line where each part stands alone. An `Oversized:` line in the
   description turns the failure into a warning; it was used three times, on #1, #2 and #3 (Days
