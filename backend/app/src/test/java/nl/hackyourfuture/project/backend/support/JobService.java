@@ -49,9 +49,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>Its counts calls go to a relay in this JVM: one container serves every context, so its
  * applications URL names the relay, and {@link IntegrationTest} points the relay at the running
- * test's context. The relay only forwards: a failing stub behind it would open job-service's one
- * breaker for the rest of the run. matching-service's container reaches identity through the same
- * relay.
+ * test's context. The relay routes job-service's saved-counts calls to application-service's
+ * container and identity's routes to the current test context. The relay only forwards: a failing
+ * stub behind it would open job-service's one breaker for the rest of the run. matching-service's
+ * container reaches identity through the same relay.
  */
 public final class JobService {
 
@@ -131,7 +132,7 @@ public final class JobService {
     }
 
     /**
-     * Where the container's counts calls land until a test says otherwise: the context running the
+     * Where the relay sends identity's routes until a test says otherwise: the context running the
      * current test. {@link IntegrationTest} calls this before every test.
      */
     public static void relayTo(int port) {
@@ -228,11 +229,16 @@ public final class JobService {
         return server;
     }
 
-    /** Forwards every request it gets to {@code http://localhost:<current target>}, unchanged. */
+    /** Forwards identity's routes to the current test context; job-service's counts calls to application-service's container. */
     private static HttpServer startRelay() {
         HttpServer server = newServer();
         server.createContext("/", exchange -> {
-            int target = RELAY_TARGET_PORT.get();
+            int target;
+            if (exchange.getRequestURI().getPath().equals("/internal/saved-counts")) {
+                target = ApplicationService.port();
+            } else {
+                target = RELAY_TARGET_PORT.get();
+            }
             try {
                 byte[] requestBody = exchange.getRequestBody().readAllBytes();
                 HttpRequest.Builder forward = HttpRequest.newBuilder(

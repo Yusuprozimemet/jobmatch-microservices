@@ -31,7 +31,9 @@ class BackendApplicationTests extends IntegrationTest {
                 "user_credentials identity_user",
                 "user_profiles identity_user",
                 "users identity_user");
-        assertThat(tablesIn("applications")).containsExactly("saved_jobs applications_user");
+        // saved_jobs is application-service's since Day 25. Until a migration drops it here, the
+        // harness's is a foreign table over apps_db (TestDatabase), which pg_tables does not list.
+        assertThat(tablesIn("applications")).isEmpty();
         assertThat(tablesIn("matching")).isEmpty();
     }
 

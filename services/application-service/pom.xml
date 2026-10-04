@@ -80,6 +80,11 @@
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
+		<!-- saved_jobs' JdbcClient and transaction manager (Day 25, E1). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
@@ -101,12 +106,11 @@
 			<artifactId>testcontainers</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Test scope until the user.deleted consumer moves here (Day 25, E1). -->
+		<!-- The user.deleted consumer (Day 27), moved here on Day 25. -->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>sqs</artifactId>
 			<version>2.46.7</version>
-			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

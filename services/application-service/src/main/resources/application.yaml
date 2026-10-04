@@ -49,6 +49,17 @@ app:
   # no default; it does not start without one.
   service-jwt:
     private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
+  # The user.deleted consumer (Day 27, moved here on Day 25). Off by default: compose turns it on
+  # with the queue it reads (Track E2); the harness's container reads a queue of its own.
+  events:
+    consumer:
+      enabled: ${EVENTS_CONSUMER_ENABLED:false}
+    sqs:
+      endpoint: ${EVENTS_SQS_ENDPOINT:}
+      region: ${EVENTS_SQS_REGION:eu-west-1}
+      access-key: ${EVENTS_SQS_ACCESS_KEY:}
+      secret-key: ${EVENTS_SQS_SECRET_KEY:}
+    user-deleted-queue-url: ${EVENTS_USER_DELETED_QUEUE_URL:}
 
 # Observability. Actuator listens on its own port, which compose does not publish, so nothing
 # here is reachable from the internet.

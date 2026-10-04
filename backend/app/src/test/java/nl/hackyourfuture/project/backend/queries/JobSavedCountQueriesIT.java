@@ -46,7 +46,7 @@ class JobSavedCountQueriesIT extends IntegrationTest {
         // The page really is that big - otherwise sizes 20 and 100 would test the same thing.
         long postings = response.at("/totalElements").asLong();
         assertThat(response.at("/content").size()).isEqualTo((int) Math.min(size, postings));
-        assertThat(StatementCounter.statementsMentioning("saved_jobs")).isEqualTo(1);
+        assertThat(StatementCounter.appsStatementsMentioning("saved_jobs")).isEqualTo(1);
     }
 
     @Test
@@ -57,6 +57,6 @@ class JobSavedCountQueriesIT extends IntegrationTest {
 
         assertThat(response.status()).isEqualTo(200);
         assertThat(response.at("/savedCount").asInt()).isEqualTo(1);
-        assertThat(StatementCounter.statementsMentioning("saved_jobs")).isEqualTo(1);
+        assertThat(StatementCounter.appsStatementsMentioning("saved_jobs")).isEqualTo(1);
     }
 }

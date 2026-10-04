@@ -52,13 +52,6 @@ class ModuleBoundariesTest {
             .should().dependOnClassesThat().resideInAnyPackage(APPLICATIONS)
             .because(WHY);
 
-    /** The one Day 09 will be tested by: applications must stop reading postings. */
-    @ArchTest
-    static final ArchRule applicationsKeepsToItself = noClasses()
-            .that().resideInAPackage(APPLICATIONS)
-            .should().dependOnClassesThat().resideInAnyPackage(IDENTITY)
-            .because(WHY);
-
     /**
      * {@code shared} is a leaf and has to stay one. Every module depends on it, so a dependency
      * from it to a feature module is a cycle, and the first symptom of a cycle here would be

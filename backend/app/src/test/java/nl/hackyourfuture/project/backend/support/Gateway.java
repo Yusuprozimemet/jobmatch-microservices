@@ -74,6 +74,7 @@ public final class Gateway {
                 .withEnv("BACKEND_URL", "http://host.testcontainers.internal:" + applicationPort)
                 .withEnv("JOB_SERVICE_URL", insideContainer(Services.url(Services.JOB_SERVICE, applicationPort, serviceUrls)))
                 .withEnv("MATCHING_SERVICE_URL", insideContainer(Services.url(Services.MATCHING_SERVICE, applicationPort, serviceUrls)))
+                .withEnv("APPLICATION_SERVICE_URL", insideContainer(Services.url(Services.APPLICATION_SERVICE, applicationPort, serviceUrls)))
                 // The suite logs in from one address far more than ten times a minute.
                 .withEnv("RATE_LIMIT_AUTH_PER_MINUTE", "1000000")
                 // One line per request, method and path, which the gateway's log pattern prefixes
