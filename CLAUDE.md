@@ -101,9 +101,13 @@ implementer never commits or pushes.
   dashboard reads no other wording.
 - The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
   split the PR along a line where each part stands alone. An `Oversized:` line in the
-  description turns the failure into a warning; it was used three times, on #1, #2 and #3 (Days
-  1-2 and the README rewrite), and never since. `main` is protected, so the check must pass
-  before a merge.
+  description turns the failure into a warning. It has been used five times: #1, #2 and #3
+  (Days 1-2 and the README rewrite), then #224 (Day 21 E1a, 950 lines) and #296 (Day 25 E1a,
+  1,225 lines). The two extraction tracks could not split and stay green: once a module's code
+  leaves the monolith, its database tests fail and the harness must route its endpoints to the
+  new container in the same PR. Both specs expected the line. The moved code showed as renames;
+  the counted lines were monolith tests deleted and rebuilt on the service's base, and in #296
+  mostly deletions (914 of 1,225). `main` is protected, so the check must pass before a merge.
 - A grep criterion cannot tell a comment from code: do not name, in a comment, the thing the
   day's grep checks is gone.
 
