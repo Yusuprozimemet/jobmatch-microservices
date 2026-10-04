@@ -192,8 +192,7 @@ class SpecDriftTest(unittest.TestCase):
     def test_the_data_names_the_commit_versions_and_draws_that_made_it(self):
         p = sd.provenance()
         self.assertRegex(p["commit"], "^[0-9a-f]{40}$")
-        self.assertEqual((p["numpy"], p["chance_draws"], p["split_draws"]),
-                         (sd.np.__version__, sd.CHANCE_DRAWS, sd.SPLIT_DRAWS))
+        self.assertEqual((p["numpy"], p["chance_draws"]), (sd.np.__version__, sd.CHANCE_DRAWS))
         self.assertRegex(p["python"], r"^3\.\d+\.\d+")
         self.assertIsInstance(p["script_edited"], bool)
 
@@ -222,27 +221,6 @@ class SpecDriftTest(unittest.TestCase):
         rows = self.repo.merge({"src/Foo.java": "class FooService { bar_table a; bar_table b; }\n"}).rows()
         self.assertGreater(rows[2]["gap_full"], rows[1]["gap_full"])
         self.assertEqual(rows[2]["gap_chance"], rows[1]["gap_chance"])  # the same counts, shuffled
-
-    def test_the_drift_reference_splits_the_first_files_in_two(self):
-        ref = lambda repo: repo.inside(lambda blobs: sd.trajectory([dict(s) for s in repo.snaps], blobs)[4])
-        self.assertEqual(ref(self.repo), [90.0] * 3)  # two files: a word in both weighs nothing
-        three = Repo().merge({"plan.md": "alpha\n", "specs/day-01-x.md": "beta gamma\n",
-                              "specs/day-02-x.md": "beta delta\n"})
-        try:
-            mean, lo, hi = ref(three)
-            self.assertLess(mean, 90.0)  # a split with day 01 and day 02 apart: both halves have beta
-            self.assertGreater(mean, 0.0)
-            self.assertEqual(hi, 90.0)  # plan.md alone against both days: nothing shared
-            self.assertLess(lo, hi)
-        finally:
-            three.close()
-
-    def test_drift_ignores_words_every_file_uses_and_sees_new_ones(self):
-        rows = self.repo.merge({"specs/day-01-x.md": DAY + "the " * 200 + "\n"}).rows()
-        self.assertEqual(rows[1]["drift"], 0.0)
-        rows = self.repo.merge({"specs/day-01-x.md": DAY + "gateway routes the login\n"}).rows()
-        self.assertGreater(rows[2]["drift"], 0.0)
-
 
 CRITERIA = """- [x] **hold** — Refused: `contract/FooIT` passes. Broken on purpose: the check removed.
       #2: `FooIT.refuses`. Red with the guard removed (`expected: 401 but was: 200`).
