@@ -24,7 +24,6 @@
 	<modules>
 		<module>shared</module>
 		<module>identity</module>
-		<module>applications</module>
 		<module>app</module>
 	</modules>
 

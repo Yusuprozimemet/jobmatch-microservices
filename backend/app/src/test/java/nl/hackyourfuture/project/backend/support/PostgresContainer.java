@@ -36,8 +36,8 @@ public final class PostgresContainer {
     /** Each module's schema, owned by a role of the same name plus {@code _user}. */
     public static final List<String> MODULE_SCHEMAS = List.of("identity", "applications", "matching");
 
-    /** What the monolith connects as; matching-service connects as matching_user since Day 21. */
-    public static final List<String> CONNECTED_SCHEMAS = List.of("identity", "applications");
+    /** What the monolith connects as; matching-service connects as matching_user since Day 21, application-service as applications_user since Day 25. */
+    public static final List<String> CONNECTED_SCHEMAS = List.of("identity");
 
     /** Every schema a module's tables can be in, in the order unqualified names resolve. */
     public static final List<String> TABLE_SCHEMAS = List.of("identity", "applications", "matching", "app");

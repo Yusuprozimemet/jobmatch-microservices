@@ -17,8 +17,8 @@ import java.util.UUID;
  * Consumes user.deleted events from the applications queue (Day 27): reads messages from SQS,
  * deletes the user's saved jobs, and acknowledges the message. Idempotent: a repeat is a success,
  * and a failed message returns after the queue's visibility timeout and goes to the DLQ after 5
- * receives. {@code fk_saved_jobs_user} still deletes the rows on a real account delete until Day
- * 25 moves saved_jobs; this consumer is what removes them once the key is gone.
+ * receives. Since Day 25 saved_jobs lives in apps_db, where no key reaches users: this consumer
+ * is the only thing that removes a deleted user's rows.
  */
 public class UserDeletedConsumer implements SmartLifecycle {
     private static final Logger LOG = LoggerFactory.getLogger(UserDeletedConsumer.class);

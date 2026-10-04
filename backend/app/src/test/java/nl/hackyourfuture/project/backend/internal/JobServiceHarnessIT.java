@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer;
 import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
+import nl.hackyourfuture.project.backend.support.ApplicationService;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.JobService;
 import nl.hackyourfuture.project.backend.support.TestServiceCaller;
@@ -29,8 +30,8 @@ class JobServiceHarnessIT extends IntegrationTest {
     private ServiceToken serviceToken;
 
     @Test
-    void aJobmatchJobServiceTokenReachesTheMonolithsSavedCounts() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + JobService.mintToken());
+    void aJobmatchJobServiceTokenReachesApplicationServicesSavedCounts() {
+        ApiClient client = ApiClient.at(ApplicationService.baseUrl()).withHeader("Authorization", "Bearer " + JobService.mintToken());
 
         ApiResponse response = client.post("/internal/saved-counts", Map.of("ids", List.of()));
 

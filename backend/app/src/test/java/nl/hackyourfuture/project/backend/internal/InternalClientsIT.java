@@ -1,6 +1,5 @@
 package nl.hackyourfuture.project.backend.internal;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import nl.hackyourfuture.project.backend.shared.internal.InternalClients;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.StubUpstream;
@@ -25,15 +24,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Day 19 Track A1: the builder that makes every internal client.
  *
  * <p>Verifies the URL resolution (empty property or explicit), the timeouts, the service token
- * header, and that the circuit breakers are wired as the spec specifies.
+ * header.
  */
 class InternalClientsIT extends IntegrationTest {
 
     @Autowired
     private InternalClients internalClients;
-
-    @Autowired
-    private CircuitBreakerRegistry circuitBreakerRegistry;
 
     @DynamicPropertySource
     static void stubUpstream(DynamicPropertyRegistry registry) {
@@ -122,33 +118,5 @@ class InternalClientsIT extends IntegrationTest {
         RestClient second = supplier.get();
 
         assertThat(first).isSameAs(second);
-    }
-
-    @Test
-    void breakersAreConfiguredAsTheSpecSays() {
-        var postingLookupBreaker = circuitBreakerRegistry.circuitBreaker("postingLookup");
-        var postingShortlistBreaker = circuitBreakerRegistry.circuitBreaker("postingShortlist");
-
-        for (var breaker : new Object[]{postingLookupBreaker, postingShortlistBreaker}) {
-            var config = ((io.github.resilience4j.circuitbreaker.CircuitBreaker) breaker).getCircuitBreakerConfig();
-
-            assertThat(config.getSlidingWindowSize()).isEqualTo(10);
-            assertThat(config.getMinimumNumberOfCalls()).isEqualTo(5);
-            assertThat(config.getFailureRateThreshold()).isEqualTo(50.0f);
-            assertThat(config.getPermittedNumberOfCallsInHalfOpenState()).isEqualTo(2);
-
-            // Verify record predicate
-            var recordPredicate = config.getRecordExceptionPredicate();
-            assertThat(recordPredicate.test(new ResourceAccessException("x"))).isTrue();
-            assertThat(recordPredicate.test(HttpServerErrorException.create(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "Service Unavailable", null, null, null))).isTrue();
-
-            // Verify ignore predicate
-            var ignorePredicate = config.getIgnoreExceptionPredicate();
-            assertThat(ignorePredicate.test(HttpClientErrorException.create(
-                    HttpStatus.BAD_REQUEST,
-                    "Bad Request", null, null, null))).isTrue();
-        }
     }
 }
