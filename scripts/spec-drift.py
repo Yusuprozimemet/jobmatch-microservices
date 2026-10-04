@@ -1,6 +1,6 @@
 """Measure how the spec and the code move against each other, merge by merge.
 
-Writes one JSON file for the migration dashboard: drift, gap and a 2D projection per merge on
+Writes one JSON file for the migration dashboard: drift, gap and name coverage per merge on
 main, and each day's status, tracks and criteria. Needs git, the gh CLI and numpy.
 
     python scripts/spec-drift.py --out data.json
@@ -382,7 +382,7 @@ def trajectory(snaps, blobs, order=()):
 
     origin = collections.Counter(w for t in snaps[0]["texts"].values() for w in WORD.findall(t.lower()))
     idf = rarity(snaps[0]["texts"])
-    prev, day, rows, vectors = origin, 0, [], []
+    prev, day, rows = origin, 0, []
     for i, s in enumerate(snaps):
         touched = at_commits("diff", "--name-only", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").split() if i else []
         s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"], touched)
@@ -422,19 +422,10 @@ def trajectory(snaps, blobs, order=()):
                          name_coverage=name_coverage, jaccard=jaccard,
                          spec_files=spec_files, code_churn=churn, work=work))
         prev = words
-        vectors.append((spec_v, code_v))
-    X = np.array([v / (np.linalg.norm(v) or 1) for pair in zip(*vectors) for v in pair])
-    X = X - X.mean(0)
-    _, S, Vt = np.linalg.svd(X, full_matrices=False)
-    P, n = X @ Vt[:2].T, len(rows)
-    for k, r in enumerate(rows):
-        r["spec_xy"] = [round(float(v), 4) for v in P[k]]
-        r["code_xy"] = [round(float(v), 4) for v in P[n + k]]
     files = sorted({f for s in snaps for f in s["texts"] if f == "plan.md" or day_of(f)},
                    key=lambda f: (rank(day_of(f)), f))
     lines = sum(t.count("\n") for t in snaps[0]["texts"].values())
-    return (rows, files, len(vocab), [round(float(v), 3) for v in (S ** 2 / (S ** 2).sum())[:2]], lines,
-            split_angle(snaps[0]["texts"], idf))
+    return rows, files, len(vocab), lines, split_angle(snaps[0]["texts"], idf)
 
 
 def boundaries(rows, snaps, blobs):
@@ -892,7 +883,7 @@ def main():
         snaps = snapshots(prs)
         head = snaps[-1]["sha"]
         spec_days = [d for d in map(day_of, run("git", "ls-tree", "--name-only", head, "specs/").split()) if d]
-        rows, files, vocab, pca, lines, drift_ref = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
+        rows, files, vocab, lines, drift_ref = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
         days, order, stop = roadmap(snaps, prs, blobs)
         evidence_history(rows, days, snaps, blobs)
         boundaries(rows, snaps, blobs)
@@ -906,7 +897,7 @@ def main():
                                out_of_order=out_of_order(order),
                                removals=removal_history(days, snaps, blobs),
                                hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
-                               vocab_size=vocab, pca_var=pca, tokens=token_usage(),
+                               vocab_size=vocab, tokens=token_usage(),
                                verification=verification(prs, runs),
                                conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md")),
                                meta=dict(caveats=CAVEATS)),
