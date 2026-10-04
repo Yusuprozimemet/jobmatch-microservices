@@ -862,6 +862,29 @@ In compose, one `DELETE /api/users/me` drains both queues within 5 s with nothin
 - **Both tracks split** to stay under 400 lines, which the estimate did not count.
 - *Estimated 5 pull requests; took 8,* in 1,214 track lines.
 
+**Day 25 — application-service becomes its own deployable.** The third day of Phase 5.
+- **Saved jobs and the tracker left the monolith** for `services/application-service`, on Day
+  21's pattern: its own image and CI gate, the route `/api/saved-jobs/**` at the gateway, a
+  service key with its key set, the trust lists both ways, and `POST /internal/saved-counts` for
+  job-service's search.
+- **Its own database,** `apps_db`, migrated by its own Flyway as `applications_user`, who can no
+  longer connect to `project_db`. V16 drops the old table, and `fk_saved_jobs_user` with it, so
+  a deleted account's saved jobs now go only by `user.deleted`, through the consumer that moved
+  with the table. `copy-saved-jobs.py` moves existing rows and skips any already there.
+- **Unchanged from outside:** a deleted user still gets 404 "User not found", identity is asked
+  once per request, search reads saved counts once per page, and with application-service down
+  the search still answers, with counts of 0.
+
+`AccountDeletionIT` 3 of 3 with its one approved edit; the other Day 3–4 saved-jobs tests
+unedited, `JobSavedCountIT` through a `postgres_fdw` bridge in the harness.
+
+- **The audit rewrote the spec first** (#278): three tracks for what Day 21 did in fifteen PRs,
+  and a `savedCount` hold that could not pass once the table moved.
+- **A track went missing:** E1c, announced in #298, never had a PR, and the dashboard read the
+  day as done. The close's evidence-gathering found it, and it landed before the close (#305).
+- *Estimated 15 pull requests; took 25,* in 7,022 track lines; E1a under `Oversized:`, as its
+  spec allowed.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation
@@ -959,13 +982,16 @@ and `support/` +194 −3 for the table, its reset and `ScoreStore.ageAll`; outsi
 event bus behind account deletion: zero in `contract/`, and `support/` +296, the bus container
 (`EventBus`, 164) and its self-test. Day 27 put two consumers on the bus: zero in `contract/`,
 and `support/` +43 −1, `EventBus`'s queue count and URL lookup and the matching consumer off in
-the harness.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Days 17–28 are the remaining tests, run in the corrected order (#115) |
-| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→1, 3→1, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→9, 3→2, 4→5, 3→5, 3→4, 3→4, 3→6, 3→14, 3→5, 5→3, 15→22, 8→9, 6→6, 5→5, 6→6, 5→8; Days 1 and 2 were one oversized pull request each) |
-| Does the agent catch defects in the system it is migrating? | Defects found and filed: 285 entries, Days 1–41. Only 19 were in the system being migrated; 266 were in the agent's own work, its specs, drafts and tooling, caught by an auditor, a review, a break on purpose or the close. Counted by kind in [Defects in the system](#defects-in-the-system) and [The agent's own failures](#the-agents-own-failures) below; every entry, by day, in [`docs/defects.md`](docs/defects.md) |
-| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 29 of 30 days worked; Day 38 needed one, the audit's (#119), made the day after it was written (#118); Days 39 and 40 one each, written in full and audited in the same PR (#127, #140), and Days 18 and 19
-one each, rewritten against the code and audited twice in the same PR (#148, #154), and Day 17 two, the rewrite (#162) and a split recorded after the track that made it (#175), and Day 20 one, rewritten against the code and audited twice in the same PR (#183), and Day 41 one, the audit's (#201), after it was split out of Day 24 in Day 21's (#200), and Day 21 four, the seam-first rewrite (#200), the rewrite after Day 41 (#206), and two during the day (#211, #222), and Day 22 one, rewritten from the provisional dual write after the audit (#232), and Day 23 one, the drop moved into the monolith's migrations after the audit (#244), and Day 24 one, rewritten from the audit's ten findings (#250), and Day 26 one, rewritten for the plan's deletion-first order and SNS/SQS after the plan-auditor (#255), and Day 27 one, the consumers isolated from the relay tests and checks that can fail, after the audit's ten findings (#261); Days 5, 8, 9, 10, 11, 12 and 15 needed two and Days 13, 14 and 16 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 16 on Day 9, Day 14's second on Day 13, Day 16's second on Day 14) |
-| How much of the agent's work is redone? | Rework rate per day: tracks whose implementer draft review changed, out of the tracks the implementer wrote, and spec-change PRs (the row above). Days 39, 40, 18, 19, 17, 20 and 41 count any change, style included: 4/5, 4/4, 4/4, 6/6, 12/13, 4/4, 3/3, so 37 of 39 tracks. From Day 21 the Notes record only defects, so the numbers are not comparable with the earlier ones: Days 21, 22, 23, 24, 26 and 27 had 7/14, 5/7, 1/4, 2/3, 2/4, 3/6, so 20 of 38 tracks with a defect in the draft. Days 1–16 and 38 have no implementer and no rate (—) |
-| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 4: #1 at 1,420 changed lines, #2 at 1,075, #3 at 712, all before Day 3, and #224 at 950 on Day 21, the move itself, as its spec allowed; with the gate having forced a split twenty times, the sixth Day 15's Track C, the seventh Day 39's Track A, the eighth the README's drawings, outside the days (#142, #143); the ninth to eleventh Day 17's Tracks B1, B2 and D, D at 453 lines (#166–#170, #174); the twelfth to fifteenth Day 21's Tracks A1, B1, B2 and E1 (#212–#218, #224–#225); the sixteenth Day 22's Track B, B2 at 399 lines (#237, #239); the seventeenth Day 23's Track B, as its spec planned (#246, #247); the eighteenth Day 27's Track A (#263, #264); the nineteenth and twentieth its Track B, once as its spec planned (#269) and once more (#270, #271). Recorded as 0 until after Phase 2. The checks did not block a merge until `main` was protected after Phase 2) |
+the harness. Day 25 moved saved jobs to application-service: `contract/` +13 −13, the one approved
+edit, `AccountDeletionIT` counting in `apps_db` and waiting for the event; and `support/` +372 −48,
+`apps_db` and its grants, application-service's container on a queue of its own, `ServiceKey` in
+place of `MatchingServiceKey`, and the `postgres_fdw` bridge.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Days 17–28 are the remaining tests, run in the corrected order (#115) |
+| How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→1, 3→1, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→9, 3→2, 4→5, 3→5, 3→4, 3→4, 3→6, 3→14, 3→5, 5→3, 15→22, 8→9, 6→6, 5→5, 6→6, 5→8, 15→25; Days 1 and 2 were one oversized pull request each) |
+| Does the agent catch defects in the system it is migrating? | Defects found and filed: 309 entries, Days 1–41. Only 19 were in the system being migrated; 290 were in the agent's own work, its specs, drafts and tooling, caught by an auditor, a review, a break on purpose or the close. Counted by kind in [Defects in the system](#defects-in-the-system) and [The agent's own failures](#the-agents-own-failures) below; every entry, by day, in [`docs/defects.md`](docs/defects.md) |
+| How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 30 of 31 days worked; Day 38 needed one, the audit's (#119), made the day after it was written (#118); Days 39 and 40 one each, written in full and audited in the same PR (#127, #140), and Days 18 and 19
+one each, rewritten against the code and audited twice in the same PR (#148, #154), and Day 17 two, the rewrite (#162) and a split recorded after the track that made it (#175), and Day 20 one, rewritten against the code and audited twice in the same PR (#183), and Day 41 one, the audit's (#201), after it was split out of Day 24 in Day 21's (#200), and Day 21 four, the seam-first rewrite (#200), the rewrite after Day 41 (#206), and two during the day (#211, #222), and Day 22 one, rewritten from the provisional dual write after the audit (#232), and Day 23 one, the drop moved into the monolith's migrations after the audit (#244), and Day 24 one, rewritten from the audit's ten findings (#250), and Day 26 one, rewritten for the plan's deletion-first order and SNS/SQS after the plan-auditor (#255), and Day 27 one, the consumers isolated from the relay tests and checks that can fail, after the audit's ten findings (#261), and Day 25 one, twelve tracks for three and the bridge that keeps `JobSavedCountIT` unedited (#278); Days 5, 8, 9, 10, 11, 12 and 15 needed two and Days 13, 14 and 16 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 16 on Day 9, Day 14's second on Day 13, Day 16's second on Day 14) |
+| How much of the agent's work is redone? | Rework rate per day: tracks whose implementer draft review changed, out of the tracks the implementer wrote, and spec-change PRs (the row above). Days 39, 40, 18, 19, 17, 20 and 41 count any change, style included: 4/5, 4/4, 4/4, 6/6, 12/13, 4/4, 3/3, so 37 of 39 tracks. From Day 21 the Notes record only defects, so the numbers are not comparable with the earlier ones: Days 21, 22, 23, 24, 26, 27 and 25 had 7/14, 5/7, 1/4, 2/3, 2/4, 3/6, 9/23, so 29 of 61 tracks with a defect in the draft. Days 1–16 and 38 have no implementer and no rate (—) |
+| Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 5: #1 at 1,420 changed lines, #2 at 1,075, #3 at 712, all before Day 3, #224 at 950 on Day 21, the move itself, as its spec allowed, and #296 at 1,225 on Day 25, its move, as its spec allowed; with the gate having forced a split thirty times, the sixth Day 15's Track C, the seventh Day 39's Track A, the eighth the README's drawings, outside the days (#142, #143); the ninth to eleventh Day 17's Tracks B1, B2 and D, D at 453 lines (#166–#170, #174); the twelfth to fifteenth Day 21's Tracks A1, B1, B2 and E1 (#212–#218, #224–#225); the sixteenth Day 22's Track B, B2 at 399 lines (#237, #239); the seventeenth Day 23's Track B, as its spec planned (#246, #247); the eighteenth Day 27's Track A (#263, #264); the nineteenth and twentieth its Track B, once as its spec planned (#269) and once more (#270, #271); the twenty-first to thirtieth Day 25's Tracks A1, B1, B2 and E1 in three each, and B3 and F in two (#281–#292, #296, #298, #301, #302, #305). Recorded as 0 until after Phase 2. The checks did not block a merge until `main` was protected after Phase 2) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
 
 ### Defects in the system
@@ -986,18 +1012,18 @@ in a neighbouring row; the split between the two tables is firmer than the rows.
 
 | Kind | Count | Examples |
 | --- | --- | --- |
-| Spec and plan premises wrong about the code, or work they missed | 103 | eight specs that could not be met, three database objects a spec missed, a provisional spec built on the wrong bus |
-| Spec checks that could not fail, could not pass, or proved the wrong thing | 73 | a grep criterion that could never pass, a hold that was red before any change, a TTL check that accepted `ENABLING` |
-| Code drafts that review or a break changed, and lost work | 38 | a shutdown join of 7 ms, a publish failure caught inside its transaction, three reviewer reverts that lost work, two edits an implementer reverted |
-| Tests a spec would break without naming, or behaviour it left untested | 29 | eleven tests a track would turn red that no spec named, protected behaviours with no test behind them |
-| Spec Verify commands that ran nothing, the wrong thing, or something unsafe | 15 | a Verify that would have deleted the maintainer's database, four that ran no tests |
-| Bugs in the migration's own tooling | 8 | six dashboard misreads of tracks and tests, a dashboard measure that credited the spec with gap it did not close, a wrong Jira key |
+| Spec and plan premises wrong about the code, or work they missed | 106 | eight specs that could not be met, three database objects a spec missed, a provisional spec built on the wrong bus |
+| Spec checks that could not fail, could not pass, or proved the wrong thing | 80 | a grep criterion that could never pass, a hold that was red before any change, a TTL check that accepted `ENABLING` |
+| Code drafts that review or a break changed, and lost work | 49 | a shutdown join of 7 ms, a publish failure caught inside its transaction, three reviewer reverts that lost work, two edits an implementer reverted |
+| Tests a spec would break without naming, or behaviour it left untested | 30 | eleven tests a track would turn red that no spec named, protected behaviours with no test behind them |
+| Spec Verify commands that ran nothing, the wrong thing, or something unsafe | 16 | a Verify that would have deleted the maintainer's database, four that ran no tests |
+| Bugs in the migration's own tooling | 9 | six dashboard misreads of tracks and tests, a dashboard measure that credited the spec with gap it did not close, a wrong Jira key |
 
 From Day 21 each day's Notes tag every defect with where it was found and its cause
-([`specs/_template.md`](specs/_template.md)). Across Days 21–27 and 41, 64 tagged defects: cause
-spec 38, implementation 14, process 9, environment 2, tooling 1; found by an auditor 17, in review
-or during a track 24, by a break on purpose 8, at the close 6, by the session that made them 5, in
-a spec-change PR 3, by the dashboard 1. Their 61 spec, implementation and process causes are the
+([`specs/_template.md`](specs/_template.md)). Across Days 21–27 and 41, 78 tagged defects: cause
+spec 44, implementation 18, process 13, environment 2, tooling 1; found by an auditor 21, in review
+or during a track 33, by a break on purpose 8, at the close 7, by the session that made them 5, in
+a spec-change PR 3, by the dashboard 1. Their 75 spec, implementation and process causes are the
 agent's own.
 
 ## Retrospective

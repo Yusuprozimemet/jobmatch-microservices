@@ -41,9 +41,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 38: 1 setup script that crashes on Windows output
 - Day 20: 1 container path Git Bash rewrote
 
-## In the agent's own work (266)
+## In the agent's own work (290)
 
-### Spec and plan premises wrong about the code, or work they missed (103)
+### Spec and plan premises wrong about the code, or work they missed (106)
 
 - Days 1-13: 8 specs that could not be met
 - Days 1-13: 1 plan that missed a cross-module read
@@ -129,8 +129,11 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 26: 1 provisional spec built on the wrong order and the wrong bus
 - Day 27: 1 relay test's messages a cached consumer would take
 - Day 27: 1 track split the estimate missed
+- Day 25: 1 spec with three tracks for an extraction Day 21 did in fifteen PRs
+- Day 25: 1 approved edit that could not pass with the relay and consumer off
+- Day 25: 1 estimate that counted none of six track splits
 
-### Spec checks that could not fail, could not pass, or proved the wrong thing (73)
+### Spec checks that could not fail, could not pass, or proved the wrong thing (80)
 
 - Days 1-13: 1 spec check that could not fail
 - Days 1-13: 1 gate that does not pin what its spec says
@@ -193,8 +196,11 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 27: 1 hold that named a test that did not exist
 - Day 27: 1 consumer's failure paths with no criterion
 - Day 27: 1 compose wiring with no check
+- Day 25: 5 criteria without a command
+- Day 25: 1 `savedCount` hold that could not pass once the table moved
+- Day 25: 1 row count that cannot see an overwrite
 
-### Code drafts that review or a break changed, and lost work (38)
+### Code drafts that review or a break changed, and lost work (49)
 
 - Day 38: 1 metric tag unlike the backend's
 - Day 40: 1 default interval that made a wait slow
@@ -232,8 +238,15 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 27: 1 version check that read "1" and 1.5 as 1
 - Day 27: 1 DLQ check made at the wrong time
 - Day 27: 1 eviction test an evict-everything bug would pass
+- Day 25: 1 restored test with three of its checks dropped
+- Day 25: 1 test helper that let the consumer-off break pass
+- Day 25: 2 script bugs only a real database showed
+- Day 25: 1 revoke that missed the role's own grant
+- Day 25: 3 losses of unstaged work
+- Day 25: 1 literal test password
+- Day 25: 2 breaks run together that hid each other
 
-### Tests a spec would break without naming, or behaviour it left untested (29)
+### Tests a spec would break without naming, or behaviour it left untested (30)
 
 - Days 1-13: 2 protected behaviours with no test behind them
 - Days 1-13: 1 missing claim that would have made a test flaky
@@ -251,8 +264,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 21: 1 test premise that the monolith serves what it no longer does
 - Day 23: 2 test assertions a migration broke that the spec did not name
 - Day 26: 2 harness tests a migration broke that the spec did not name
+- Day 25: 1 grants test a revoke broke that no spec named
 
-### Spec Verify commands that ran nothing, the wrong thing, or something unsafe (15)
+### Spec Verify commands that ran nothing, the wrong thing, or something unsafe (16)
 
 - Days 1-13: 3 spec verify commands that ran no tests
 - Day 15: 1 verify that ran no tests
@@ -267,8 +281,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 20: 1 service a Verify misnamed
 - Day 24: 1 Verify that gave a 401 where it promised a 503
 - Day 26: 1 shared network a Verify could remove
+- Day 25: 1 Verify that could not fail
 
-### Bugs in the migration's own tooling (dashboard, commit keys) (8)
+### Bugs in the migration's own tooling (dashboard, commit keys) (9)
 
 - Day 39: 1 dashboard that could not read a split track
 - Day 17: 1 dashboard that could not read a three-way split
@@ -278,3 +293,4 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 22: 1 branch name the dashboard read as a whole track
 - Day 27: 1 wrong Jira key on a commit
 - Day 27: 1 dashboard measure that credited the spec with gap it did not close, #107
+- Day 25: 1 track announced and never opened, which the dashboard read as done
