@@ -48,7 +48,9 @@ function rowTip(r) {
   <div class="row"><span>date</span><span>${r.date}</span></div>
   <div class="row"><span>day reached</span><span>${r.day || "–"}</span></div>
   <div class="row"><span>drift</span><span>${fmt(r.drift)}°</span></div>
-  <div class="row"><span>gap</span><span>${fmt(r.gap_full)}°</span></div>
+  <div class="row"><span>spec names in code</span><span>${r.name_coverage == null ? "–" : fmt(r.name_coverage * 100, 1) + "%"}</span></div>
+  <div class="row"><span>Jaccard, spec ∩ code</span><span>${r.jaccard == null ? "–" : fmt(r.jaccard, 2)}</span></div>
+  <div class="row"><span>gap angle (secondary)</span><span>${fmt(r.gap_full)}°</span></div>
   <div class="row"><span>gap by chance</span><span>${r.gap_chance == null ? "–" : fmt(r.gap_chance) + "°"}</span></div>
   <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>
   <div class="row"><span>service code out</span><span>${movedShare(r) == null ? "–" : fmt(movedShare(r)) + "%"}</span></div>`;
@@ -77,9 +79,10 @@ document.getElementById("stats").innerHTML = `
   <div class="stat"><span class="k">Drift from the plan as written</span>
     <span class="v num">${fmt(last.drift)}°</span>
     <span class="n">0° on Sep 20. ${bigStep < 10 ? "It rises by small steps and never jumps." : `Its biggest single step was ${fmt(bigStep, 2)}° (${prLabel(R.find(r => r.step === bigStep))}).`}</span></div>
-  <div class="stat"><span class="k">Gap between spec and code</span>
-    <span class="v num">${fmt(first.gap_full)}° → ${fmt(last.gap_full)}°</span>
-    <span class="n">${fmt(gapClosed)}° closed across ${N - 1} merges. By chance it would be ${fmt(last.gap_chance)}° now; ${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
+  <div class="stat"><span class="k">Spec names in the code · Jaccard</span>
+    <span class="v num">${last.name_coverage == null ? "–" : fmt(last.name_coverage * 100, 1) + "%"} <small>· ${last.jaccard == null ? "–" : fmt(last.jaccard, 2)}</small></span>
+    <span class="n">Of the backticked names the specs use today, the share the code has; Jaccard is the names in both over the names in either.</span>
+    <span class="n" style="color:var(--muted)">Gap angle (secondary): ${fmt(first.gap_full)}° → ${fmt(last.gap_full)}°, ${fmt(gapClosed)}° closed across ${N - 1} merges; ${fmt(last.gap_chance)}° by chance. ${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
   <div class="stat"><span class="k">Share of the gap closed by the spec</span>
     <span class="v num">${Math.round(specShare * 100)}%</span>
     <span class="n"><span class="sw" style="background:var(--spec)"></span>${nKind("spec")} spec-change PRs ${specShare >= 0 ? "moved the spec toward the code" : "widened the gap, naming what was not built yet"}; <span class="sw" style="background:var(--code)"></span>${nKind("code")} code PRs closed ${Math.round(-byKind.code / gapClosed * 100)}%</span></div>
@@ -97,6 +100,7 @@ document.getElementById("pc2").textContent = Math.round(DATA.pca_var[1] * 100) +
 document.getElementById("pc-rest").textContent = (100 - Math.round(DATA.pca_var[0] * 100) - Math.round(DATA.pca_var[1] * 100)) + "%";
 document.querySelectorAll(".drift-ref").forEach(e => { e.textContent = DATA.drift_ref == null ? "–" : fmt(DATA.drift_ref) + "°"; });
 document.getElementById("gap-chance").textContent = fmt(last.gap_chance) + "°";
+document.getElementById("caveats").innerHTML = ((DATA.meta || {}).caveats || []).map(c => `<li>${esc(c)}</li>`).join("");
 
 /* ---------- scrubber ---------- */
 const scrub = document.getElementById("pr-scrub");
@@ -178,7 +182,9 @@ function drawReadout() {
     <div class="hr"></div>
     <dl>
       <dt>Drift from the plan as written</dt><dd>${fmt(s.drift, 2)}° <span style="color:var(--muted)">(${sign(dDrift)})</span></dd>
-      <dt>Gap, spec vs code</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd>
+      <dt>Spec names in code</dt><dd>${s.name_coverage == null ? "–" : fmt(s.name_coverage * 100, 1) + "%"}</dd>
+      <dt>Jaccard, spec ∩ code</dt><dd>${s.jaccard == null ? "–" : fmt(s.jaccard, 2)}</dd>
+      <dt>Gap angle, spec vs code (secondary)</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd>
       <dt>Reached-day names in code</dt><dd>${s.coverage == null ? "–" : fmt(s.coverage * 100, 1) + "%"}</dd>
       <dt>Code lines changed</dt><dd>${s.code_churn.toLocaleString()}</dd>
       <dt>Spec lines changed</dt><dd>${edits.reduce((a, b) => a + b[1], 0)}</dd>
