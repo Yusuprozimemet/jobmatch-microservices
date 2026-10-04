@@ -41,11 +41,6 @@ app:
       # context runs a relay, which is safe: a relay claims each row with a lock and skips rows
       # another holds.
       enabled: true
-    consumer:
-      # Off: a live consumer in a cached context would take the messages
-      # UserDeletedRelayIT waits for on the shared queues; only ApplicationsUserDeletedConsumerIT
-      # turns it on, on queues of its own.
-      enabled: false
 
 management:
   server:

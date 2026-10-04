@@ -45,10 +45,6 @@ app:
       url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=identity
       username: ${DB_IDENTITY_USER:identity_user}
       password: ${DB_IDENTITY_PASSWORD:password}
-    applications:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=applications
-      username: ${DB_APPLICATIONS_USER:applications_user}
-      password: ${DB_APPLICATIONS_PASSWORD:password}
   base-url: ${APP_BASE_URL:http://localhost:3000}
   # The RSA key identity signs tokens with (Day 12): a PEM, PKCS#8 file. No default on purpose,
   # since the application never generates one; without it, it does not start. Compose writes one
@@ -78,27 +74,19 @@ app:
   internal:
     jobs-url: ${INTERNAL_JOBS_URL:}
 
-  # The outbox relay (Day 26) publishes identity's user.deleted to SNS. The consumer (Day 27)
-  # reads the applications queue and needs its URL. With the relay on, the topic is required;
-  # compose points it and the endpoint at the emulator. Empty keys mean the SDK's default
-  # credentials.
+  # The outbox relay (Day 26) publishes identity's user.deleted to SNS; its consumers are
+  # application-service and matching-service (Days 25, 27). With the relay on, the topic is
+  # required; compose points it and the endpoint at the emulator. Empty keys mean the SDK's
+  # default credentials.
   events:
     relay:
       enabled: ${EVENTS_RELAY_ENABLED:true}
-    consumer:
-      enabled: ${EVENTS_CONSUMER_ENABLED:true}
     sns:
       endpoint: ${EVENTS_SNS_ENDPOINT:}
       region: ${EVENTS_SNS_REGION:eu-west-1}
       access-key: ${EVENTS_SNS_ACCESS_KEY:}
       secret-key: ${EVENTS_SNS_SECRET_KEY:}
-    sqs:
-      endpoint: ${EVENTS_SQS_ENDPOINT:}
-      region: ${EVENTS_SQS_REGION:eu-west-1}
-      access-key: ${EVENTS_SQS_ACCESS_KEY:}
-      secret-key: ${EVENTS_SQS_SECRET_KEY:}
     user-deleted-topic-arn: ${EVENTS_USER_DELETED_TOPIC_ARN:}
-    user-deleted-queue-url: ${EVENTS_USER_DELETED_QUEUE_URL:}
 
 # API Docs
 springdoc:

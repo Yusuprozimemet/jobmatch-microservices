@@ -27,7 +27,7 @@ Related: [`auth.md`](auth.md) for how accounts work, [`api.md`](api.md) for the 
 
 # 1. Everything that is stored
 
-All of it is in the module schemas (`identity`, `applications`, `matching`). The `analytics` schema holds job postings and nothing about users.
+All of it is in the module schemas (`identity`, `matching`) and, since Day 25, application-service's own database, `apps_db` (`saved_jobs`). The `analytics` schema holds job postings and nothing about users.
 
 | Table | Fields | Why it exists |
 | --- | --- | --- |
@@ -145,16 +145,20 @@ Two real weaknesses:
 GDPR Art. 17. `DELETE /api/users/me`, from the profile page behind a confirmation step.
 
 The account is resolved from the access token, so a caller can only ever delete their own. One `DELETE`
-on `users` removes everything, because every table that references it cascades:
+on `users` removes everything in `project_db`, because every table that references it cascades:
 
 ```
 users ─┬─ user_credentials        ON DELETE CASCADE
        ├─ user_profiles           ON DELETE CASCADE
-       ├─ saved_jobs              ON DELETE CASCADE
        ├─ password_reset_tokens   ON DELETE CASCADE
        ├─ refresh_tokens          ON DELETE CASCADE
        └─ pending_google_links    ON DELETE CASCADE
 ```
+
+The saved jobs are in application-service's database since Day 25, out of reach of a cascade. The
+same transaction writes a `user.deleted` event to identity's outbox; the relay publishes it, and
+application-service deletes the user's saved jobs when it reads it, usually within seconds
+(Days 26 and 27).
 
 Both token cookies are deleted in the same request — otherwise the browser would keep sending a
 token for a row that is gone and `/me` would answer 404 instead of 401. An access token copied

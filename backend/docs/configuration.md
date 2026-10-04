@@ -79,6 +79,7 @@ scripts/dev-up.sh          # docker compose up -d db backend api-gateway fronten
 | `backend` | — | Built from `./backend`. Listens on 8080 inside the network only (Day 16). Waits for the database to be healthy and for `jwt-key` to finish |
 | `job-service` | — | Built from `./services/job-service` (Day 17). Job search and the postings routes. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Needs its image built first when the harness runs it: `docker build -t jobmatch-job-service:harness services/job-service` |
 | `matching-service` | — | Built from `./services/matching-service` (Day 21). Top matches, and the only service with the model's key. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Its harness image: `docker build -t jobmatch-matching-service:harness services/matching-service` |
+| `application-service` | — | Built from `./services/application-service` (Day 25). Saved jobs and the tracker, on `apps_db`. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Its harness image: `docker build -t jobmatch-application-service:harness services/application-service` |
 | `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. Healthcheck on `/actuator/health/readiness` (management port 9090, inside the network). `depends_on: backend` |
 | `frontend` | 3000 | Built from `./frontend`. Waits for the gateway to be healthy (`condition: service_healthy`), so `up --wait` returns once the gateway is ready |
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
@@ -95,6 +96,7 @@ The gateway's settings, all with defaults that suit compose:
 | `BACKEND_URL` | `http://localhost:8080` — `http://backend:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
 | `JOB_SERVICE_URL` | `BACKEND_URL`'s value — `http://job-service:8080` in compose | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. The backend no longer serves these (Day 17), so outside compose it must be set |
 | `MATCHING_SERVICE_URL` | `BACKEND_URL`'s value — `http://matching-service:8080` in compose | Where `/api/jobs/top-matches` goes. The backend no longer serves it (Day 21), so outside compose it must be set |
+| `APPLICATION_SERVICE_URL` | `BACKEND_URL`'s value — `http://application-service:8080` in compose | Where `/api/saved-jobs/**` goes. The backend no longer serves it (Day 25), so outside compose it must be set |
 | `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login, register and the two password-reset steps, per client |
 | `GATEWAY_TRUSTED_PROXIES` | empty | A regex of proxy addresses whose `X-Forwarded-For` is believed. Leave it empty behind the frontend, which passes a client's own header through; set it only for a proxy that overwrites it |
 | `GATEWAY_CONNECT_TIMEOUT` / `GATEWAY_READ_TIMEOUT` | `5s` / `30s` | Past them the gateway answers 502 / 504 |
@@ -109,7 +111,7 @@ job-service's settings (Day 17), as compose sets them:
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-job-service`. **Required**; compose's `jwt-key` service writes it |
 | `BACKEND_KEY_SET_URL` | empty | The monolith's service key set, so `jobmatch-backend` may call its `/internal/**` routes. Compose: `http://backend:8080/.well-known/service-jwks.json` |
 | `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` / `..._0_KEYSETURL` | none | Further trusted issuers, as the backend's ([auth.md](auth.md#service-tokens-and-internal)) |
-| `INTERNAL_APPLICATIONS_URL` | empty | Where it asks for saved counts (`/internal/saved-counts`): the backend, `http://backend:8080` in compose. Empty would mean itself, which has no such route |
+| `INTERNAL_APPLICATIONS_URL` | empty | Where it asks for saved counts (`/internal/saved-counts`): application-service, `http://application-service:8080` in compose (Day 25). Empty would mean itself, which has no such route |
 | `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
 | `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |
 
@@ -142,6 +144,22 @@ And the model, which only it calls. With no key it still answers, by skill overl
 At most ten scoring calls run at once (a bulkhead, Day 21); an eleventh request is answered by
 skill overlap at once rather than waiting.
 
+application-service's settings (Day 25), in its
+[`application.yaml`](../../services/application-service/src/main/resources/application.yaml):
+
+| Variable | Default | |
+| --- | --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `apps_db` | Its own database; compose passes `APPS_DB_NAME` |
+| `DB_APPLICATIONS_USER` / `DB_APPLICATIONS_PASSWORD` | `applications_user` / `password` | The only role that connects to `apps_db` ([§6](#6-the-database-schemas-and-roles)); compose passes `APPLICATIONS_DB_PASSWORD` |
+| `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-application-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
+| `INTERNAL_IDENTITY_URL` | empty | Where it asks whether a user exists (`/internal/users/{id}`): the backend, `http://backend:8080` in compose |
+| `INTERNAL_JOBS_URL` | empty | Where it fetches posting details for the saved list (`/internal/postings/batch`): job-service, `http://job-service:8080` in compose |
+| `JOB_SERVICE_KEY_SET_URL` | empty | job-service's service key set, so it may call `/internal/saved-counts` |
+| `IDENTITY_JWKS_URL` | `INTERNAL_IDENTITY_URL` + `/.well-known/jwks.json` | The user key set it checks tokens against |
+| `EVENTS_CONSUMER_ENABLED`, `EVENTS_SQS_*`, `EVENTS_USER_DELETED_QUEUE_URL` | `false`, empty | The `user.deleted` consumer (Day 27, moved here on Day 25), which deletes a deleted account's saved jobs. Compose turns it on, on the emulator's `applications-user-deleted` queue |
+| `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
+| `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |
+
 **The gateway's healthcheck makes `up --wait` wait until it is ready.** The backend has actuator on
 its management port but compose has no healthcheck for it. The gateway's check is the one compose
 waits on, and the frontend starts only after it. It does not close the window for a request sent
@@ -162,8 +180,8 @@ All of it in [`application.yaml`](../src/main/resources/application.yaml).
 | `DB_NAME` | `project_db` | The mart is not here: it is in `jobs_db`, job-service's (Day 20) |
 | `DB_USER` | `admin` | The owner of the migrations; only Flyway logs in as it. `app_user` in a production-like setup |
 | `DB_PASSWORD` | `password` | |
-| `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER` | `identity_user`, `applications_user` | Each module's own login, with its own schema as the search path (Day 11). Jobs and matching are their services' logins now (Days 17 and 21) |
-| `DB_IDENTITY_PASSWORD`, `DB_APPLICATIONS_PASSWORD` | `password` | Their passwords |
+| `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path (Day 11). Jobs, matching and applications are their services' logins now (Days 17, 21 and 25) |
+| `DB_IDENTITY_PASSWORD` | `password` | Its password |
 
 There is no schema setting since Day 11: the owner's Flyway migrates `app` (V1–V14), and each
 module's Flyway migrates its own schema as its own login.
@@ -265,13 +283,14 @@ The one that matters to the backend team is **`BACKEND_PG_PUBLISH_SCHEMA`** — 
 
 # 6. The database: schemas and roles
 
-[`scripts/db-setup.py`](../../scripts/db-setup.py) creates the production-like arrangement: two
-databases, six schemas, and one login role per owner.
+[`scripts/db-setup.py`](../../scripts/db-setup.py) creates the production-like arrangement: three
+databases, seven schemas, and one login role per owner.
 
 | Database | Schema | Owner role | Written by | Read by |
 | --- | --- | --- | --- | --- |
 | `project_db` | `app` | `app_user` | the backend's migrations, V1–V14 | everyone, read-only |
-| `project_db` | `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11) | its owner only (Day 38) |
+| `project_db` | `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11). `applications` is empty since V16, and `applications_user` cannot connect here (Day 25) | its owner only (Day 38) |
+| `apps_db` | `applications` | `applications_user` | application-service (Day 25) | nobody else: no other role may connect |
 | `jobs_db` | `analytics` | `analytics_user` | the scheduled pipeline | `jobs_user` (job-service) and `analytics_dev_user`, read-only |
 | `jobs_db` | `analytics_dev` | `analytics_dev_user` | trainees, by hand | `jobs_user` and `analytics_user`, read-only |
 
@@ -318,9 +337,9 @@ say so once, loudly, rather than fail per request.
 What must be set beyond the defaults, in one place:
 
 - [ ] `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER=app_user`, `DB_PASSWORD`, and each module's login:
-      `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER` with their `_PASSWORD`s — the `prod` profile has no
-      fallbacks, and the backend does not start without them. job-service's `DB_JOBS_*` are set on
-      that service
+      `DB_IDENTITY_USER` with its `_PASSWORD` — the `prod` profile has no fallbacks, and the backend
+      does not start without them. job-service's `DB_JOBS_*` and application-service's
+      `DB_APPLICATIONS_*` are set on those services
 - [ ] `JWT_PRIVATE_KEY_FILE`, pointing at a key from the secret store — the backend does not start
       without it. Replacing the key later signs every user out
 - [ ] `SERVICE_JWT_PRIVATE_KEY_FILE`, pointing at the service key from the secret store — the
