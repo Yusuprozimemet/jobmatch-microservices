@@ -29,7 +29,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * <p>What is deliberately <em>not</em> here: a rule that only a module's {@code api} package may
  * be imported from outside. Today no feature module publishes anything to another — they speak
  * through interfaces in {@code shared} — so such a rule would guard packages that do not exist.
- * The Day 07 notes say when to add it.
+ * The Day 07 notes say when to add it. Identity is the only feature module left, after applications
+ * moved to application-service on Day 25; the enforcer still bans cross-module dependencies.
  */
 @AnalyzeClasses(
         packages = "nl.hackyourfuture.project.backend",
@@ -37,20 +38,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 class ModuleBoundariesTest {
 
     private static final String IDENTITY = "..backend.identity..";
-    private static final String APPLICATIONS = "..backend.applications..";
     private static final String APP = "..backend.config..";
-
-    // Worded differently from the enforcer's message on purpose: when a build fails, which of
-    // the two gates caught it is the first thing worth knowing.
-    private static final String WHY =
-            "this module reaches into another. A feature module may depend on shared and nothing "
-                    + "else of ours - publish an interface in shared instead.";
-
-    @ArchTest
-    static final ArchRule identityKeepsToItself = noClasses()
-            .that().resideInAPackage(IDENTITY)
-            .should().dependOnClassesThat().resideInAnyPackage(APPLICATIONS)
-            .because(WHY);
 
     /**
      * {@code shared} is a leaf and has to stay one. Every module depends on it, so a dependency
@@ -61,7 +49,7 @@ class ModuleBoundariesTest {
     static final ArchRule sharedDependsOnNobody = noClasses()
             .that().resideInAPackage("..backend.shared..")
             .should().dependOnClassesThat()
-            .resideInAnyPackage(IDENTITY, APPLICATIONS, APP)
+            .resideInAnyPackage(IDENTITY, APP)
             .because("shared is depended on by everything, so anything it depends on is shared too");
 
     /**
@@ -70,7 +58,7 @@ class ModuleBoundariesTest {
      */
     @ArchTest
     static final ArchRule nobodyDependsOnTheAssembly = noClasses()
-            .that().resideInAnyPackage(IDENTITY, APPLICATIONS, "..backend.shared..")
+            .that().resideInAnyPackage(IDENTITY, "..backend.shared..")
             .should().dependOnClassesThat().resideInAPackage(APP)
             .because("app assembles the modules; a module that knows about the assembly is not a module");
 

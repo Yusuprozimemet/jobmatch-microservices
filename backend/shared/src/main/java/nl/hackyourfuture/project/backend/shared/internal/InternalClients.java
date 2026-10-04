@@ -11,8 +11,8 @@ import java.util.function.Supplier;
 
 /**
  * The one place an internal client is built (Day 19): the {@code RestClient} that calls another
- * service's {@code /internal/**} routes, for the {@code PostingLookup}, {@code PostingShortlist} and
- * {@code SavedJobCounts} clients.
+ * service's {@code /internal/**} routes, for the {@code PostingLookup} and {@code PostingShortlist}
+ * clients.
  *
  * <p>The URL is read on the first call, not when the bean is made: the server's port is known only
  * once it has started, and the harness sets it from a container started after the context (Day 17).

@@ -4,7 +4,7 @@ The feature that turns a job board into a job *tracker*: keep a posting, then mo
 stages of an application. It is also the smallest feature in the backend — one table with three
 columns — and most of what is worth writing down is about what that smallness costs.
 
-Code: [`savedjobs/`](../src/main/java/nl/hackyourfuture/project/backend/savedjobs) and, on the
+Code: application-service ([`services/application-service`](../../services/application-service), since Day 25) and, on the
 frontend, [`SavedJobsContent`](../../frontend/src/components/jobs/SavedJobsContent.tsx) plus the two
 bookmark buttons. Endpoint contracts are in [`api.md`](api.md).
 
@@ -31,13 +31,14 @@ CREATE TABLE saved_jobs (
     user_id    UUID NOT NULL,
     posting_id TEXT NOT NULL,
     job_state  job_state NOT NULL DEFAULT 'SAVED',
-    PRIMARY KEY (user_id, posting_id),
-    CONSTRAINT fk_saved_jobs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    PRIMARY KEY (user_id, posting_id)
 );
 ```
 
-That is all of it. Three columns, a composite primary key that makes "saved twice" impossible, and a
-cascade so deleting an account takes the list with it.
+That is all of it. Three columns and a composite primary key that makes "saved twice" impossible.
+It lives in application-service's own database, `apps_db`, since Day 25. Until then a key to `users`
+cascaded, so deleting an account took the list with it; `users` is in another database now, so the
+list goes when application-service reads that account's `user.deleted` event (Day 27).
 
 **Only an id is stored, never a copy of the posting.** That is the single decision this feature
 rests on, and it buys three things:

@@ -51,8 +51,6 @@ services:
       # One login per module, created by scripts/db-init/ on an empty volume.
       DB_IDENTITY_USER: identity_user
       DB_IDENTITY_PASSWORD: ${IDENTITY_DB_PASSWORD:-password}
-      DB_APPLICATIONS_USER: applications_user
-      DB_APPLICATIONS_PASSWORD: ${APPLICATIONS_DB_PASSWORD:-password}
       # Day 17: job search and the postings routes are job-service's; it calls back for saved counts.
       INTERNAL_JOBS_URL: http://job-service:8080
       APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-job-service

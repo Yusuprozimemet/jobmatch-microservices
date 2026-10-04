@@ -93,7 +93,7 @@ erDiagram
         varchar education_level "unused"
     }
     SAVED_JOBS {
-        uuid user_id PK "FK cascade"
+        uuid user_id PK "no key: apps_db since Day 25"
         text posting_id PK "analytics.fct_postings.posting_id"
         job_state job_state "default SAVED"
     }
@@ -383,7 +383,7 @@ Search and filter job postings
 | Query | All four optional; a blank value is treated as absent. `q` matches title, company, city or skill with `ILIKE %q%`. `category` and `workMode` are exact matches on the mart columns. `location` is an **exact city match** against `fct_postings_cities`, not a substring: the value comes from `/api/jobs/filters`, and matching `%Ede%` instead also returned Enschede, Medemblik, Nederweert and Sweden. |
 | Response body | An array of `{ postingId, title, companyName, location, workMode, isRemote, skills, employmentType, postedDate, source, category, freshnessClass, ageDays, savedCount }` |
 | Ordering and cap | `posted_date DESC NULLS LAST, posting_id`, capped at **200 rows**. The tie-breaker is what makes the cut-off stable between calls. There is no paging — see [section 12](#12-not-in-the-api). |
-| Notes | `location` is the posting's cities, title-cased and joined with commas, not the raw location text. A hard-coded exclusion list keeps countries, provinces and "remote" out of every city-derived value, because the city column carries them too; provinces that double as city names (Utrecht, Groningen) and city-states (Singapore) stay in. The proper fix is upstream in the mart. `savedCount` counts distinct users who saved the posting — across all users, so it is a popularity signal, not "did I save this"; it comes from applications' internal route (§13), and while that cannot be reached (connection or timeout, 5xx, open breaker) it reads 0 on every posting. `freshnessClass` and `ageDays` are the pipeline's verdict on how stale a listing is. Closed postings are **not** filtered out. |
+| Notes | `location` is the posting's cities, title-cased and joined with commas, not the raw location text. A hard-coded exclusion list keeps countries, provinces and "remote" out of every city-derived value, because the city column carries them too; provinces that double as city names (Utrecht, Groningen) and city-states (Singapore) stay in. The proper fix is upstream in the mart. `savedCount` counts distinct users who saved the posting — across all users, so it is a popularity signal, not "did I save this"; it comes from application-service's internal route (§13), and while that cannot be reached (connection or timeout, 5xx, open breaker) it reads 0 on every posting. `freshnessClass` and `ageDays` are the pipeline's verdict on how stale a listing is. Closed postings are **not** filtered out. |
 | Returns | 200 |
 
 ### GET /api/jobs/filters
@@ -406,7 +406,7 @@ Get one job posting in full
 | Method | GET |
 | Auth | none |
 | Response body | the search fields plus `description`, `experienceLevel`, `educationLevel`, `salaryMin`, `salaryMax`, `salaryCurrency`, `salaryPeriod`, `sourceUrl`, `status` |
-| Behaviour | `{postingId}` is the mart's `posting_id`. Closed postings are served too, so a saved job does not 404 once it closes — `status` says which it is. `description` arrives with HTML stripped and entities decoded by the pipeline. `sourceUrl` is where "Apply externally" goes. `savedCount` comes from applications' internal route (§13), and while that cannot be reached (connection or timeout, 5xx, open breaker) it reads 0 on the posting. |
+| Behaviour | `{postingId}` is the mart's `posting_id`. Closed postings are served too, so a saved job does not 404 once it closes — `status` says which it is. `description` arrives with HTML stripped and entities decoded by the pipeline. `sourceUrl` is where "Apply externally" goes. `savedCount` comes from application-service's internal route (§13), and while that cannot be reached (connection or timeout, 5xx, open breaker) it reads 0 on the posting. |
 | Returns | 200 · 404 no such posting |
 
 ---
@@ -483,7 +483,8 @@ carry a message the frontend shows as-is.
 
 # 8. Saved jobs
 
-Saving stores an id and a state, nothing else, which is why it works against an empty mart. The
+application-service serves these since Day 25, from its own database, `apps_db`. Saving stores an
+id and a state, nothing else, which is why it works against an empty mart. The
 design and its consequences — the orphaned-row case, the state model, how the frontend discovers
 saved state — are in [`saving-tracking.md`](saving-tracking.md).
 
@@ -675,8 +676,9 @@ every browser shares the frontend's one bucket. Nothing yet throttles the model-
 # 13. Internal routes
 
 Service-to-service routes, service tokens only, not routed by the gateway, not in the public
-OpenAPI. The two postings routes are job-service's since Day 17, called by the backend's saved
-jobs and top matches; `/internal/saved-counts` is the backend's, called by job-service. The `/internal/**` chain and the tokens it trusts are in [auth.md](auth.md#service-tokens-and-internal).
+OpenAPI. The two postings routes are job-service's since Day 17, called by application-service's
+saved jobs and matching-service's top matches; `/internal/saved-counts` is application-service's
+since Day 25, called by job-service. The `/internal/**` chain and the tokens it trusts are in [auth.md](auth.md#service-tokens-and-internal).
 
 ### POST /internal/postings/batch
 Batch lookup of posting details by id.

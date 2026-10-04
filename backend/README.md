@@ -17,7 +17,7 @@ With the default `admin` / `password` credentials. Do not use those credentials 
 docker run --name hyf-postgres -e POSTGRES_DB=project_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18.4-alpine
 ```
 
-> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates `project_db` with an `app` schema and one schema per backend module (`identity`, `applications`, `matching`), and `jobs_db` with the analytics schemas the pipeline publishes into (Day 20), and one least-privilege role for each, plus a read-only `jobs_user`, which job-service connects to `jobs_db` as. Run the app with `DB_USER=app_user` for the migrations and each module's role for its own connection (`DB_IDENTITY_USER=identity_user`, and so on), with the passwords the script prints.
+> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates `project_db` with an `app` schema and one schema per backend module (`identity`, `applications`, `matching`; `applications` empty since Day 25), `jobs_db` with the analytics schemas the pipeline publishes into (Day 20), and `apps_db`, application-service's (Day 25), and one least-privilege role for each, plus a read-only `jobs_user`, which job-service connects to `jobs_db` as. Run the app with `DB_USER=app_user` for the migrations and each module's role for its own connection (`DB_IDENTITY_USER=identity_user`, and so on), with the passwords the script prints.
 
 ### 2. Set up configuration
 
@@ -108,7 +108,12 @@ docker pull ghcr.io/<org>/<repo>/backend:latest
 Run it, pointing at your database:
 
 ```bash
-docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=project_db \n  -e DB_USER=app_user -e DB_PASSWORD=<password> \n  -e DB_IDENTITY_USER=identity_user -e DB_IDENTITY_PASSWORD=<password> \n  -e DB_APPLICATIONS_USER=applications_user -e DB_APPLICATIONS_PASSWORD=<password> \n  -e DB_JOBS_USER=jobs_user -e DB_JOBS_PASSWORD=<password> \n  -v /path/to/keys:/run/keys:ro -e JWT_PRIVATE_KEY_FILE=/run/keys/private.pem \n  ghcr.io/<org>/<repo>/backend:latest
+docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=project_db \
+  -e DB_USER=app_user -e DB_PASSWORD=<password> \
+  -e DB_IDENTITY_USER=identity_user -e DB_IDENTITY_PASSWORD=<password> \
+  -v /path/to/keys:/run/keys:ro -e JWT_PRIVATE_KEY_FILE=/run/keys/private.pem \
+  -e SERVICE_JWT_PRIVATE_KEY_FILE=/run/keys/service.pem \
+  ghcr.io/<org>/<repo>/backend:latest
 ```
 
 Two things to watch:
@@ -131,8 +136,8 @@ All configuration lives in [`application.yaml`](src/main/resources/application.y
 | `DB_NAME` | `project_db` | Database name |
 | `DB_USER` | `admin` | Owner of the migrations; only Flyway logs in as it. `app_user` where `db-setup.py` set the database up |
 | `DB_PASSWORD` | `password` | Its password |
-| `DB_IDENTITY_USER`, `DB_APPLICATIONS_USER`, `DB_JOBS_USER` | `identity_user`, … | Each module's own login, with its own schema as the search path. `jobs_user` only reads |
-| `DB_IDENTITY_PASSWORD`, `DB_APPLICATIONS_PASSWORD`, `DB_JOBS_PASSWORD` | `password` | Their passwords |
+| `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path. Jobs, matching and applications connect from their services (Days 17, 21 and 25) |
+| `DB_IDENTITY_PASSWORD` | `password` | Its password |
 | `JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the RSA private key (PEM, PKCS#8, 2048 bits or more) tokens are signed with. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../scripts/jwt-key.sh) writes one, and compose sets this itself |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the monolith's own key (PEM, PKCS#8, 2048 bits or more) for service tokens (Day 39), separate from the user key. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../scripts/jwt-key.sh) writes one, and compose sets this itself |
 | `SPRING_PROFILES_ACTIVE` | — | Active profile: `dev` or `prod`. None is active unless you set it; the Docker image defaults to `prod` |
