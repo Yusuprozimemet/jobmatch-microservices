@@ -44,7 +44,7 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
 		</dependency>
-		<!-- The saved-jobs requests' @Valid, as backend/applications has it (Track B2a). -->
+		<!-- The saved-jobs requests' @Valid, as the monolith's applications module had it (Track B2a). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>

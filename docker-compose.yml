@@ -37,7 +37,7 @@ services:
       - ./scripts/jwt-key.sh:/jwt-key.sh:ro
 
   backend:
-    build: ./backend
+    build: ./services/identity-service
     environment:
       DB_HOST: db
       # application-prod.yaml builds the JDBC URL from DB_PORT and nothing set it, so the

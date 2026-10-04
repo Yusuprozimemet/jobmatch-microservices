@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code applications} runs. It would become one per posting if the batch were ever replaced by
  * a loop, and that is what this test is for.
  *
- * <p>Expires on Day 25, when {@code saved_jobs} moves to its own database and this container no
- * longer sees the statement.
+ * <p>Kept past Day 25, when {@code saved_jobs} moved to application-service's database: it guards
+ * job-service's batching, which a test inside application-service cannot see.
  */
 class JobSavedCountQueriesIT extends IntegrationTest {
 

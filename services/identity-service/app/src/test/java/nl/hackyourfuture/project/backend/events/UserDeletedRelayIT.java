@@ -76,8 +76,8 @@ class UserDeletedRelayIT extends IntegrationTest {
         UUID.fromString((String) body.get("eventId"));
         Instant.parse((String) body.get("occurredAt"));
 
-        // Surefire runs in backend/app.
-        String page = Files.readString(Path.of("../../docs/events/user-deleted.md"));
+        // Surefire runs in services/identity-service/app.
+        String page = Files.readString(Path.of("../../../docs/events/user-deleted.md"));
         assertThat(page).contains("`eventId`", "`type`", "`version`", "`userId`", "`occurredAt`",
                 "Idempotent", "A repeat is a success", "An unreadable body goes to the dead-letter queue");
     }
