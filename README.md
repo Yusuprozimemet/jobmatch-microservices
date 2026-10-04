@@ -7,8 +7,11 @@ This repository takes [JobMatch](docs/original-readme.md) — a deployed, six-pe
 HackYourFuture final project — and rebuilds it as a set of independently deployable services.
 Every change is driven by a numbered day specification with acceptance criteria written *before*
 any code exists. The work is done by [Claude](https://www.anthropic.com/claude): Opus 5.5 runs
-each day, and since Day 39 an implementer agent on Haiku writes each track's code. The
-architecture, the specifications and every merge decision are mine.
+each day, and since Day 39 an implementer agent on Haiku writes each track's code. I set the plan
+and the constraints and approve every change; Claude drafts and audits the specifications.
+
+> **This repository is an engineering experiment.** Its migration metrics are experimental
+> diagnostic signals, not optimization targets or standard measures of quality.
 
 > **Status:** in progress. The [migration dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/) shows the current day
 > and the next step; it is rebuilt from the repository after every merge. This is an open lab
@@ -25,6 +28,7 @@ architecture, the specifications and every merge decision are mine.
 - [Target architecture](#target-architecture)
 - [Results to date](#results-to-date)
 - [What is being measured](#what-is-being-measured)
+- [Retrospective](#retrospective)
 - [Running it](#running-it)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
@@ -957,38 +961,59 @@ event bus behind account deletion: zero in `contract/`, and `support/` +296, the
 and `support/` +43 −1, `EventBus`'s queue count and URL lookup and the matching consumer off in
 the harness.** Additions between refactors are counted apart: 32 lines pinning the saved-jobs order (#57), and one new file for Day 10's tests-first track. Days 17–28 are the remaining tests, run in the corrected order (#115) |
 | How good are day-sized estimates for agent-implemented work? | Estimated vs actual pull requests per spec (currently 3→1, 3→1, 3→4, 3→5, 3→7, 2→2, 4→5, 2→3, 2→4, 3→4, 3→6, 3→3, 3→5, 2→4, 3→9, 3→2, 4→5, 3→5, 3→4, 3→4, 3→6, 3→14, 3→5, 5→3, 15→22, 8→9, 6→6, 5→5, 6→6, 5→8; Days 1 and 2 were one oversized pull request each) |
-| Does the agent catch defects in the system it is migrating? | Bugs found and filed per phase (currently: 1 CI gate, 2 harness, 2 production, 8 specs that could not be met, 3 spec verify commands that ran no tests, 1 spec check that could not fail, 1 plan that missed a cross-module read, 1 gate that does not pin what its spec says, 2 protected behaviours with no test behind them, 1 dead branch copied into four controllers, 1 plan that could not have run as written, 3 database objects a spec missed (a moved enum, a cascade, a revoke), 1 missing claim that would have made a test flaky, 1 migration that broke two harness tests by construction, 1 setting that did nothing, 2 fixtures unlike production, 1 principal a spec would have changed by accident, 1 frontend regression a spec missed, 1 CI build that re-downloaded the world; Day 14: 1 spec item written for code that never existed, 1 spec change that would have broken a contract test, 1 grep criterion that could not print clean, 1 framework default that made a session, 1 new table without its revoke, 1 protected behaviour with no test behind it, 4 cookie properties no criterion checked; Day 15: 2 checks a pass-through proxy passed, 1 hold a gateway would have silenced, 1 token location no spec named, 3 access rules a spec missed, 1 track that did not exist, 1 rate limit that would have failed the suite, 1 verify that ran no tests, 1 CORS configuration that never existed, 2 framework defaults that broke what the spec asked for; Day 16: 1 verify that would have deleted the maintainer's database, 1 grep criterion that could never pass, 1 criterion that did not prove its goal, 1 trusted header that would have let any client pick its rate-limit bucket, 1 check by hand that could not run on a fresh volume, 1 deployment item with nothing in the repository, 2 documents wrong since the initial commit; Day 38: 2 checks that could not fail, 1 security
-chain a spec missed, 11 tests a track would turn red that no spec named, 1 verify command with an
-empty variable, 1 hold that named a test that does not notice the break, 1 grep that printed 106
-lines, 1 hand-off only a spec knew, 1 harness rule that would have hidden the migrations, 1
-framework startup race that turned `main` red, 1 metric tag unlike the backend's, 1 setup script
-that crashes on Windows output; Day 39: 1 check that could not fail, 1 break that did not
-compile, 1 verify whose curls checked nothing, 1 track with no route to answer, 1 break not
-reachable as worded, 1 track too big for the gate, 1 first caller the outline missed, 1 map no
-environment variable can set, 1 spec claim a track made stale, 1 break that turned two cases red,
-1 doc row a track left out, 1 dashboard that could not read a split track; Day 40: 1 hold that
-was red before any change, 1 diff check a move broke, 1 gateway test a track would turn red, 1 route
-order that caught nothing, 1 metric check that passed without its request, 1 job request a spec
-missed, 3 stale doc paragraphs, 1 overclaim, 1 default interval that made a wait slow, 1 verify that
-ran in the wrong directory and overwrote its own reports, 1 hand-off missing what a container forces,
-1 startup cycle a later day inherits, 1 fixture miscount, 1 test class misdescribed, 1 stale Javadoc
-hand-off, 1 test that could not tell a dropped header from one never sent, 1 compose wait that stops
-at the gateway; Day 18: 1 track an earlier day had built, 1 criterion that contradicted an earlier
-day's test, 2 criteria wrong as worded, 1 hand-off no day owned, 1 cap with no number that would
-have refused a long saved list, 1 verify path that did not exist, 3 later specs still written for
-the old order, 2 decisions no Phase 3 day owned, 1 fixture the database refuses, 1 break a fixture
-could hide, 1 verify missing four of CI's classes, 1 hold with two cases no break could reach, 1
-break proved on the wrong command, 1 hand-off left in one spec's Notes; Day 19: 1 verify that
-stopped a service that did not exist, 1 fallback that would have thrown in two routes, 1 retry rule
-that matched no call, 1 dependency the spec assumed, 1 request factory claim that did not reproduce,
-1 breaker that would have counted a 4xx, 1 parent span that was Spring Security's, 1 break a metric
-series would have survived, 1 URL read too early for a later day, 1 stub one hang would have
-blocked, 1 self-test that could not fail, 1 client retry that turned a hang into a 404, 1 track
-over the gate as written; Day 17: 1 spec that moved code out with nothing serving, 1 test property a base class silently wins, 1 test a move would turn red that no track owned, 1 break that could not fail, 1 criterion that said a map binds nothing, 1 list a higher-priority source replaces whole, 1 public chain that hid a service's own key set, 1 grep criterion the ignored `target/` kept red, 1 Verify on the maintainer's own project, 1 query-count break that could not reach hydration, 1 key file the container could not read, 1 test the spec missed that looked up a moved bean, 1 monolith unit test a criterion asked for and no track wrote, 1 dashboard that could not read a three-way split; Day 20: 1 harness a spec claimed that did not exist, 1 pipeline a spec called untested that had 9 tests, 1 "unedited" claim false for six test classes, 1 test that would have passed in either database, 1 Airflow connection that is a Variable, 1 fixture the publish role could not run, 1 service a Verify misnamed, 1 test case a move would turn red that no spec named, 1 break that needed an image rebuild to mean anything, 1 break that reports a 500 where the spec said a count, 1 CI job that trusted another repository, 1 rollback grant a republish would lose, 1 restart that would recreate the database, 1 container path Git Bash rewrote, 1 docstring with two false claims, 1 probe check that could not tell never-ran from passed, 1 doc row stale since Day 17, 1 dashboard that could not read tracks 0a and 0b; Day 41: 1 controller that would have called itself, 1 criterion that could pass on the wrong 422, 1 criterion with no red for its 404 cases, 1 hold that cannot see the existence call, 1 red the spec wrote as 200 that is 422, 1 status check a 204 broke, 1 track order that made the next track edit a test, 1 test helper already there, 1 test that passed with no client, 2 false test Javadocs, 1 build run on another JVM's stale jar, 1 run on IDE-compiled classes; Day 21: 1 draft that kept a read in-process a container cannot make, 1 spec that named nothing removing a module breaks, 1 existence test a move would have dropped, 1 timeout budget 4 s over the gateway's, 1 token hand-off only a Note carried, 1 harness gateway no track owned, 1 track the dashboard counted merged half-done, 1 track that could not be one PR, 1 break that failed at setup, 1 test premise that the monolith serves what it no longer does, 1 header the spec said is read that nothing reads, 1 span collector that records database URLs, 1 criterion no track broke, 1 hang a stub never cleared, 1 harness rewrite that would have tested no model, 1 test name the module never runs, 1 counter that was not atomic, 3 reviewer reverts that lost work, 1 gateway key-set test no day owns, 1 dashboard that lost a moved test; Day 22: 1 spec built on a dual write the plan rules out, 1 interface the spec assumed, 1 compose service a check stopped that did not exist, 1 service nobody scraped, 1 grep pinned at the wrong count, 1 branch name the dashboard read as a whole track, 1 table creation that shared the request timeout, 1 read filtered on the wrong attribute, 1 null attribute that would drop a batch, 1 TTL check that accepted ENABLING, 1 test loosened over an id collision, 2 tests that never reached the store they broke, 2 startup tests that passed without the fix, 1 doc edit an implementer reverted, 1 test in the wrong package; Day 23: 2 test assertions a migration broke that the spec did not name, 1 dependency only a removed one brought in, 1 dependency break that passed without `clean`, 1 grep criterion that could not print clean, 1 migration comment that said a role was going, 1 grep a comment would have doubled, 1 doc stale since Day 21; Day 24: 1 Verify that gave a 401 where it promised a 503, 1 503 that could not tell identity from an unseeded mart, 3 criteria with no `new`/`hold` tag, 2 of them already true, 2 decisions with no criterion or threshold, 1 item both in and out of scope, 1 retry hand-off a spec missed, 1 phase tag never made, 1 time limit with no number, 1 spec edit an implementer reverted, 1 trace test that would take another user's log line, 1 transport resend a "no retry" Javadoc missed, 1 check a criterion put in the wrong class; Day 26: 1 provisional spec built on the wrong order and the wrong bus, 1 rollback check that could not fail, 1 relay every cached context would run, 2 harness tests a migration broke that the spec did not name, 1 cleanup that deleted another test's message, 1 started guard set too early, 1 publish failure caught inside its transaction, 1 emulator ARN as the production default, 1 test profile in the jar, 1 break script that never started Maven, 1 shared network a Verify could remove; Day 27: 1 relay test's messages a cached consumer would take, 2 failure criteria that could not fail on the shared queues, 1 hold that named a test that did not exist, 1 consumer's failure paths with no criterion, 1 compose wiring with no check, 1 Maven scope that would leave SQS out of the jar, 1 Verify line with no wrapper, 1 shutdown join of 7 ms, 1 version check that read "1" and 1.5 as 1, 1 DLQ check made at the wrong time, 1 eviction test an evict-everything bug would pass, 1 track split the estimate missed, 1 wrong Jira key on a commit; and outside the days, 1 dashboard measure that credited the spec with gap it did not close, #107) |
+| Does the agent catch defects in the system it is migrating? | Defects found and filed: 285 entries, Days 1–41. Only 19 were in the system being migrated; 266 were in the agent's own work, its specs, drafts and tooling, caught by an auditor, a review, a break on purpose or the close. Counted by kind in [Defects in the system](#defects-in-the-system) and [The agent's own failures](#the-agents-own-failures) below; every entry, by day, in [`docs/defects.md`](docs/defects.md) |
 | How often do specifications need revision once work starts? | Spec-change pull requests per day spec (currently 29 of 30 days worked; Day 38 needed one, the audit's (#119), made the day after it was written (#118); Days 39 and 40 one each, written in full and audited in the same PR (#127, #140), and Days 18 and 19
 one each, rewritten against the code and audited twice in the same PR (#148, #154), and Day 17 two, the rewrite (#162) and a split recorded after the track that made it (#175), and Day 20 one, rewritten against the code and audited twice in the same PR (#183), and Day 41 one, the audit's (#201), after it was split out of Day 24 in Day 21's (#200), and Day 21 four, the seam-first rewrite (#200), the rewrite after Day 41 (#206), and two during the day (#211, #222), and Day 22 one, rewritten from the provisional dual write after the audit (#232), and Day 23 one, the drop moved into the monolith's migrations after the audit (#244), and Day 24 one, rewritten from the audit's ten findings (#250), and Day 26 one, rewritten for the plan's deletion-first order and SNS/SQS after the plan-auditor (#255), and Day 27 one, the consumers isolated from the relay tests and checks that can fail, after the audit's ten findings (#261); Days 5, 8, 9, 10, 11, 12 and 15 needed two and Days 13, 14 and 16 three, Day 8's first made on Day 3 while writing its gate, Day 13's first on Day 2, those of Days 10 to 16 on Day 9, Day 14's second on Day 13, Day 16's second on Day 14) |
+| How much of the agent's work is redone? | Rework rate per day: tracks whose implementer draft review changed, out of the tracks the implementer wrote, and spec-change PRs (the row above). Days 39, 40, 18, 19, 17, 20 and 41 count any change, style included: 4/5, 4/4, 4/4, 6/6, 12/13, 4/4, 3/3, so 37 of 39 tracks. From Day 21 the Notes record only defects, so the numbers are not comparable with the earlier ones: Days 21, 22, 23, 24, 26 and 27 had 7/14, 5/7, 1/4, 2/3, 2/4, 3/6, so 20 of 38 tracks with a defect in the draft. Days 1–16 and 38 have no implementer and no rate (—) |
 | Does the 400-line gate hold without override? | `Oversized:` overrides used (currently 4: #1 at 1,420 changed lines, #2 at 1,075, #3 at 712, all before Day 3, and #224 at 950 on Day 21, the move itself, as its spec allowed; with the gate having forced a split twenty times, the sixth Day 15's Track C, the seventh Day 39's Track A, the eighth the README's drawings, outside the days (#142, #143); the ninth to eleventh Day 17's Tracks B1, B2 and D, D at 453 lines (#166–#170, #174); the twelfth to fifteenth Day 21's Tracks A1, B1, B2 and E1 (#212–#218, #224–#225); the sixteenth Day 22's Track B, B2 at 399 lines (#237, #239); the seventeenth Day 23's Track B, as its spec planned (#246, #247); the eighteenth Day 27's Track A (#263, #264); the nineteenth and twentieth its Track B, once as its spec planned (#269) and once more (#270, #271). Recorded as 0 until after Phase 2. The checks did not block a merge until `main` was protected after Phase 2) |
 | Is the finished system actually independently deployable? | Each service builds, tests and deploys from its own workflow |
+
+### Defects in the system
+
+| Kind | Count | Examples |
+| --- | --- | --- |
+| CI and test harness | 8 | a CI gate, two harness defects, two fixtures unlike production, a CI job that trusted another repository, a startup race that turned `main` red |
+| Production code | 4 | two production defects, a dead branch copied into four controllers, a framework default that made a session |
+| Configuration | 3 | a setting that did nothing, a service nobody scraped, a dependency only a removed one brought in |
+| Documentation | 2 | two documents wrong since the initial commit |
+| Environment | 2 | a setup script that crashes on Windows output, a container path Git Bash rewrote |
+
+### The agent's own failures
+
+Kept apart from the defects above: these are errors in what the agent wrote, caught before they
+merged or soon after. The kinds were assigned by reading each entry, so a borderline one could sit
+in a neighbouring row; the split between the two tables is firmer than the rows.
+
+| Kind | Count | Examples |
+| --- | --- | --- |
+| Spec and plan premises wrong about the code, or work they missed | 103 | eight specs that could not be met, three database objects a spec missed, a provisional spec built on the wrong bus |
+| Spec checks that could not fail, could not pass, or proved the wrong thing | 73 | a grep criterion that could never pass, a hold that was red before any change, a TTL check that accepted `ENABLING` |
+| Code drafts that review or a break changed, and lost work | 38 | a shutdown join of 7 ms, a publish failure caught inside its transaction, three reviewer reverts that lost work, two edits an implementer reverted |
+| Tests a spec would break without naming, or behaviour it left untested | 29 | eleven tests a track would turn red that no spec named, protected behaviours with no test behind them |
+| Spec Verify commands that ran nothing, the wrong thing, or something unsafe | 15 | a Verify that would have deleted the maintainer's database, four that ran no tests |
+| Bugs in the migration's own tooling | 8 | six dashboard misreads of tracks and tests, a dashboard measure that credited the spec with gap it did not close, a wrong Jira key |
+
+From Day 21 each day's Notes tag every defect with where it was found and its cause
+([`specs/_template.md`](specs/_template.md)). Across Days 21–27 and 41, 64 tagged defects: cause
+spec 38, implementation 14, process 9, environment 2, tooling 1; found by an auditor 17, in review
+or during a track 24, by a break on purpose 8, at the close 6, by the session that made them 5, in
+a spec-change PR 3, by the dashboard 1. Their 61 spec, implementation and process causes are the
+agent's own.
+
+## Retrospective
+
+Written when the last phase closes, not before. For each hypothesis in
+[Why this repository exists](#why-this-repository-exists) and each question in
+[What is being measured](#what-is-being-measured): a verdict of supported, partly supported or
+rejected, with the evidence. It includes any service that should not have been extracted.
+
+| Hypothesis or question | Verdict | Evidence |
+| --- | --- | --- |
+| The four hard parts can be migrated by an agent under written specs | — | — |
+| The binding constraint is specification quality, not model capability | — | — |
+| Each row of the measurement table | — | — |
+| Services that should not have been extracted | — | — |
+
 
 ## Running it
 
@@ -1076,6 +1101,6 @@ Bash on Windows does not rewrite the path). Its old
 JobMatch was built by Hamed Razizadeh, Monerh Al Sqyan, Yusup Rozimemet, Halyna Romanyshyn,
 Baraah Alshiaani and Mohamad Bader Almsaddi alzin as a HackYourFuture final project; the full
 team listing is in the [original README](docs/original-readme.md#team). This migration
-repository is my own work — the plan, the specifications and the reviews are mine; the
-implementation is Claude's under those specifications (Opus 5.5 running the work, Haiku writing
-the code since Day 39), and commits state which.
+repository's division of work: I set the plan and the constraints and approve every change;
+Claude (Opus 5.5) drafts the specifications, runs the audits and reviews each track; Haiku
+writes the code from the main session's briefs, since Day 39. Commits state which.
