@@ -48,7 +48,6 @@ function rowTip(r) {
   return `<b>${prLabel(r)} · ${KIND[r.kind]}</b><div style="margin:3px 0 6px">${esc(r.title)}</div>
   <div class="row"><span>date</span><span>${r.date}</span></div>
   <div class="row"><span>day reached</span><span>${r.day || "–"}</span></div>
-  <div class="row"><span>lexical drift</span><span>${fmt(r.drift)}°</span></div>
   <div class="row"><span>spec names in code</span><span>${r.name_coverage == null ? "–" : fmt(r.name_coverage * 100, 1) + "%"}</span></div>
   <div class="row"><span>Jaccard, spec ∩ code</span><span>${r.jaccard == null ? "–" : fmt(r.jaccard, 2)}</span></div>
   <div class="row"><span>names kept, dropped by specs</span><span>${r.names_kept ?? "–"}</span></div>
@@ -67,7 +66,6 @@ for (let i = 1; i < N; i++) byKind[R[i].kind] += step(R[i - 1].gap_full, R[i].ga
 const gapClosed = -Object.values(byKind).reduce((a, b) => a + b, 0);
 const firstGap = R.find(r => r.gap_full != null) || first;
 const specShare = -byKind.spec / gapClosed;
-const bigStep = Math.max(...R.map(r => r.step));
 const nKind = k => R.filter(r => r.kind === k).length;
 let forward = 0, specEdits = 0;
 R.forEach(r => {
@@ -81,9 +79,6 @@ R.forEach(r => {
 
 /* ---------- stats ---------- */
 document.getElementById("stats").innerHTML = `
-  <div class="stat"><span class="k">Lexical drift from the plan as written</span>
-    <span class="v num">${fmt(last.drift)}°</span>
-    <span class="n">0° on Sep 20. ${bigStep < 10 ? "It rises by small steps and never jumps." : `Its biggest single step was ${fmt(bigStep, 2)}° (${prLabel(R.find(r => r.step === bigStep))}).`}</span></div>
   <div class="stat"><span class="k">Spec names in the code · Jaccard</span>
     <span class="v num">${last.name_coverage == null ? "–" : fmt(last.name_coverage * 100, 1) + "%"} <small>· ${last.jaccard == null ? "–" : fmt(last.jaccard, 2)}</small></span>
     <span class="n">Of the backticked names the specs use today, the share the code has; Jaccard is the names in both over the names in either.</span>
@@ -99,7 +94,6 @@ document.getElementById("headline").textContent = specShare >= -byKind.code / ga
 document.querySelectorAll(".vocab-n").forEach(e => { e.textContent = DATA.vocab_size; });
 const merged = R.filter(r => r.pr).map(r => r.pr);
 document.getElementById("pr-range").textContent = `${N - 1} merges, #${Math.min(...merged)}–#${Math.max(...merged)}`;
-document.querySelectorAll(".drift-ref").forEach(e => { e.textContent = DATA.drift_ref == null ? "–" : `${fmt(DATA.drift_ref)}° (95%: ${band(DATA.drift_ref_band)})`; });
 document.getElementById("gap-chance").textContent = `${fmt(last.gap_chance)}° (95%: ${band(last.gap_chance_band)})`;
 document.getElementById("caveats").innerHTML = ((DATA.meta || {}).caveats || []).map(c => `<li>${esc(c)}</li>`).join("");
 
@@ -121,13 +115,13 @@ playBtn.addEventListener("click", () => {
 
 function drawReadout() {
   const s = R[sel], prev = R[Math.max(0, sel - 1)];
-  const dGap = s.gap_full - prev.gap_full, dDrift = s.drift - prev.drift;
+  const dGap = s.gap_full - prev.gap_full, specLines = Object.values(s.spec_files || {}).reduce((a, b) => a + b, 0);
   const sign = x => (x > 0 ? "+" : x < 0 ? "−" : "±") + Math.abs(x).toFixed(2);
   const edits = Object.entries(s.spec_files || {}).sort((a, b) => b[1] - a[1]);
   const moved = sel === 0 ? "Starting point: the monolith and the plan written for it." :
-    Math.abs(dDrift) < 0.01 && Math.abs(dGap) < 0.05 ? "Neither vector moved noticeably." :
-    Math.abs(dDrift) < 0.01 ? `Only the code moved. The gap ${dGap < 0 ? "narrowed" : "widened"} by ${Math.abs(dGap).toFixed(2)}°.` :
-    `The spec rotated ${dDrift.toFixed(2)}° and the gap ${dGap < 0 ? "narrowed" : "widened"} by ${Math.abs(dGap).toFixed(2)}°.`;
+    !specLines && Math.abs(dGap) < 0.05 ? "Neither the spec nor the gap moved noticeably." :
+    !specLines ? `Only the code moved. The gap ${dGap < 0 ? "narrowed" : "widened"} by ${Math.abs(dGap).toFixed(2)}°.` :
+    `${specLines} spec lines changed and the gap ${dGap < 0 ? "narrowed" : "widened"} by ${Math.abs(dGap).toFixed(2)}°.`;
   document.getElementById("readout").innerHTML = `
     <div class="eyebrow">Selected merge</div>
     <div class="title">${prLabel(s)} · ${esc(s.title)}</div>
@@ -135,7 +129,6 @@ function drawReadout() {
     <p style="font-size:14px;color:var(--ink-2)">${moved}</p>
     <div class="hr"></div>
     <dl>
-      <dt>Lexical drift from the plan as written</dt><dd>${fmt(s.drift, 2)}° <span style="color:var(--muted)">(${sign(dDrift)})</span></dd>
       <dt>Spec names in code</dt><dd>${s.name_coverage == null ? "–" : fmt(s.name_coverage * 100, 1) + "%"}</dd>
       <dt>Jaccard, spec ∩ code</dt><dd>${s.jaccard == null ? "–" : fmt(s.jaccard, 2)}</dd>
       <dt>Names the specs dropped, still in code</dt><dd>${s.names_kept ?? "–"}</dd>
@@ -215,24 +208,18 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, bands, label, stri
   hit.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
   hit.addEventListener("click", ev => setSel(idxAt(ev)));
 }
-// The axes follow the data, so a later phase that pushes drift or coverage past today's range stays on the chart.
-const degMax = Math.ceil(Math.max((DATA.drift_ref_band || [])[1] || DATA.drift_ref || 0,
-  ...R.map(r => Math.max(r.drift || 0, r.gap_full || 0, (r.gap_chance_band || [])[1] || 0))) / 15) * 15;
+// The axes follow the data, so a later phase that pushes the gap or coverage past today's range stays on the chart.
+const degMax = Math.ceil(Math.max(...R.map(r => Math.max(r.gap_full || 0, (r.gap_chance_band || [])[1] || 0))) / 15) * 15;
 const covMin = Math.min(92, Math.floor(Math.min(...R.filter(r => r.coverage != null).map(r => r.coverage * 100)) / 2) * 2);
 function drawLines() {
   lineChart(document.getElementById("lines"), {
     H: 330, yMin: 0, yMax: degMax, ticks: steps(0, degMax, degMax / 15), unit: "°", strip: true,
-    label: "Lexical drift and spec–code name gap in degrees across merges",
+    label: "Spec–code name gap in degrees across merges",
     series: [
       { name: "gap", color: "var(--gap)", get: r => r.gap_full },
       { name: "chance", color: "var(--gap)", dash: true, get: r => r.gap_chance ?? null },
-      { name: "drift", color: "var(--spec)", get: r => r.drift },
-      ...(DATA.drift_ref == null ? [] : [{ name: "halves", color: "var(--spec)", dash: true, get: () => DATA.drift_ref }]),
     ],
-    bands: [
-      { color: "var(--gap)", get: r => r.gap_chance_band ?? null },
-      ...(DATA.drift_ref_band == null ? [] : [{ color: "var(--spec)", get: () => DATA.drift_ref_band }]),
-    ],
+    bands: [{ color: "var(--gap)", get: r => r.gap_chance_band ?? null }],
   });
   lineChart(document.getElementById("cover"), {
     H: 190, yMin: covMin, yMax: 100, ticks: steps(covMin, 100, 4), unit: "%", strip: false,
@@ -330,17 +317,16 @@ function drawWork() {
 const gapDelta = i => step(R[i - 1].gap_full, R[i].gap_full);
 const signed = (x, d = 2) => (x > 0 ? "+" : x < 0 ? "−" : "") + fmt(Math.abs(x), d);
 
-/* ---------- per-merge change in drift and gap ---------- */
-// Two panels on the merge axis of the line chart above: the step each merge took on drift, then on gap.
+/* ---------- per-merge change in gap ---------- */
+// A panel on the merge axis of the line chart above: the step each merge took on the gap.
 function drawDeltas() {
   const box = document.getElementById("deltas");
   box.innerHTML = "";
   const panels = [
-    { name: "drift", label: "Δ drift", get: r => r.drift },
     { name: "gap", label: "Δ gap", get: r => r.gap_full },
   ];
   const PH = 200, GAP = 18, H = LP.t + panels.length * PH + (panels.length - 1) * GAP + 40;
-  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Change in drift and in gap at each merge, in merge order" }, box);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Change in gap at each merge, in merge order" }, box);
   panels.forEach((pn, k) => {
     const top = LP.t + k * (PH + GAP), bot = top + PH;
     const pts = R.slice(1).map((r, j) => ({ i: j + 1, r, d: step(pn.get(R[j]), pn.get(r)) }));
@@ -554,8 +540,8 @@ function drawFindings() {
   const codeShare = -byKind.code / gapClosed;
   const days = DATA.days.filter(finished).length;
   const f = [
-    [bigStep < 10 ? "The destination held; the path moved" : "The plan changed direction",
-     `Drift reached ${fmt(last.drift)}°; the biggest single step was ${fmt(bigStep, 2)}°. ${days} days in, ${Math.round(last.deleted / DATA.origin_lines * 100)}% of the Sep 20 spec's lines have been rewritten.`],
+    [last.deleted < DATA.origin_lines / 2 ? "Most of the plan as written still stands" : "Most of the plan as written has been rewritten",
+     `${days} days in, ${Math.round(last.deleted / DATA.origin_lines * 100)}% of the Sep 20 spec's lines have been rewritten, and ${last.added} lines added.`],
     [specShare >= codeShare ? "The spec moved toward the code, not the reverse" : "The code now closes more of the gap than the spec",
      `Of the ${fmt(gapClosed)}° of gap that closed, ${Math.round(specShare * 100)}% came from ${nKind("spec")} spec-change PRs and ${Math.round(codeShare * 100)}% from ${nKind("code")} code PRs.`],
     [covFloor >= 90 ? "Spec first keeps the gap from ever opening" : "The gap opened at least once",
@@ -566,14 +552,14 @@ function drawFindings() {
   document.getElementById("findings").innerHTML = f.map(([h, p]) => `<div class="finding"><h3>${h}</h3><p>${p}</p></div>`).join("");
 }
 function drawTable() {
-  document.getElementById("tbl").innerHTML = `<thead><tr><th>PR</th><th>Type</th><th>Day</th><th class="r">Lexical drift °</th><th class="r">Name gap °</th><th class="r">Names in code</th><th class="r">Spec lines</th><th class="r">Code lines</th><th>Title</th></tr></thead><tbody>` +
-    R.map((r, i) => `<tr data-i="${i}" class="${i === sel ? "sel" : ""}"><td class="num">${prLabel(r)}</td><td><span class="sw" style="background:${KVAR[r.kind]}"></span>${KIND[r.kind]}</td><td class="num">${r.day || "–"}</td><td class="r">${fmt(r.drift, 2)}</td><td class="r">${fmt(r.gap_full, 2)}</td><td class="r">${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</td><td class="r">${Object.values(r.spec_files || {}).reduce((a, b) => a + b, 0)}</td><td class="r">${r.code_churn}</td><td class="t">${esc(r.title)}</td></tr>`).join("") + "</tbody>";
+  document.getElementById("tbl").innerHTML = `<thead><tr><th>PR</th><th>Type</th><th>Day</th><th class="r">Name gap °</th><th class="r">Names in code</th><th class="r">Spec lines</th><th class="r">Code lines</th><th>Title</th></tr></thead><tbody>` +
+    R.map((r, i) => `<tr data-i="${i}" class="${i === sel ? "sel" : ""}"><td class="num">${prLabel(r)}</td><td><span class="sw" style="background:${KVAR[r.kind]}"></span>${KIND[r.kind]}</td><td class="num">${r.day || "–"}</td><td class="r">${fmt(r.gap_full, 2)}</td><td class="r">${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</td><td class="r">${Object.values(r.spec_files || {}).reduce((a, b) => a + b, 0)}</td><td class="r">${r.code_churn}</td><td class="t">${esc(r.title)}</td></tr>`).join("") + "</tbody>";
 }
 function drawScrubNow() {
   const s = R[sel];
   document.getElementById("scrub-now").innerHTML = `<span class="chip" style="color:${KVAR[s.kind]}">${KIND[s.kind]}</span>
     <span class="t">${prLabel(s)} · ${esc(s.title)}</span>
-    <span class="num" style="color:var(--ink-2)">drift ${fmt(s.drift)}° · gap ${fmt(s.gap_full)}°</span>`;
+    <span class="num" style="color:var(--ink-2)">gap ${fmt(s.gap_full)}°</span>`;
 }
 function setSel(i) {
   sel = i; scrub.value = i;
