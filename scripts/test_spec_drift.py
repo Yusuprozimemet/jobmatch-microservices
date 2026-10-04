@@ -72,7 +72,7 @@ class SpecDriftTest(unittest.TestCase):
 
     def test_code_that_names_a_spec_name_narrows_the_gap(self):
         rows = self.repo.merge({"src/Foo.java": "class FooService {}\n"}).rows()
-        self.assertEqual(rows[0]["gap_full"], 90.0)
+        self.assertIsNone(rows[0]["gap_full"])  # no spec name in the code: no direction to compare
         self.assertLess(rows[1]["gap_full"], 90.0)
 
     def test_name_coverage_is_the_share_of_spec_names_the_code_has(self):
@@ -88,6 +88,7 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual((rows[1]["name_coverage"], rows[1]["jaccard"]), (1.0, 1.0))
         rows = self.repo.merge({"plan.md": "# Plan\n\nThe plan names nothing.\n"}).rows()
         self.assertEqual((rows[2]["name_coverage"], rows[2]["jaccard"]), (1.0, 0.5))  # bar_table: code only
+        self.assertEqual((rows[1]["names_kept"], rows[2]["names_kept"]), (0, 1))
 
     def test_a_failed_blob_read_names_the_commit_and_the_path(self):
         sha = self.repo.snaps[0]["sha"]
@@ -125,7 +126,7 @@ class SpecDriftTest(unittest.TestCase):
         rows = self.repo.merge({"src/Foo.java": "// FooService comes later\n /* FooService */\n",
                                 "src/V1.sql": "-- bar_table comes later\nSELECT 1; -- bar_table\n",
                                 "run.sh": "# FooService\n"}).rows()
-        self.assertEqual(rows[1]["gap_full"], 90.0)
+        self.assertIsNone(rows[1]["gap_full"])
 
     def test_a_later_spec_name_does_not_move_an_earlier_gap(self):
         self.repo.merge({"src/Foo.java": "class FooService { BazClient baz; }\n"})
@@ -193,21 +194,26 @@ class SpecDriftTest(unittest.TestCase):
 
     def test_code_in_the_spec_proportions_sits_below_chance(self):
         rows = self.repo.merge({"src/Foo.java": "class FooService { FooService f; bar_table b; }\n"}).rows()
-        self.assertEqual((rows[0]["gap_full"], rows[0]["gap_chance"]), (90.0, 90.0))
+        self.assertEqual((rows[0]["gap_full"], rows[0]["gap_chance"]), (None, None))  # no code: no angle
         self.assertEqual(rows[1]["gap_full"], 0.0)  # FooService twice and bar_table once, as the specs
         self.assertGreater(rows[1]["gap_chance"], 10.0)
+        lo, hi = rows[1]["gap_chance_band"]
+        self.assertTrue(lo <= rows[1]["gap_chance"] <= hi)
         rows = self.repo.merge({"src/Foo.java": "class FooService { bar_table a; bar_table b; }\n"}).rows()
         self.assertGreater(rows[2]["gap_full"], rows[1]["gap_full"])
         self.assertEqual(rows[2]["gap_chance"], rows[1]["gap_chance"])  # the same counts, shuffled
 
     def test_the_drift_reference_splits_the_first_files_in_two(self):
         ref = lambda repo: repo.inside(lambda blobs: sd.trajectory([dict(s) for s in repo.snaps], blobs)[4])
-        self.assertEqual(ref(self.repo), 90.0)  # two files: a word in both weighs nothing
+        self.assertEqual(ref(self.repo), [90.0] * 3)  # two files: a word in both weighs nothing
         three = Repo().merge({"plan.md": "alpha\n", "specs/day-01-x.md": "beta gamma\n",
                               "specs/day-02-x.md": "beta delta\n"})
         try:
-            self.assertLess(ref(three), 90.0)  # plan.md and day 02 against day 01: both halves have beta
-            self.assertGreater(ref(three), 0.0)
+            mean, lo, hi = ref(three)
+            self.assertLess(mean, 90.0)  # a split with day 01 and day 02 apart: both halves have beta
+            self.assertGreater(mean, 0.0)
+            self.assertEqual(hi, 90.0)  # plan.md alone against both days: nothing shared
+            self.assertLess(lo, hi)
         finally:
             three.close()
 
