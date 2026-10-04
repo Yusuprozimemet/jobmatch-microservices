@@ -1,11 +1,11 @@
-name: Backend CI/CD
+name: Identity Service CI/CD
 
 on:
   push:
     branches: [main]
     paths:
-      - "backend/**"
-      # The backend builds with the root wrapper and rules (Day 28).
+      - "services/identity-service/**"
+      # identity-service builds with the root wrapper and rules (Day 28).
       - "checkstyle.xml"
       - "mvnw"
       - ".mvn/**"
@@ -17,14 +17,14 @@ on:
       - "services/matching-service/**"
       # The harness starts application-service from its image (Day 25), so a change to it runs the suite.
       - "services/application-service/**"
-      - ".github/workflows/backend-ci-cd.yaml"
+      - ".github/workflows/identity-service-ci-cd.yaml"
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
 
 # Cancel previous runs on new pushes
 concurrency:
-  group: docker-build-backend-${{ github.ref }}
+  group: docker-build-identity-service-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -48,7 +48,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(backend/|checkstyle\.xml$|mvnw$|\.mvn/|services/(api-gateway|job-service|matching-service|application-service)/|\.github/workflows/backend-ci-cd\.yaml$)'
+          PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|\.github/workflows/identity-service-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
             echo run=true >> "$GITHUB_OUTPUT"; exit 0
@@ -73,8 +73,8 @@ jobs:
           cache: maven
 
       - name: Run Checkstyle
-        working-directory: ./backend
-        run: ../mvnw -B checkstyle:check
+        working-directory: ./services/identity-service
+        run: ../../mvnw -B checkstyle:check
 
       # Every integration test's context trusts job-service at its container's key set (Day 17),
       # so the harness starts it from this image, built here: never pulled.
@@ -97,8 +97,8 @@ jobs:
       # split, so a pull request that breaks one has to fail here. They need a Docker daemon
       # for Testcontainers, which ubuntu-latest has.
       - name: Run tests
-        working-directory: ./backend
-        run: ../mvnw -B verify
+        working-directory: ./services/identity-service
+        run: ../../mvnw -B verify
 
       # The Day 1-4 suite, and the stale-cookie and refresh tests, again through the API gateway
       # (Day 15): the harness starts this image in front of the application and sends every
@@ -110,9 +110,9 @@ jobs:
         run: docker build -t jobmatch-api-gateway:harness services/api-gateway
 
       - name: Run the suite through the gateway
-        working-directory: ./backend
+        working-directory: ./services/identity-service
         run: >-
-          ../mvnw -B verify -pl app -am -Dharness.gateway=true
+          ../../mvnw -B verify -pl app -am -Dharness.gateway=true
           -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT,ServiceJwksIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
@@ -142,7 +142,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}/backend
+          images: ghcr.io/${{ github.repository }}/identity-service
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ env.MAJOR_VERSION }},enable={{is_default_branch}}
@@ -154,18 +154,19 @@ jobs:
       - name: Build and Push
         uses: docker/build-push-action@v7
         with:
-          context: ./backend
+          context: ./services/identity-service
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,scope=backend,mode=max
+          cache-from: type=gha,scope=identity-service
+          cache-to: type=gha,scope=identity-service,mode=max
 
   # The required check, named per workflow so the four do not share one name. It runs even when a
   # job before it failed or was skipped, since a skipped required check counts as passed: skipped
   # jobs pass here, failed or cancelled ones do not.
   gate:
+    # Still "Backend gate": it is the required check's name until the maintainer swaps it (Day 28, H28.1).
     name: Backend gate
     if: always()
     needs: [changes, lint-and-test, build]
