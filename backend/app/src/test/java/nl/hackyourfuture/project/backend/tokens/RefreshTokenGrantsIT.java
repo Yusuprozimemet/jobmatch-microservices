@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * schema's; {@code ModuleConnectionsIT} checks that nothing identity creates later is granted.
  *
  * <p>As the role each module logs in as: identity through the application's own pool,
- * applications as applications_user, whose login left with application-service (Day 25).
+ * the others as matching_user, whose login left with matching-service (Day 21). Not
+ * applications_user: since Day 25 it cannot connect to project_db at all.
  */
 class RefreshTokenGrantsIT extends IntegrationTest {
 
@@ -29,8 +30,8 @@ class RefreshTokenGrantsIT extends IntegrationTest {
     private ApplicationContext context;
 
     @ParameterizedTest
-    @CsvSource({"applications, refresh_tokens",
-        "applications, pending_google_links"})
+    @CsvSource({"matching, refresh_tokens",
+        "matching, pending_google_links"})
     void noOtherModuleCanReadThem(String module, String table) {
         DataSource dataSource = new DriverManagerDataSource(PostgresContainer.jdbcUrl(module), module + "_user", PostgresContainer.rolePassword());
 

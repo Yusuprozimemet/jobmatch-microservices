@@ -28,9 +28,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ModuleConnectionsIT extends IntegrationTest {
 
     @Autowired @Qualifier("identityDataSource") private DataSource identity;
-    // applications_user's login left with application-service (Day 25); checked as matching_user's is.
-    private final DataSource applications = new DriverManagerDataSource(
-            PostgresContainer.jdbcUrl("applications"), "applications_user", PostgresContainer.rolePassword());
     private final DataSource jobs = new DriverManagerDataSource(
             PostgresContainer.jobsJdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
     // jobs_user keeps CONNECT on project_db, so what it must not read there is checked from there.
@@ -43,15 +40,26 @@ class ModuleConnectionsIT extends IntegrationTest {
     @Test
     void eachModuleLogsInAsItsOwnRoleWithItsOwnSchema() {
         assertThat(whoAndWhere(identity)).isEqualTo("identity_user identity");
-        assertThat(whoAndWhere(applications)).isEqualTo("applications_user applications");
         assertThat(whoAndWhere(jobs)).isEqualTo("jobs_user analytics");
+    }
+
+    @Test
+    void applicationsCannotConnectToProjectDb() {
+        // Since Day 25 it connects only to apps_db; Postgres refuses at login.
+        DataSource applicationsOnProjectDb = new DriverManagerDataSource(
+                PostgresContainer.jdbcUrl("applications"), "applications_user", PostgresContainer.rolePassword());
+        assertThatThrownBy(() -> JdbcClient.create(applicationsOnProjectDb)
+                .sql("SELECT 1")
+                .query(Integer.class)
+                .single())
+                .rootCause()
+                .hasMessageContaining("permission denied for database \"project_db\"");
     }
 
     // Days 08-10 removed the reads; Day 38 revoked what allowed them, before the modules leave
     // the process with these logins.
     @ParameterizedTest
-    @CsvSource({"jobs, identity.user_credentials", "applications, matching.job_match_scores",
-        "matching, identity.users"})
+    @CsvSource({"jobs, identity.user_credentials", "matching, identity.users"})
     void noModuleCanReadAnothersSchema(String module, String table) {
         assertThatThrownBy(() -> JdbcClient.create(pool(module))
                 .sql("SELECT count(*) FROM " + table)
@@ -82,15 +90,14 @@ class ModuleConnectionsIT extends IntegrationTest {
     }
 
     // Default privileges registered for any creator but the owner, db-setup.py's admin among them.
-    // Not applications since Day 25: the revokes were its module's own V1, which left with the
-    // module; the migration that drops its table here carries them, as V15 does matching's.
+    // V16 carries applications' revokes, as V15 does matching's.
     @Test
     void noModuleSchemaGrantsWhatIsCreatedLaterToAnyoneElse() {
         assertThat(jdbc()
                 .sql("""
                         SELECT n.nspname || ': ' || pg_get_userbyid(acl.grantee)
                         FROM pg_default_acl d JOIN pg_namespace n ON n.oid = d.defaclnamespace, aclexplode(d.defaclacl) acl
-                        WHERE n.nspname IN ('identity', 'matching') AND acl.grantee <> n.nspowner
+                        WHERE n.nspname IN ('identity', 'applications', 'matching') AND acl.grantee <> n.nspowner
                         """)
                 .query(String.class)
                 .list())
@@ -129,7 +136,6 @@ class ModuleConnectionsIT extends IntegrationTest {
     private DataSource pool(String module) {
         return switch (module) {
             case "identity" -> identity;
-            case "applications" -> applications;
             case "matching" -> matching;
             case "jobs" -> jobsOnProjectDb;
             default -> throw new IllegalArgumentException(module);
