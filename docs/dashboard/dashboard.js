@@ -659,18 +659,25 @@ function drawEvidence() {
 }
 
 /* ---------- hand-offs ---------- */
-// The script sorts them by the receiving day's place in the run order, open ones first.
+// The script sorts them by the receiving day's place in the run order, open ones first; those no
+// later day picks up (`to` null) come last, then tracks a PR announced that no branch names.
 function drawHandOffs() {
   const groups = [];
   for (const h of DATA.hand_offs || []) {
     if (!groups.length || groups[groups.length - 1].to !== h.to) groups.push({ to: h.to, items: [] });
     groups[groups.length - 1].items.push(h);
   }
+  const unopened = DATA.days.flatMap(d => (d.tracks_unopened || []).map(t =>
+    ({ source: `Day ${dd(d.day)}`, text: `Track ${t.track}: announced in #${t.pr}, no branch names it`, picked: false })));
+  if (unopened.length) groups.push({ to: "tracks", items: unopened });
+  const label = g => g.to === null ? "<b>No later day picks these up</b>"
+    : g.to === "tracks" ? "<b>Tracks announced, never opened</b>"
+    : `<b>Day ${dd(g.to)}</b> ${(d => d ? md(d.title) : "")(DATA.days.find(x => x.day === g.to))}`;
   const source = s => s.startsWith("Day ") ? esc(s) : `<code title="${esc(s)}">${esc(s.split("/").pop())}</code>`;
   document.getElementById("hand-offs").innerHTML = groups.length ? groups.map((g, k) => {
-    const open = g.items.filter(h => !h.picked), d = DATA.days.find(x => x.day === g.to);
-    return `<details${k === 0 ? " open" : ""}><summary><b>Day ${dd(g.to)}</b> ${d ? md(d.title) : ""} · <span class="${open.length ? "none" : ""}">${open.length} open</span> of ${g.items.length}</summary>
-      <ul>${g.items.map(h => `<li class="${h.picked ? "picked" : ""}">${source(h.source)}: ${md(h.text)}${h.picked ? " <em>(picked up)</em>" : ""}</li>`).join("")}</ul></details>`;
+    const open = g.items.filter(h => !h.picked);
+    return `<details${k === 0 || g.to === null || g.to === "tracks" ? " open" : ""}><summary>${label(g)} · <span class="${open.length ? "none" : ""}">${open.length} open</span> of ${g.items.length}</summary>
+      <ul>${g.items.map(h => `<li class="${h.picked ? "picked" : ""}">${source(h.source)}${h.id ? ` <code>${esc(h.id)}</code>` : ""}: ${md(h.text)}${h.picked ? " <em>(picked up)</em>" : ""}</li>`).join("")}</ul></details>`;
   }).join("") : "<p>No finished day names a day not yet run.</p>";
 }
 
