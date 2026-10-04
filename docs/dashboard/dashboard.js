@@ -5,6 +5,7 @@ const N = R.length;
 const KIND = { spec: "Spec change", code: "Code track", close: "Close the day", other: "Other", origin: "Plan as written" };
 const KVAR = { spec: "var(--spec)", code: "var(--code)", close: "var(--close)", other: "var(--other)", origin: "var(--muted)" };
 const fmt = (x, d = 1) => x == null ? "–" : Number(x).toFixed(d);
+const band = b => b == null ? "–" : `${fmt(b[0])}–${fmt(b[1])}°`;
 // PR titles come from anyone who opens a pull request, so everything from the data is escaped.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const md = s => esc(s)
@@ -47,20 +48,24 @@ function rowTip(r) {
   return `<b>${prLabel(r)} · ${KIND[r.kind]}</b><div style="margin:3px 0 6px">${esc(r.title)}</div>
   <div class="row"><span>date</span><span>${r.date}</span></div>
   <div class="row"><span>day reached</span><span>${r.day || "–"}</span></div>
-  <div class="row"><span>drift</span><span>${fmt(r.drift)}°</span></div>
+  <div class="row"><span>lexical drift</span><span>${fmt(r.drift)}°</span></div>
   <div class="row"><span>spec names in code</span><span>${r.name_coverage == null ? "–" : fmt(r.name_coverage * 100, 1) + "%"}</span></div>
   <div class="row"><span>Jaccard, spec ∩ code</span><span>${r.jaccard == null ? "–" : fmt(r.jaccard, 2)}</span></div>
-  <div class="row"><span>gap angle (secondary)</span><span>${fmt(r.gap_full)}°</span></div>
-  <div class="row"><span>gap by chance</span><span>${r.gap_chance == null ? "–" : fmt(r.gap_chance) + "°"}</span></div>
+  <div class="row"><span>names kept, dropped by specs</span><span>${r.names_kept ?? "–"}</span></div>
+  <div class="row"><span>name-gap angle (secondary)</span><span>${fmt(r.gap_full)}°</span></div>
+  <div class="row"><span>name gap by chance</span><span>${r.gap_chance == null ? "–" : fmt(r.gap_chance) + "°"} <small>(${band(r.gap_chance_band)})</small></span></div>
   <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>
   <div class="row"><span>service code out</span><span>${movedShare(r) == null ? "–" : fmt(movedShare(r)) + "%"}</span></div>`;
 }
 
 /* ---------- derived numbers ---------- */
 const first = R[0], last = R[N - 1];
+// A merge with no gap angle (no spec name in the code yet) takes no step, to it or from it.
+const step = (a, b) => a == null || b == null ? 0 : +(b - a).toFixed(2);
 const byKind = { spec: 0, code: 0, close: 0, other: 0 };
-for (let i = 1; i < N; i++) byKind[R[i].kind] += R[i].gap_full - R[i - 1].gap_full;
-const gapClosed = first.gap_full - last.gap_full;
+for (let i = 1; i < N; i++) byKind[R[i].kind] += step(R[i - 1].gap_full, R[i].gap_full);
+const gapClosed = -Object.values(byKind).reduce((a, b) => a + b, 0);
+const firstGap = R.find(r => r.gap_full != null) || first;
 const specShare = -byKind.spec / gapClosed;
 const bigStep = Math.max(...R.map(r => r.step));
 const nKind = k => R.filter(r => r.kind === k).length;
@@ -76,13 +81,13 @@ R.forEach(r => {
 
 /* ---------- stats ---------- */
 document.getElementById("stats").innerHTML = `
-  <div class="stat"><span class="k">Drift from the plan as written</span>
+  <div class="stat"><span class="k">Lexical drift from the plan as written</span>
     <span class="v num">${fmt(last.drift)}°</span>
     <span class="n">0° on Sep 20. ${bigStep < 10 ? "It rises by small steps and never jumps." : `Its biggest single step was ${fmt(bigStep, 2)}° (${prLabel(R.find(r => r.step === bigStep))}).`}</span></div>
   <div class="stat"><span class="k">Spec names in the code · Jaccard</span>
     <span class="v num">${last.name_coverage == null ? "–" : fmt(last.name_coverage * 100, 1) + "%"} <small>· ${last.jaccard == null ? "–" : fmt(last.jaccard, 2)}</small></span>
     <span class="n">Of the backticked names the specs use today, the share the code has; Jaccard is the names in both over the names in either.</span>
-    <span class="n" style="color:var(--muted)">Gap angle (secondary): ${fmt(first.gap_full)}° → ${fmt(last.gap_full)}°, ${fmt(gapClosed)}° closed across ${N - 1} merges; ${fmt(last.gap_chance)}° by chance. ${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
+    <span class="n" style="color:var(--muted)">Name-gap angle (secondary): ${fmt(firstGap.gap_full)}° → ${fmt(last.gap_full)}°, ${fmt(gapClosed)}° closed across ${N - 1} merges; ${fmt(last.gap_chance)}° by chance (95%: ${band(last.gap_chance_band)}). ${last.names_kept == null ? "" : `${last.names_kept} names the specs dropped are still in the code. `}${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
   <div class="stat"><span class="k">Share of the gap closed by the spec</span>
     <span class="v num">${Math.round(specShare * 100)}%</span>
     <span class="n"><span class="sw" style="background:var(--spec)"></span>${nKind("spec")} spec-change PRs ${specShare >= 0 ? "moved the spec toward the code" : "widened the gap, naming what was not built yet"}; <span class="sw" style="background:var(--code)"></span>${nKind("code")} code PRs closed ${Math.round(-byKind.code / gapClosed * 100)}%</span></div>
@@ -94,8 +99,8 @@ document.getElementById("headline").textContent = specShare >= -byKind.code / ga
 document.querySelectorAll(".vocab-n").forEach(e => { e.textContent = DATA.vocab_size; });
 const merged = R.filter(r => r.pr).map(r => r.pr);
 document.getElementById("pr-range").textContent = `${N - 1} merges, #${Math.min(...merged)}–#${Math.max(...merged)}`;
-document.querySelectorAll(".drift-ref").forEach(e => { e.textContent = DATA.drift_ref == null ? "–" : fmt(DATA.drift_ref) + "°"; });
-document.getElementById("gap-chance").textContent = fmt(last.gap_chance) + "°";
+document.querySelectorAll(".drift-ref").forEach(e => { e.textContent = DATA.drift_ref == null ? "–" : `${fmt(DATA.drift_ref)}° (95%: ${band(DATA.drift_ref_band)})`; });
+document.getElementById("gap-chance").textContent = `${fmt(last.gap_chance)}° (95%: ${band(last.gap_chance_band)})`;
 document.getElementById("caveats").innerHTML = ((DATA.meta || {}).caveats || []).map(c => `<li>${esc(c)}</li>`).join("");
 
 /* ---------- scrubber ---------- */
@@ -130,10 +135,11 @@ function drawReadout() {
     <p style="font-size:14px;color:var(--ink-2)">${moved}</p>
     <div class="hr"></div>
     <dl>
-      <dt>Drift from the plan as written</dt><dd>${fmt(s.drift, 2)}° <span style="color:var(--muted)">(${sign(dDrift)})</span></dd>
+      <dt>Lexical drift from the plan as written</dt><dd>${fmt(s.drift, 2)}° <span style="color:var(--muted)">(${sign(dDrift)})</span></dd>
       <dt>Spec names in code</dt><dd>${s.name_coverage == null ? "–" : fmt(s.name_coverage * 100, 1) + "%"}</dd>
       <dt>Jaccard, spec ∩ code</dt><dd>${s.jaccard == null ? "–" : fmt(s.jaccard, 2)}</dd>
-      <dt>Gap angle, spec vs code (secondary)</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd>
+      <dt>Names the specs dropped, still in code</dt><dd>${s.names_kept ?? "–"}</dd>
+      <dt>Spec–code name-gap angle (secondary)</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd>
       <dt>Reached-day names in code</dt><dd>${s.coverage == null ? "–" : fmt(s.coverage * 100, 1) + "%"}</dd>
       <dt>Code lines changed</dt><dd>${s.code_churn.toLocaleString()}</dd>
       <dt>Spec lines changed</dt><dd>${edits.reduce((a, b) => a + b[1], 0)}</dd>
@@ -154,7 +160,8 @@ function dateStarts() {
   return R.map((r, i) => [i, r.date]).filter(([i, s]) => !i || R[i - 1].date !== s);
 }
 const steps = (lo, hi, n) => Array.from({ length: n + 1 }, (_, i) => +(lo + (hi - lo) * i / n).toFixed(1));
-function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digits = 1 }) {
+// bands: [{ color, get: r => [lo, hi] }], shaded under the lines.
+function lineChart(box, { H, yMin, yMax, ticks, unit, series, bands, label, strip, digits = 1 }) {
   box.innerHTML = "";
   const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": label }, box);
   const ly = v => LP.t + (1 - (v - yMin) / (yMax - yMin)) * (H - LP.t - LP.b);
@@ -184,6 +191,12 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digi
   }
   el("line", { x1: lx(sel), x2: lx(sel), y1: LP.t, y2: H - LP.b, stroke: "var(--ink-2)", "stroke-width": 1 }, svg);
   const cross = el("line", { x1: 0, x2: 0, y1: LP.t, y2: H - LP.b, stroke: "var(--muted)", "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
+  (bands || []).forEach(b => {
+    const pts = R.map((r, i) => [i, b.get(r)]).filter(p => p[1] != null);
+    if (!pts.length) return;
+    const edge = k => pts.map(([i, v]) => `${lx(i)},${ly(v[k])}`);
+    el("polygon", { points: [...edge(0), ...edge(1).reverse()].join(" "), fill: b.color, "fill-opacity": 0.12, stroke: "none" }, svg);
+  });
   series.forEach(s => {
     const pts = R.map((r, i) => [i, s.get(r)]).filter(p => p[1] != null);
     el("polyline", { points: pts.map(([i, v]) => `${lx(i)},${ly(v)}`).join(" "), fill: "none", stroke: s.color, "stroke-width": s.dash ? 1.5 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", ...(s.dash ? { "stroke-dasharray": "5 4" } : {}) }, svg);
@@ -203,17 +216,22 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, label, strip, digi
   hit.addEventListener("click", ev => setSel(idxAt(ev)));
 }
 // The axes follow the data, so a later phase that pushes drift or coverage past today's range stays on the chart.
-const degMax = Math.ceil(Math.max(DATA.drift_ref || 0, ...R.map(r => Math.max(r.drift, r.gap_full, r.gap_chance || 0))) / 15) * 15;
+const degMax = Math.ceil(Math.max((DATA.drift_ref_band || [])[1] || DATA.drift_ref || 0,
+  ...R.map(r => Math.max(r.drift || 0, r.gap_full || 0, (r.gap_chance_band || [])[1] || 0))) / 15) * 15;
 const covMin = Math.min(92, Math.floor(Math.min(...R.filter(r => r.coverage != null).map(r => r.coverage * 100)) / 2) * 2);
 function drawLines() {
   lineChart(document.getElementById("lines"), {
     H: 330, yMin: 0, yMax: degMax, ticks: steps(0, degMax, degMax / 15), unit: "°", strip: true,
-    label: "Drift and gap in degrees across merges",
+    label: "Lexical drift and spec–code name gap in degrees across merges",
     series: [
       { name: "gap", color: "var(--gap)", get: r => r.gap_full },
       { name: "chance", color: "var(--gap)", dash: true, get: r => r.gap_chance ?? null },
       { name: "drift", color: "var(--spec)", get: r => r.drift },
       ...(DATA.drift_ref == null ? [] : [{ name: "halves", color: "var(--spec)", dash: true, get: () => DATA.drift_ref }]),
+    ],
+    bands: [
+      { color: "var(--gap)", get: r => r.gap_chance_band ?? null },
+      ...(DATA.drift_ref_band == null ? [] : [{ color: "var(--spec)", get: () => DATA.drift_ref_band }]),
     ],
   });
   lineChart(document.getElementById("cover"), {
@@ -309,7 +327,7 @@ function drawWork() {
     `<span><i class="dot" style="background:${p.color}"></i>${p.name} · ${kilo(p.value)}</span>`).join("")
     + `<span>${fmt(n("test") / Math.max(1, n("prod")), 1)} test lines per production line</span>`;
 }
-const gapDelta = i => +(R[i].gap_full - R[i - 1].gap_full).toFixed(2);
+const gapDelta = i => step(R[i - 1].gap_full, R[i].gap_full);
 const signed = (x, d = 2) => (x > 0 ? "+" : x < 0 ? "−" : "") + fmt(Math.abs(x), d);
 
 /* ---------- per-merge change in drift and gap ---------- */
@@ -325,7 +343,7 @@ function drawDeltas() {
   const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Change in drift and in gap at each merge, in merge order" }, box);
   panels.forEach((pn, k) => {
     const top = LP.t + k * (PH + GAP), bot = top + PH;
-    const pts = R.slice(1).map((r, j) => ({ i: j + 1, r, d: +(pn.get(r) - pn.get(R[j])).toFixed(2) }));
+    const pts = R.slice(1).map((r, j) => ({ i: j + 1, r, d: step(pn.get(R[j]), pn.get(r)) }));
     const lo = Math.min(0, ...pts.map(p => p.d)), hi = Math.max(0, ...pts.map(p => p.d));
     const unit = hi - lo > 4 ? 1 : 0.5, yMin = Math.floor(lo / unit) * unit, yMax = Math.max(Math.ceil(hi / unit) * unit, yMin + unit);
     const ly = v => top + (1 - (v - yMin) / (yMax - yMin)) * PH;
@@ -548,7 +566,7 @@ function drawFindings() {
   document.getElementById("findings").innerHTML = f.map(([h, p]) => `<div class="finding"><h3>${h}</h3><p>${p}</p></div>`).join("");
 }
 function drawTable() {
-  document.getElementById("tbl").innerHTML = `<thead><tr><th>PR</th><th>Type</th><th>Day</th><th class="r">Drift °</th><th class="r">Gap °</th><th class="r">Names in code</th><th class="r">Spec lines</th><th class="r">Code lines</th><th>Title</th></tr></thead><tbody>` +
+  document.getElementById("tbl").innerHTML = `<thead><tr><th>PR</th><th>Type</th><th>Day</th><th class="r">Lexical drift °</th><th class="r">Name gap °</th><th class="r">Names in code</th><th class="r">Spec lines</th><th class="r">Code lines</th><th>Title</th></tr></thead><tbody>` +
     R.map((r, i) => `<tr data-i="${i}" class="${i === sel ? "sel" : ""}"><td class="num">${prLabel(r)}</td><td><span class="sw" style="background:${KVAR[r.kind]}"></span>${KIND[r.kind]}</td><td class="num">${r.day || "–"}</td><td class="r">${fmt(r.drift, 2)}</td><td class="r">${fmt(r.gap_full, 2)}</td><td class="r">${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</td><td class="r">${Object.values(r.spec_files || {}).reduce((a, b) => a + b, 0)}</td><td class="r">${r.code_churn}</td><td class="t">${esc(r.title)}</td></tr>`).join("") + "</tbody>";
 }
 function drawScrubNow() {

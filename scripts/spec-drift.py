@@ -16,12 +16,13 @@ not move an earlier point.
 
 Both angles need a reference to be read. Two vectors of counts are never negative, so they sit
 well under 90° even when they have nothing to do with each other. Gap chance is the gap to the
-same code counts shuffled across the names (the mean of CHANCE_DRAWS, seeded): a gap near it says
+same code counts shuffled across the names (the mean and 95% band of CHANCE_DRAWS, seeded): a gap near it says
 the code uses the spec's names in no particular proportion. The angle is the secondary reading;
 two plain set figures come first. Name coverage: of the names the specs use at a merge, the share
 the code has. Jaccard: the names in both, over the names in either (a name the specs have dropped
-but the code keeps counts against it). Drift reference is the angle between
-the Sep 20 files split in two (even and odd by name): how far one part of the spec as written
+but the code keeps counts against it). Names kept: that other direction alone, how many names the
+specs once used and have dropped that the code still has. Drift reference is the angle between
+the Sep 20 files split at random in two (the mean and 95% band of SPLIT_DRAWS, seeded): how far one part of the spec as written
 sits from another.
 
 Boundaries: for plan.md's four services, how much of their main source has left the monolith for
@@ -80,7 +81,8 @@ SERVICE = dict(auth="identity", user="identity", profile="identity", identity="i
 OWN_PACKAGE = re.compile(r"(?:^|/)src/main/java/nl/hackyourfuture/project/backend/([a-z]+)/")
 IMPORT = re.compile(r"^import\s+(?:static\s+)?nl\.hackyourfuture\.project\.backend\.([a-z]+)\.", re.M)
 FINISHED = ("done", "closed")
-CHANCE_DRAWS = 50
+CHANCE_DRAWS = 1000
+SPLIT_DRAWS = 1000
 # What every figure built on the backticked names cannot see; the dashboard lists these as written.
 CAVEATS = [
     "Gap, name coverage and Jaccard see only identifiers the specs put in backticks: a name written "
@@ -256,10 +258,22 @@ def kind(title, branch, files=None):
 
 
 def angle(x, y):
+    """None when either vector is all zeros: it has no direction, so no angle to the other."""
     nx, ny = np.linalg.norm(x), np.linalg.norm(y)
     if nx == 0 or ny == 0:
-        return 90.0
+        return None
     return float(np.degrees(np.arccos(np.clip(x @ y / (nx * ny), -1, 1))))
+
+
+def deg(a):
+    return None if a is None else round(a, 2)
+
+
+def band(angles):
+    """The mean of a set of angles and the 95% interval they fall in, rounded; None if it is empty."""
+    if not len(angles):
+        return None
+    return [round(float(v), 2) for v in (np.mean(angles), *np.percentile(angles, [2.5, 97.5]))]
 
 
 def word_angle(a, b, idf):
@@ -269,37 +283,58 @@ def word_angle(a, b, idf):
                  w * np.array([math.log1p(b.get(k, 0)) for k in keys]))
 
 
+def angles(X, y):
+    """The angle between each row of X and y; the rows with no direction are left out."""
+    nx, ny = np.linalg.norm(X, axis=1), np.linalg.norm(y)
+    ok = nx > 0
+    if ny == 0:
+        return np.array([])
+    return np.degrees(np.arccos(np.clip(X[ok] @ y / (nx[ok] * ny), -1, 1)))
+
+
 def chance_angle(x, y, keep):
-    """The mean angle between x and y with y's entries in keep shuffled among themselves. Seeded
-    per call, so the same counts give the same chance at every merge."""
+    """The angle between x and y with y's entries in keep shuffled among themselves, over
+    CHANCE_DRAWS shuffles: [mean, 2.5th, 97.5th percentile], or None with no angle. Seeded per
+    call, so the same counts give the same chance at every merge."""
     idx, rng = np.flatnonzero(keep), np.random.default_rng(0)
     if len(idx) < 2:
-        return angle(x, y)
-    out = []
-    for _ in range(CHANCE_DRAWS):
-        z = y.copy()
-        z[idx] = rng.permutation(np.sort(y[idx]))  # sorted first: only the counts matter, not their order
-        out.append(angle(x, z))
-    return float(np.mean(out))
+        a = angle(x, y)
+        return None if a is None else [round(a, 2)] * 3
+    Z = np.tile(y, (CHANCE_DRAWS, 1))
+    # sorted first: only the counts matter, not their order
+    Z[:, idx] = rng.permuted(np.tile(np.sort(y[idx]), (CHANCE_DRAWS, 1)), axis=1)
+    return band(angles(Z, x))
 
 
 def split_angle(texts, idf):
-    """The drift reference: the angle between one snapshot's files split in two, even and odd by name.
-    With two files it is 90° by construction: a word in both weighs nothing."""
+    """The drift reference: the angle between one snapshot's files split at random into two halves,
+    over SPLIT_DRAWS seeded splits: [mean, 2.5th, 97.5th percentile]. With two files every split
+    reads 90°: a word in both weighs nothing."""
     names = sorted(texts)
     if len(names) < 2:
         return None
-    words = [collections.Counter(w for n in names[k::2] for w in WORD.findall(texts[n].lower())) for k in (0, 1)]
-    return round(word_angle(words[0], words[1], idf), 2)
+    counts = [collections.Counter(WORD.findall(texts[n].lower())) for n in names]
+    keys = sorted(set().union(*counts))
+    C = np.array([[c.get(k, 0) for k in keys] for c in counts], dtype=float)
+    w, rng, out = np.array([idf(k) for k in keys]), np.random.default_rng(0), []
+    for _ in range(SPLIT_DRAWS):
+        half = np.zeros(len(names), dtype=bool)
+        half[rng.permutation(len(names))[:len(names) // 2]] = True
+        a = angle(w * np.log1p(C[half].sum(0)), w * np.log1p(C[~half].sum(0)))
+        if a is not None:
+            out.append(a)
+    return band(out)
 
 
 def name_overlap(spec, code, known):
     """Name coverage and Jaccard over the names known at a merge: of the names the specs use, the
-    share the code has; and the names in both over the names in either. None with nothing to divide."""
+    share the code has; and the names in both over the names in either. None with nothing to divide.
+    Last, the other direction: how many names the specs once used and have dropped, that the code keeps."""
     named, in_code = (spec > 0) & known, (code > 0) & known
     both, either = (named & in_code).sum(), (named | in_code).sum()
     return (round(float(both / named.sum()), 3) if named.any() else None,
-            round(float(both / either), 3) if either else None)
+            round(float(both / either), 3) if either else None,
+            int((in_code & ~named).sum()))
 
 
 def rarity(texts):
@@ -412,14 +447,15 @@ def trajectory(snaps, blobs, order=()):
                 churn += 0 if a == "-" else int(a) + int(d)
         mask, known = reached > 0, born <= i
         spec_v, code_v = np.log1p(spec) * known, np.log1p(code) * known
-        name_coverage, jaccard = name_overlap(spec, code, known)
+        name_coverage, jaccard, names_kept = name_overlap(spec, code, known)
+        chance = chance_angle(spec_v, code_v, known)
         rows.append(dict(i=i, sha=s["sha"], date=s["date"], pr=s["pr"], title=s["title"], kind=s["kind"],
-                         day=day if s["pr"] else 0, drift=round(word_angle(words, origin, idf), 2),
-                         step=round(word_angle(words, prev, idf), 2), added=added, deleted=deleted,
-                         gap_full=round(angle(spec_v, code_v), 2),
-                         gap_chance=round(chance_angle(spec_v, code_v, known), 2),
+                         day=day if s["pr"] else 0, drift=deg(word_angle(words, origin, idf)),
+                         step=deg(word_angle(words, prev, idf)), added=added, deleted=deleted,
+                         gap_full=deg(angle(spec_v, code_v)),
+                         gap_chance=chance and chance[0], gap_chance_band=chance and chance[1:],
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
-                         name_coverage=name_coverage, jaccard=jaccard,
+                         name_coverage=name_coverage, jaccard=jaccard, names_kept=names_kept,
                          spec_files=spec_files, code_churn=churn, work=work))
         prev = words
     files = sorted({f for s in snaps for f in s["texts"] if f == "plan.md" or day_of(f)},
@@ -883,7 +919,7 @@ def main():
         snaps = snapshots(prs)
         head = snaps[-1]["sha"]
         spec_days = [d for d in map(day_of, run("git", "ls-tree", "--name-only", head, "specs/").split()) if d]
-        rows, files, vocab, lines, drift_ref = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
+        rows, files, vocab, lines, split = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
         days, order, stop = roadmap(snaps, prs, blobs)
         evidence_history(rows, days, snaps, blobs)
         boundaries(rows, snaps, blobs)
@@ -892,7 +928,8 @@ def main():
                    current_day=next((d["day"] for d in days if d["status"] == "active"), None),
                    next_step=next_step(days, open_prs, order, stop), stop_after=stop,
                    open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
-        data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines, drift_ref=drift_ref,
+        data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
+                               drift_ref=split and split[0], drift_ref_band=split and split[1:],
                                order=[d for d in order if d != PLATFORM],
                                out_of_order=out_of_order(order),
                                removals=removal_history(days, snaps, blobs),
