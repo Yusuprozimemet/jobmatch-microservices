@@ -309,6 +309,38 @@ class EvidenceTest(unittest.TestCase):
         self.assertEqual(self.repo.inside(lambda blobs: sd.moves(self.repo.snaps)), [])
         self.assertEqual(set(self.state()[1]["tests"].values()), {"missing"})
 
+    def test_a_name_there_before_the_test_left_and_arriving_again_after_is_followed_to_the_later(self):
+        # InternalCallsObservedTest: in matching-service from Day 21, then in application-service
+        # in #305, after InternalCallsObservedIT left in #296.
+        self.repo.merge({"svc/FooTest.java": "class FooTest { void other() {} }\n"})
+        self.repo.git("rm", "-q", "src/FooIT.java")
+        self.repo.merge({"src/Other.java": "class Other {}\n"})
+        self.repo.merge({"app/FooTest.java": "class FooTest { void refuses() {} void saves() {} }\n"})
+        self.assertEqual(self.repo.inside(lambda blobs: sd.moves(self.repo.snaps)), [(4, "FooIT", "FooTest")])
+        self.assertEqual(self.state()[1]["tests"], {"FooIT": "present", "FooIT.saves": "present"})
+
+    def test_a_move_to_another_stem_is_followed_only_by_the_rename_table(self):
+        self.repo.git("rm", "-q", "src/FooIT.java")
+        self.repo.merge({"svc/BarTest.java": "class BarTest { void refuses() {} void saves() {} }\n"})
+        self.assertEqual(set(self.state()[1]["tests"].values()), {"missing"})
+        renamed, sd.RENAMED = sd.RENAMED, {2: ("FooIT", "BarTest")}
+        try:
+            self.assertEqual(self.repo.inside(lambda blobs: sd.moves(self.repo.snaps)), [(2, "FooIT", "BarTest")])
+            self.assertEqual(self.state()[1]["tests"], {"FooIT": "present", "FooIT.saves": "present"})
+        finally:
+            sd.RENAMED = renamed
+
+    def test_a_test_run_on_a_system_property_is_run_when_ci_passes_it_and_disabled_is_not(self):
+        on = '@EnabledIfSystemProperty(named = "harness.gateway", matches = "true")\n'
+        self.repo.merge({"src/FooIT.java": on + "class FooIT { void refuses() {} void saves() {} }\n"})
+        self.assertEqual(set(self.state()[1]["tests"].values()), {"skippable"})
+        self.repo.merge({".github/workflows/ci.yml": "run: ./mvnw -B verify -Dharness.gateway=false\n"})
+        self.assertEqual(set(self.state()[1]["tests"].values()), {"skippable"})
+        self.repo.merge({".github/workflows/ci.yml": "run: ./mvnw -B verify -pl app -am -Dharness.gateway=true\n"})
+        self.assertEqual(set(self.state()[1]["tests"].values()), {"present"})
+        self.repo.merge({"src/FooIT.java": on + "@Disabled class FooIT { void refuses() {} void saves() {} }\n"})
+        self.assertEqual(set(self.state()[1]["tests"].values()), {"skippable"})
+
     def test_the_history_counts_a_moved_test_missing_until_it_arrives(self):
         days = [dict(day=1, status="done", prs=[dict(number=1)], evidence=sd.criteria(CRITERIA))]
         self.repo.git("rm", "-q", "src/FooIT.java")
