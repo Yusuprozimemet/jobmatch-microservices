@@ -142,8 +142,8 @@
 				<artifactId>maven-checkstyle-plugin</artifactId>
 				<version>3.6.0</version>
 				<configuration>
-					<!-- Absolute, because a bare filename is resolved against each module's
-					     own directory and every module but this one would fail. -->
+					<!-- The repository root, where .mvn/ is located (Day 28). Absolute path because
+					     a bare filename is resolved against each module's own directory. -->
 					<configLocation>${maven.multiModuleProjectDirectory}/checkstyle.xml</configLocation>
 					<consoleOutput>true</consoleOutput>
 					<failOnViolation>true</failOnViolation>

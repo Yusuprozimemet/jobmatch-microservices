@@ -28,10 +28,10 @@ To point at a different database, set the [`DB_*` variables](#environment-variab
 ### 3. Start the application
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+../mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-On Windows use `mvnw.cmd`. No profile is active unless you ask for one, so pass `dev` here or set it as the active profile in your IDE's run configuration.
+On Windows use `..\mvnw.cmd`. No profile is active unless you ask for one, so pass `dev` here or set it as the active profile in your IDE's run configuration.
 
 Open the API docs at **http://localhost:8080/api/docs**
 
@@ -57,7 +57,7 @@ Both are public (see [`SecurityConfig`](src/main/java/nl/hackyourfuture/project/
 Build a runnable JAR into `target/`:
 
 ```bash
-./mvnw clean package
+../mvnw clean package
 ```
 
 Run it:
@@ -71,7 +71,7 @@ change to `services/job-service`, since a stale image passes silently):
 
 ```bash
 docker build -t jobmatch-job-service:harness ../services/job-service
-./mvnw verify
+../mvnw verify
 ```
 
 > The tests never touch your own database: they start one throwaway `postgres:18.4-alpine`
@@ -79,10 +79,10 @@ docker build -t jobmatch-job-service:harness ../services/job-service
 > has to be running and the `DB_*` variables are ignored here. See
 > [Integration tests](#integration-tests).
 
-Check code style with Checkstyle ([`checkstyle.xml`](checkstyle.xml)):
+Check code style with Checkstyle ([`checkstyle.xml`](../checkstyle.xml)):
 
 ```bash
-./mvnw checkstyle:check
+../mvnw checkstyle:check
 ```
 
 ### Docker build
@@ -286,7 +286,7 @@ Do not add a second `@TestConfiguration` with its own container, and do not put 
 
 Every pull request touching `backend/**` runs [`backend-ci-cd.yaml`](../.github/workflows/backend-ci-cd.yaml), and so does every push to `main` that touches it:
 
-1. **`lint-and-test`** — `./mvnw checkstyle:check`, builds job-service's harness image, then `./mvnw verify`. Both must pass.
+1. **`lint-and-test`** — `../mvnw checkstyle:check`, builds job-service's harness image, then `../mvnw verify`. Both must pass.
 2. **`build`** — builds the Docker image; only pushes to GHCR when the change lands on `main`.
 
 Images are tagged `latest`, `1.0.<run number>`, and `main-sha-<short sha>`.
@@ -319,22 +319,22 @@ The `user` package is your reference — deliberately small and complete.
 - **Keep classes under `nl.hackyourfuture.project.backend`.** Spring only scans below the package holding `BackendApplication`; anything outside is silently ignored.
 - **Use correct status codes** — `200` read/update, `201` create (see `@ResponseStatus(HttpStatus.CREATED)`), `400` invalid input, `404` not found — then document them with `@ApiResponse`.
 - **Validate at the edge:** constraints on the request DTO, `@Valid` on the controller parameter.
-- **Before opening a PR,** build job-service's image (`docker build -t jobmatch-job-service:harness ../services/job-service`), then run `./mvnw checkstyle:check` and `./mvnw verify` locally — CI runs the same checks and blocks the PR if either fails.
+- **Before opening a PR,** build job-service's image (`docker build -t jobmatch-job-service:harness ../services/job-service`), then run `../mvnw checkstyle:check` and `../mvnw verify` locally — CI runs the same checks and blocks the PR if either fails.
 
 ### Troubleshooting
 
 | Symptom | Cause |
 |---|---|
-| `Failed to configure a DataSource: 'url' attribute is not specified` | Config files missing from `target/classes`. Run `./mvnw clean package`, or Rebuild Project in IntelliJ — recompiling a single class doesn't copy resources |
+| `Failed to configure a DataSource: 'url' attribute is not specified` | Config files missing from `target/classes`. Run `../mvnw clean package`, or Rebuild Project in IntelliJ — recompiling a single class doesn't copy resources |
 | `Connection refused` on port 5432 | PostgreSQL isn't running — start the container from [Quick start](#quick-start) |
 | `FATAL: database "project_db" does not exist` | The database was created under another name. Create `project_db`, or set `DB_NAME` to the name you have |
 | `password authentication failed for user "admin"` | Wrong `DB_USER` / `DB_PASSWORD` for this database |
 | Flyway stops at V12 with `Day 11 moves identity's tables into schema identity ...` | The module roles and schemas do not exist in this database. Run `db-setup.py` against it, or for compose recreate the volume: `docker compose down -v` |
 | `permission denied for table ...` from the application | A module's login reached another module's table. Each module writes only its own schema; that is Postgres enforcing the boundary, not a grant to add |
-| `Could not find a valid Docker environment` while running `./mvnw verify` | Docker isn't running — the tests start their own database container |
+| `Could not find a valid Docker environment` while running `../mvnw verify` | Docker isn't running — the tests start their own database container |
 | `job-service's harness image did not start from jobmatch-job-service:harness` | The image is not built: `docker build -t jobmatch-job-service:harness ../services/job-service` (the harness never pulls it) |
 | `Migration checksum mismatch` | An applied migration was edited. Revert it and add a new `V…` file |
 | `403 Forbidden` on your new endpoint | Not listed in `SecurityConfig`; anything unlisted requires authentication |
 | Endpoint missing from `/api/docs` | Not annotated `@RestController`, or outside the base package |
 | IDE errors on `@Getter`/`@Builder` but Maven builds fine | Lombok plugin not installed in the IDE |
-| Checkstyle fails in CI but not locally | Run `./mvnw checkstyle:check` before pushing — it's the same check CI runs |
+| Checkstyle fails in CI but not locally | Run `../mvnw checkstyle:check` before pushing — it's the same check CI runs |

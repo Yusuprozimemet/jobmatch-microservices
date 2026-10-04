@@ -1062,7 +1062,7 @@ Run the contract test suite that Phase 0 is building:
 
 ```bash
 docker build -t jobmatch-job-service:harness services/job-service   # the suite starts it (Day 17)
-cd backend && ./mvnw verify
+cd backend && ../mvnw verify
 ```
 
 Job listings come from the data pipeline, which publishes its marts into `jobs_db`, job-service's

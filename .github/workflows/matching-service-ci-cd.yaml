@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "services/matching-service/**"
-      - "backend/checkstyle.xml"
+      - "checkstyle.xml"
+      - "mvnw"
+      - ".mvn/**"
       - ".github/workflows/matching-service-ci-cd.yaml"
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
@@ -32,7 +34,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(services/matching-service/|backend/checkstyle\.xml$|\.github/workflows/matching-service-ci-cd\.yaml$)'
+          PATHS: '^(services/matching-service/|checkstyle\.xml$|mvnw$|\.mvn/|\.github/workflows/matching-service-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
             echo run=true >> "$GITHUB_OUTPUT"; exit 0
@@ -58,14 +60,14 @@ jobs:
 
       # The backend's Maven wrapper and checkstyle rules, so the repository keeps one of each.
       - name: Run Checkstyle
-        run: backend/mvnw -B -f services/matching-service/pom.xml checkstyle:check
+        run: ./mvnw -B -f services/matching-service/pom.xml checkstyle:check
 
       # Pull the DynamoDB emulator (Day 22): the service's test base's container.
       - name: Pull the DynamoDB emulator
         run: docker pull amazon/dynamodb-local:3.3.1
 
       - name: Run tests
-        run: backend/mvnw -B -f services/matching-service/pom.xml verify
+        run: ./mvnw -B -f services/matching-service/pom.xml verify
 
   build:
     needs: [changes, lint-and-test]

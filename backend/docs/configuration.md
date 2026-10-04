@@ -28,7 +28,7 @@ past that one is a list of overrides rather than an edited file.
 | File | Read by | Committed? |
 | --- | --- | --- |
 | [`.env`](../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
-| [`backend/.env`](../.env.example) | Loaded by hand for `./mvnw spring-boot:run`. **Not** read by compose: the backend service has no `env_file` | No |
+| [`backend/.env`](../.env.example) | Loaded by hand for `../mvnw spring-boot:run`. **Not** read by compose: the backend service has no `env_file` | No |
 | [`frontend/.env.local`](../../frontend/.env.example) | Next, in local development | No |
 | [`data/.env`](../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
 
@@ -232,7 +232,7 @@ deliberate: in production, defaulting to a local database is a worse outcome tha
 No profile is active unless you ask for one:
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+../mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 ---

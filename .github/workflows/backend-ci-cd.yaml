@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      # The backend builds with the root wrapper and rules (Day 28).
+      - "checkstyle.xml"
+      - "mvnw"
+      - ".mvn/**"
       # The suite also runs through the gateway, so a gateway change runs it too (Day 15).
       - "services/api-gateway/**"
       # Every run starts job-service from its image (Day 17), so a change to it runs the suite.
@@ -44,7 +48,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(backend/|services/(api-gateway|job-service|matching-service|application-service)/|\.github/workflows/backend-ci-cd\.yaml$)'
+          PATHS: '^(backend/|checkstyle\.xml$|mvnw$|\.mvn/|services/(api-gateway|job-service|matching-service|application-service)/|\.github/workflows/backend-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
             echo run=true >> "$GITHUB_OUTPUT"; exit 0
@@ -70,7 +74,7 @@ jobs:
 
       - name: Run Checkstyle
         working-directory: ./backend
-        run: ./mvnw -B checkstyle:check
+        run: ../mvnw -B checkstyle:check
 
       # Every integration test's context trusts job-service at its container's key set (Day 17),
       # so the harness starts it from this image, built here: never pulled.
@@ -94,7 +98,7 @@ jobs:
       # for Testcontainers, which ubuntu-latest has.
       - name: Run tests
         working-directory: ./backend
-        run: ./mvnw -B verify
+        run: ../mvnw -B verify
 
       # The Day 1-4 suite, and the stale-cookie and refresh tests, again through the API gateway
       # (Day 15): the harness starts this image in front of the application and sends every
@@ -108,7 +112,7 @@ jobs:
       - name: Run the suite through the gateway
         working-directory: ./backend
         run: >-
-          ./mvnw -B verify -pl app -am -Dharness.gateway=true
+          ../mvnw -B verify -pl app -am -Dharness.gateway=true
           -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT,ServiceJwksIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 

@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "services/application-service/**"
-      - "backend/checkstyle.xml"
+      - "checkstyle.xml"
+      - "mvnw"
+      - ".mvn/**"
       - ".github/workflows/application-service-ci-cd.yaml"
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
@@ -32,7 +34,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(services/application-service/|backend/checkstyle\.xml$|\.github/workflows/application-service-ci-cd\.yaml$)'
+          PATHS: '^(services/application-service/|checkstyle\.xml$|mvnw$|\.mvn/|\.github/workflows/application-service-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
             echo run=true >> "$GITHUB_OUTPUT"; exit 0
@@ -58,10 +60,10 @@ jobs:
 
       # The backend's Maven wrapper and checkstyle rules, so the repository keeps one of each.
       - name: Run Checkstyle
-        run: backend/mvnw -B -f services/application-service/pom.xml checkstyle:check
+        run: ./mvnw -B -f services/application-service/pom.xml checkstyle:check
 
       - name: Run tests
-        run: backend/mvnw -B -f services/application-service/pom.xml verify
+        run: ./mvnw -B -f services/application-service/pom.xml verify
 
   build:
     needs: [changes, lint-and-test]

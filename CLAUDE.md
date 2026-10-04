@@ -91,7 +91,7 @@ implementer never commits or pushes.
 
 - Build job-service's image first, `docker build -t jobmatch-job-service:harness services/job-service`:
   every run starts it, and a stale one passes silently.
-- From `backend/`: `./mvnw clean verify` **and** `./mvnw -B checkstyle:check`. `verify` does not
+- From `backend/`: `../mvnw clean verify` **and** `../mvnw -B checkstyle:check`. `verify` does not
   run checkstyle, and CI does; 200+ green tests have hidden a violation more than once.
 - Delete `*/target/surefire-reports` first and read the reports, not the exit code. A stale report
   from an earlier run looks like a pass.
