@@ -177,6 +177,26 @@ class SpecDriftTest(unittest.TestCase):
                 run("b", "success"), run("b", "cancelled", "Backend CI/CD"), run("c", "failure", event="push")]
         self.assertEqual(sd.ci_pushes(runs), {"day-01/track-a-x": (2, 1, ["Backend CI/CD", "PR checks"])})
 
+    def test_a_gh_list_as_long_as_its_limit_is_refused(self):
+        real = sd.run
+        try:
+            sd.run = lambda *args: "[" + ",".join(["{}"] * n) + "]"
+            n = 2
+            self.assertEqual(len(sd.gh_list(3, "pr", "list")), 2)
+            n = 3
+            with self.assertRaisesRegex(SystemExit, "pr list returned its limit of 3"):
+                sd.gh_list(3, "pr", "list")
+        finally:
+            sd.run = real
+
+    def test_the_data_names_the_commit_versions_and_draws_that_made_it(self):
+        p = sd.provenance()
+        self.assertRegex(p["commit"], "^[0-9a-f]{40}$")
+        self.assertEqual((p["numpy"], p["chance_draws"], p["split_draws"]),
+                         (sd.np.__version__, sd.CHANCE_DRAWS, sd.SPLIT_DRAWS))
+        self.assertRegex(p["python"], r"^3\.\d+\.\d+")
+        self.assertIsInstance(p["script_edited"], bool)
+
     def test_a_day_that_runs_later_is_not_reached_by_a_higher_number(self):
         self.repo.merge({"specs/day-17-x.md": "Day 17 adds `LaterThing`.\n",
                          "specs/day-38-x.md": "Day 38 adds `PlatformThing`.\n"})

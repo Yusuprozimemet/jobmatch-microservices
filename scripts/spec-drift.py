@@ -37,6 +37,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 import posixpath
 import re
 import shlex
@@ -83,6 +84,9 @@ IMPORT = re.compile(r"^import\s+(?:static\s+)?nl\.hackyourfuture\.project\.backe
 FINISHED = ("done", "closed")
 CHANCE_DRAWS = 1000
 SPLIT_DRAWS = 1000
+# The most gh is asked for: a list that comes back this long may have been cut, and nothing else says so.
+PR_LIMIT = 500
+RUN_LIMIT = 5000
 # What every figure built on the backticked names cannot see; the dashboard lists these as written.
 CAVEATS = [
     "Gap, name coverage and Jaccard see only identifiers the specs put in backticks: a name written "
@@ -101,6 +105,14 @@ CACHE = {}
 def run(*args):
     return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
                           errors="replace", check=True).stdout
+
+
+def gh_list(limit, *args):
+    """A gh list call's JSON, refused when it is as long as the limit: what was cut is not known."""
+    items = json.loads(run("gh", *args, "--limit", str(limit)))
+    if len(items) >= limit:
+        raise SystemExit(f"gh {' '.join(args[:2])} returned its limit of {limit}: some are missing, raise it")
+    return items
 
 
 def at_commits(*args):
@@ -899,6 +911,14 @@ def next_step(days, open_prs, order, stop):
     return f"Day {day['day']:02d}: the closing PR"
 
 
+def provenance():
+    """What made these numbers: the script's commit, the versions, and the draws behind each band."""
+    dirty = bool(run("git", "status", "--porcelain", "--", os.path.abspath(__file__)).strip())
+    return dict(commit=run("git", "rev-parse", "HEAD").strip(), script_edited=dirty,
+                python=platform.python_version(), numpy=np.__version__,
+                chance_draws=CHANCE_DRAWS, split_draws=SPLIT_DRAWS)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     out = ap.add_mutually_exclusive_group()
@@ -909,10 +929,9 @@ def main():
     args = ap.parse_args()
     if not args.no_cache:
         load_cache(args.cache)
-    listed = json.loads(run("gh", "pr", "list", "--state", "all", "--limit", "500",
-                            "--json", "number,title,headRefName,state,url,body"))
-    runs = json.loads(run("gh", "run", "list", "--event", "pull_request", "--limit", "5000",
-                          "--json", "headBranch,headSha,conclusion,event,workflowName"))
+    listed = gh_list(PR_LIMIT, "pr", "list", "--state", "all", "--json", "number,title,headRefName,state,url,body")
+    runs = gh_list(RUN_LIMIT, "run", "list", "--event", "pull_request",
+                   "--json", "headBranch,headSha,conclusion,event,workflowName")
     prs = {p["number"]: p for p in listed}
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
     with Blobs() as blobs:
@@ -937,7 +956,7 @@ def main():
                                vocab_size=vocab, tokens=token_usage(),
                                verification=verification(prs, runs),
                                conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md")),
-                               meta=dict(caveats=CAVEATS)),
+                               meta=dict(caveats=CAVEATS, provenance=provenance())),
                           separators=(",", ":"))
     target = args.build or args.out
     if args.build:
