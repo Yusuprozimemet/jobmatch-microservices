@@ -101,13 +101,13 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
-			<!-- The backend's rules, from its file, so the repository has one set. -->
+			<!-- The repository's rules from the root file. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-checkstyle-plugin</artifactId>
 				<version>3.6.0</version>
 				<configuration>
-					<configLocation>${project.basedir}/../../backend/checkstyle.xml</configLocation>
+					<configLocation>${project.basedir}/../../checkstyle.xml</configLocation>
 					<consoleOutput>true</consoleOutput>
 					<failOnViolation>true</failOnViolation>
 					<violationSeverity>warning</violationSeverity>

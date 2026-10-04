@@ -190,6 +190,7 @@ ENV/
 target/
 out/
 build/
+.mvn/wrapper/maven-wrapper.jar
 
 # Spring Boot runtime artifacts
 *.pid

@@ -24,10 +24,10 @@ do not guess which one is right.
 - **Write code that reads like the code around it:** its comment density, naming and idiom.
   Comments say why, in the repository's plain style. Never name, in a comment, a thing the day's
   grep checks is gone.
-- **Run the tests the brief names**, from `backend/` (`./mvnw -B test -Dtest='...'
+- **Run the tests the brief names**, from `backend/` (`../mvnw -B test -Dtest='...'
   -Dsurefire.failIfNoSpecifiedTests=false`) or with `-f services/api-gateway/pom.xml` for the
   gateway. Delete `*/target/surefire-reports` first and read the reports, not the exit code.
-  Run `./mvnw -B checkstyle:check` too: `verify` does not run it, and CI does.
+  Run `../mvnw -B checkstyle:check` too: `verify` does not run it, and CI does.
 - If a test fails, fix your change, not the test, unless the brief says the test changes.
 
 ## Never

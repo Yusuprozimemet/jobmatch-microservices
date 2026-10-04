@@ -1,3 +1,7 @@
 # Shell scripts run inside Linux containers (docker-entrypoint-initdb.d), where a CRLF line
 # ending breaks them. Keep them LF on every checkout, Windows included.
 *.sh text eol=lf
+
+# Maven wrapper: mvnw (Unix) must be LF; mvnw.cmd (Windows) must be CRLF
+/mvnw text eol=lf
+/mvnw.cmd text eol=crlf

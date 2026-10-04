@@ -19,7 +19,7 @@ earlier days left for this one (check 7).
 
 1. **Run every check.** Every acceptance criterion's command and the Verify block, on the code as
    it is, from the directory the spec says. For Maven: delete `*/target/surefire-reports` first,
-   read the reports rather than the exit code, and run `./mvnw -B checkstyle:check` too.
+   read the reports rather than the exit code, and run `../mvnw -B checkstyle:check` too.
    Record exactly what each printed.
 2. **The tags.** Every criterion must be `new` or `hold`. A `new` check must fail today; show the
    failure and the count. A `hold` check must pass today; say how it could be broken on purpose
