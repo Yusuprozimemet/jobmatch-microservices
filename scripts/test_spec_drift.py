@@ -254,6 +254,11 @@ class EvidenceTest(unittest.TestCase):
         cut = sd.criteria("- [x] **hold** — " + "x" * 130 + " `a/LongNameIT`\n")[0]["claim"]
         self.assertEqual(cut.count("`"), 0)
 
+    def test_a_criterion_from_day_28_on_carries_its_id_and_an_older_one_none(self):
+        tagged, untagged = sd.criteria("- [ ] C28.3 **new** — `FooIT` refuses.\n- [ ] **hold** — C28.3 holds.\n")
+        self.assertEqual((tagged["id"], tagged["kind"], tagged["claim"]), ("C28.3", "new", "`FooIT` refuses."))
+        self.assertEqual((untagged["id"], untagged["claim"]), (None, "C28.3 holds."))
+
     def test_a_break_seen_red_is_told_from_a_claim_that_it_is_red_today(self):
         seen = ["Red as named", "Red without the chain", "`savedJobs` went red", "turned two red, not one"]
         for text in seen:
@@ -430,6 +435,38 @@ class HandOffTest(unittest.TestCase):
             (5, "Day 01 Notes", False),
             (5, "src/Foo.java:1", True)])       # the code line after it is not a comment
         self.assertEqual(found[4]["text"], "Day 05 moves this.")
+
+    def test_a_hand_off_with_an_id_is_picked_up_only_by_a_spec_citing_it(self):
+        repo = Repo().merge({
+            "specs/day-01-a.md": "## Notes\n- **Hand-off** H01.1 → Day 03: the key.\n"
+                                 "- **Hand-off** H01.2 → Day 02: the queue.\n"
+                                 "- **Hand-off** H01.3 → the maintainer: branch protection.\n"
+                                 "- **Hand-off** H01.4 → the maintainer: the volume.\n",
+            "specs/day-02-b.md": "# Day 02\n\nFrom Day 01: nothing cited.\n",
+            "specs/day-03-c.md": "# Day 03\n\nFrom Day 01: the key.\n\n## Notes\n- H01.4 done by hand.\n",
+            "specs/day-04-d.md": "# Day 04\n\nPicks up H01.1.\n",
+            "src/Foo.java": "// Day 01 wrote this.\n",
+        })
+        days = [dict(day=n, file=f"specs/day-0{n}-{c}.md", status="done" if n < 3 else "ready")
+                for n, c in zip(range(1, 5), "abcd")]
+        try:
+            found = repo.inside(lambda blobs: sd.hand_offs(days, [1, 2, 3, 4], repo.snaps[-1]["sha"], blobs))
+        finally:
+            repo.close()
+        self.assertEqual([(h["to"], h["id"], h["picked"]) for h in found], [
+            (3, "H01.1", False),                # Day 03 names Day 01, not the ID; Day 04 cites it
+            (None, "H01.2", False),             # Day 02 finished without citing it
+            (None, "H01.3", False)])            # no day takes it; H01.4 is cited by Day 03's Notes
+
+    def test_a_track_a_pr_announces_that_no_branch_names_is_the_next_step(self):
+        prs = [dict(number=298, headRefName="day-25/track-e1b-x", body="**E1c** (next). Not Day 21's E1d; `grep -A3`."),
+               dict(number=297, headRefName="day-25/track-e1a-x", body="Track E1 splits; B1 stays."),
+               dict(number=290, headRefName="day-25/track-b-x", body="B1 here")]
+        self.assertEqual(sd.unopened_tracks(prs), [dict(track="E1c", pr=298)])
+        self.assertEqual(sd.unopened_tracks(prs + [dict(number=305, headRefName="day-25/track-e1c-y", body="")]), [])
+        day = dict(a_day(25), status="active", prs=[dict(kind="spec")], tracks_merged=["A"],
+                   tracks_unopened=sd.unopened_tracks(prs))
+        self.assertEqual(sd.next_step([day], [], [25], None), "Day 25 Track E1c: announced in #298, no branch names it")
 
 
 def a_day(n, ticked=1, total=1, kinds=()):

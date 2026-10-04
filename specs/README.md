@@ -38,6 +38,12 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
   `environment` (tooling, CI, the machine, a library). A track whose code the main session
   rewrote beyond review fixes gets a `Rewrite` line. These are the counts
   [`docs/paper/success-criteria.md`](../docs/paper/success-criteria.md) judges H1–H3 by.
+- **IDs, from Day 28's spec change on.** Each criterion starts with its ID, `C28.3` for Day
+  28's third, and keeps it when others are added or dropped. Each item a day leaves for later is
+  a `Hand-off` line in its Notes with an ID, `H28.1`, and the day or the maintainer it goes to.
+  The receiving spec picks it up by citing the ID; naming the day does not. `spec-drift.py`
+  lists what no later day picks up, and any track a PR announces ("E1c, next") that no branch
+  ever names. Specs before Day 28 keep their form.
 - Changing a spec is normal. Change it in a PR *before* the work, not after.
 - Specs written before the `new`/`hold` rule get their criteria tagged in that day's
   spec-change PR, when the spec is read against the code.

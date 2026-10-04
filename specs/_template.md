@@ -19,9 +19,9 @@
 | B | | |
 
 ## Acceptance criteria
-- [ ] **new** — <checkable by someone who did not write the code>. Red today: <how it fails
-      on the code as it is, e.g. "the grep finds two">.
-- [ ] **hold** — <true before the change and must stay true after it>. Broken on purpose:
+- [ ] CNN.1 **new** — <checkable by someone who did not write the code>. Red today: <how it
+      fails on the code as it is, e.g. "the grep finds two">.
+- [ ] CNN.2 **hold** — <true before the change and must stay true after it>. Broken on purpose:
       <what was broken, and what the check reported>.
 
 ## Verify
@@ -35,3 +35,4 @@
   cause: <spec | implementation | environment> · <what was wrong, and the PR that fixed it>.
 - **Rewrite** — Track <X>: <what the main session rewrote in the implementer's code beyond
   review fixes, and why>.
+- **Hand-off** HNN.1 → Day <m> | the maintainer: <what this day leaves undone, and why>.

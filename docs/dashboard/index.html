@@ -51,7 +51,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Hand-offs to days not yet run</h2>
-      <p>What finished days leave for later: a Notes item that names a day not yet run, or a code comment that does ("Day 17 adds job-service"). Nothing else carries them forward. A Notes item counts as picked up when the receiving spec names the day it came from; a comment, when the spec names its file. Days in run order; a spec written in full should leave none open.</p>
+      <p>What finished days leave for later: a Notes item that names a day not yet run, or a code comment that does ("Day 17 adds job-service"). Nothing else carries them forward. A Notes item with an ID (<code>H28.1</code>, from Day 28 on) counts as picked up only when the receiving spec cites the ID; one without, when it names the day the item came from; a comment, when the spec names its file. Days in run order; a spec written in full should leave none open. Last: ID'd items no later day picks up, and tracks a PR announced that no branch ever named (Day 25's E1c, #298).</p>
     </div>
     <div class="hand-offs" id="hand-offs"></div>
   </section>

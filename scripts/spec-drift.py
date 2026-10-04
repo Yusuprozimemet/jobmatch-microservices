@@ -64,6 +64,12 @@ GREP_SAYS_NOTHING = re.compile(r"`(grep [^`]+)`[^.]{0,40}?\b(?:returns|prints|fi
 GREP_OR_ECHO = re.compile(r"^(grep\s.+?)\s*\|\|\s*echo\b", re.M)
 # "Day 17", "Days 18-19", "Days 19, 21 and 24": the days a sentence names.
 DAY_REF = re.compile(r"\bDays? (\d+)((?:\s*(?:[–-]|,|and|or)\s*\d+)*)")
+# IDs, from Day 28's spec change on (specs/README.md): criterion 3 of Day 28 is C28.3, and the
+# first hand-off Day 28's Notes leave is H28.1. A spec picks a hand-off up by citing its ID.
+CRITERION_ID = re.compile(r"^C(\d+)\.(\d+)\s+")
+HAND_OFF_ID = re.compile(r"\bH(\d+)\.(\d+)\b")
+# A track a PR names ("**E1c** (next, ...)"), not a grep's -A3 or Day 14's A1.
+TRACK_NAMED = re.compile(r"(?<![-\w])(?<!Day \d\d's )(?<!Day \d\d )([A-Z]\d+[a-z]?|0[a-z])\b")
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
@@ -542,6 +548,20 @@ def merged_tracks(branches, tracks):
     return sorted(merged)
 
 
+def unopened_tracks(day_prs):
+    """Tracks a day's PRs name that no branch of the day ever did: #298 announced E1c, and the day
+    read as done for a day before #305 opened it. A branch covers the tracks it begins (`track-e1`
+    covers E1c) and those that begin it (`track-b` was Day 22's B1). Only letters a branch uses count."""
+    branches = {m.group(1) for p in day_prs if (m := re.search(r"/track-([0-9a-z]+?)(?:-|$)", p["headRefName"]))}
+    found = {}
+    for p in sorted(day_prs, key=lambda p: p["number"]):
+        for t in TRACK_NAMED.findall(p.get("body") or ""):
+            low = t.lower()
+            if low[0] in {b[0] for b in branches} and not any(b.startswith(low) or low.startswith(b) for b in branches):
+                found.setdefault(t, p["number"])
+    return [dict(track=t, pr=n) for t, n in sorted(found.items())]
+
+
 def excerpt(text, n):
     """text on one line, cut at a word within n characters and never inside a code span."""
     text = re.sub(r"\s+", " ", text).strip()
@@ -561,8 +581,11 @@ def criteria(section_text):
         if not block.startswith("- ["):
             continue
         tag = re.search(r"\*\*(new|hold)\*\*", block)
-        claim = excerpt(re.sub(r"^- \[[ x]\]\s*(\*\*\w+\*\*\s*—\s*)?", "", block), 140)
-        out.append(dict(ticked=block.startswith("- [x]"), kind=tag.group(1) if tag else None,
+        body = block[5:].lstrip()
+        cid = CRITERION_ID.match(body)
+        claim = excerpt(re.sub(r"^(\*\*\w+\*\*\s*—\s*)?", "", body[cid.end() if cid else 0:]), 140)
+        out.append(dict(id=f"C{cid.group(1)}.{cid.group(2)}" if cid else None,
+                        ticked=block.startswith("- [x]"), kind=tag.group(1) if tag else None,
                         claim=claim, prs=sorted({int(n) for n in CITED_PR.findall(block)}),
                         tests=sorted({c + ("." + m if m else "") for c, m in EVIDENCE_TEST.findall(block)}),
                         red=bool(SEEN_RED.search(block))))
@@ -659,6 +682,8 @@ def roadmap(snaps, prs, blobs):
                          status=status, expected=int(exp.group(1)) if exp else None,
                          expected_first=int(exp0.group(1)) if exp0 else None,
                          tracks=tracks, track_work=work, tracks_merged=done_tracks,
+                         tracks_unopened=unopened_tracks([p for p in prs.values()
+                                                          if p["headRefName"].startswith(f"day-{d:02d}/")]),
                          track_prs=sum(kind(p["title"], p["headRefName"]) == "code" for p in mine),
                          prs=[dict(number=p["number"], kind=kind(p["title"], p["headRefName"]), title=p["title"]) for p in mine],
                          criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**")),
@@ -776,8 +801,11 @@ def days_named(text):
 
 def hand_offs(days, order, sha, blobs):
     """What finished days hand to days not yet run, and whether the receiving spec picked it up.
-    A Notes item is picked up when the receiving spec names its day, or a finished day the item
-    names (Day 39 points to Day 38's findings); a code comment, when the spec names its file."""
+    A Notes item with an ID of its day (H28.1) is picked up only by a spec that cites the ID; with
+    no day ahead to take it and no spec citing it, it is listed with `to` None, as no later day
+    picks it up. An item without one is picked up when the receiving spec names its day, or a
+    finished day the item names (Day 39 points to Day 38's findings); a code comment, when the
+    spec names its file."""
     finished = {d["day"] for d in days if d["status"] in FINISHED}
     text = {d["day"]: blobs.read(sha, d["file"]) for d in days}
     ahead = {d: i for i, d in enumerate(order) if d in text and d not in finished}
@@ -787,6 +815,14 @@ def hand_offs(days, order, sha, blobs):
             continue
         for item in re.split(r"\n(?=\s*- )", section(text[d["day"]], "Notes")):
             named = days_named(item)
+            ids = sorted({f"H{a}.{b}" for a, b in HAND_OFF_ID.findall(item) if int(a) == d["day"]})
+            if ids:
+                cites = {t for t in text if t != d["day"] and any(re.search(rf"\b{re.escape(i)}\b", text[t]) for i in ids)}
+                for t in named & set(ahead) - {d["day"]}:
+                    out.append(dict(to=t, id=ids[0], source=f"Day {d['day']:02d} Notes", picked=t in cites, text=item))
+                if not cites and not named & set(ahead) - {d["day"]}:
+                    out.append(dict(to=None, id=ids[0], source=f"Day {d['day']:02d} Notes", picked=False, text=item))
+                continue
             for t in named & set(ahead):
                 picked = bool(({d["day"]} | named & finished) & days_named(text[t]))
                 out.append(dict(to=t, source=f"Day {d['day']:02d} Notes", picked=picked, text=item))
@@ -801,7 +837,7 @@ def hand_offs(days, order, sha, blobs):
                 out.append(dict(to=t, source=f"{path}:{number}", picked=stem in text[t], text=code))
     for h in out:
         h["text"] = excerpt(re.sub(r"^\s*(- |//|/\*+|\*|--|#|<!--)\s*", "", h["text"]), 160)
-    return sorted(out, key=lambda h: (ahead[h["to"]], h["picked"], h["source"]))
+    return sorted(out, key=lambda h: (ahead.get(h["to"], len(order)), h["picked"], h["source"]))
 
 
 def conclusion(readme):
@@ -861,6 +897,8 @@ def next_step(days, open_prs, order, stop):
     left = [t for t in day["tracks"] if t not in day["tracks_merged"]]
     if left:
         return f"Day {day['day']:02d} Track {left[0]}: {day['track_work'][left[0]]}"
+    for t in day.get("tracks_unopened", []):
+        return f"Day {day['day']:02d} Track {t['track']}: announced in #{t['pr']}, no branch names it"
     return f"Day {day['day']:02d}: the closing PR"
 
 
