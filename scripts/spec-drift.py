@@ -17,7 +17,10 @@ not move an earlier point.
 Both angles need a reference to be read. Two vectors of counts are never negative, so they sit
 well under 90° even when they have nothing to do with each other. Gap chance is the gap to the
 same code counts shuffled across the names (the mean of CHANCE_DRAWS, seeded): a gap near it says
-the code uses the spec's names in no particular proportion. Drift reference is the angle between
+the code uses the spec's names in no particular proportion. The angle is the secondary reading;
+two plain set figures come first. Name coverage: of the names the specs use at a merge, the share
+the code has. Jaccard: the names in both, over the names in either (a name the specs have dropped
+but the code keeps counts against it). Drift reference is the angle between
 the Sep 20 files split in two (even and odd by name): how far one part of the spec as written
 sits from another.
 
@@ -78,6 +81,14 @@ OWN_PACKAGE = re.compile(r"(?:^|/)src/main/java/nl/hackyourfuture/project/backen
 IMPORT = re.compile(r"^import\s+(?:static\s+)?nl\.hackyourfuture\.project\.backend\.([a-z]+)\.", re.M)
 FINISHED = ("done", "closed")
 CHANCE_DRAWS = 50
+# What every figure built on the backticked names cannot see; the dashboard lists these as written.
+CAVEATS = [
+    "Gap, name coverage and Jaccard see only identifiers the specs put in backticks: a name written "
+    "in plain prose is not counted.",
+    "They match names, not meaning: prose is not understood, so a spec can name a thing the code has "
+    "and still describe it wrongly.",
+    "A name a spec says should disappear still counts as shared vocabulary while the code has it.",
+]
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
 # What git said about each merge, kept between runs: every call cached here names commits only by
 # SHA, so its output never changes. Keyed on this script's text too, so a change here starts over.
@@ -118,18 +129,34 @@ def save_cache(path):
 
 
 class Blobs:
-    """One git cat-file process for every file read, instead of one git show each."""
+    """One git cat-file process for every file read, instead of one git show each. Use as
+    `with Blobs() as blobs:`, so the process is closed however the block ends."""
 
-    def __init__(self):
+    def __enter__(self):
         self.proc = subprocess.Popen(["git", "cat-file", "--batch"], stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE)
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        return self
+
+    def __exit__(self, *exc):
+        for f in (self.proc.stdin, self.proc.stdout):
+            try:
+                f.close()
+            except OSError:
+                pass
+        self.proc.wait()
 
     def read(self, sha, path):
-        self.proc.stdin.write(f"{sha}:{path}\n".encode())
-        self.proc.stdin.flush()
-        header = self.proc.stdout.readline().split()
-        if header[-1] == b"missing":
+        try:
+            self.proc.stdin.write(f"{sha}:{path}\n".encode())
+            self.proc.stdin.flush()
+            header = self.proc.stdout.readline().split()
+        except (OSError, ValueError) as e:
+            raise RuntimeError(f"git cat-file failed reading {path} at {sha}: {e}") from e
+        if header[-1:] == [b"missing"]:
             return ""
+        if len(header) != 3 or not header[2].isdigit():
+            said = b" ".join(header).decode("utf-8", "replace") or "nothing (the process ended)"
+            raise RuntimeError(f"git cat-file failed reading {path} at {sha}: it said {said}")
         body = self.proc.stdout.read(int(header[2]))
         self.proc.stdout.read(1)
         return body.decode("utf-8", "replace")
@@ -266,6 +293,15 @@ def split_angle(texts, idf):
     return round(word_angle(words[0], words[1], idf), 2)
 
 
+def name_overlap(spec, code, known):
+    """Name coverage and Jaccard over the names known at a merge: of the names the specs use, the
+    share the code has; and the names in both over the names in either. None with nothing to divide."""
+    named, in_code = (spec > 0) & known, (code > 0) & known
+    both, either = (named & in_code).sum(), (named | in_code).sum()
+    return (round(float(both / named.sum()), 3) if named.any() else None,
+            round(float(both / either), 3) if either else None)
+
+
 def rarity(texts):
     """Inverse document frequency over one snapshot's files: 0 for a word in every file."""
     df = collections.Counter(w for t in texts.values() for w in set(WORD.findall(t.lower())))
@@ -376,12 +412,14 @@ def trajectory(snaps, blobs, order=()):
                 churn += 0 if a == "-" else int(a) + int(d)
         mask, known = reached > 0, born <= i
         spec_v, code_v = np.log1p(spec) * known, np.log1p(code) * known
+        name_coverage, jaccard = name_overlap(spec, code, known)
         rows.append(dict(i=i, sha=s["sha"], date=s["date"], pr=s["pr"], title=s["title"], kind=s["kind"],
                          day=day if s["pr"] else 0, drift=round(word_angle(words, origin, idf), 2),
                          step=round(word_angle(words, prev, idf), 2), added=added, deleted=deleted,
                          gap_full=round(angle(spec_v, code_v), 2),
                          gap_chance=round(chance_angle(spec_v, code_v, known), 2),
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
+                         name_coverage=name_coverage, jaccard=jaccard,
                          spec_files=spec_files, code_churn=churn, work=work))
         prev = words
         vectors.append((spec_v, code_v))
@@ -850,28 +888,29 @@ def main():
                           "--json", "headBranch,headSha,conclusion,event,workflowName"))
     prs = {p["number"]: p for p in listed}
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
-    blobs = Blobs()
-    snaps = snapshots(prs)
-    head = snaps[-1]["sha"]
-    spec_days = [d for d in map(day_of, run("git", "ls-tree", "--name-only", head, "specs/").split()) if d]
-    rows, files, vocab, pca, lines, drift_ref = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
-    days, order, stop = roadmap(snaps, prs, blobs)
-    evidence_history(rows, days, snaps, blobs)
-    boundaries(rows, snaps, blobs)
-    now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
-               head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
-               current_day=next((d["day"] for d in days if d["status"] == "active"), None),
-               next_step=next_step(days, open_prs, order, stop), stop_after=stop,
-               open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
-    data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines, drift_ref=drift_ref,
-                           order=[d for d in order if d != PLATFORM],
-                           out_of_order=out_of_order(order),
-                           removals=removal_history(days, snaps, blobs),
-                           hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
-                           vocab_size=vocab, pca_var=pca, tokens=token_usage(),
-                           verification=verification(prs, runs),
-                           conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md"))),
-                      separators=(",", ":"))
+    with Blobs() as blobs:
+        snaps = snapshots(prs)
+        head = snaps[-1]["sha"]
+        spec_days = [d for d in map(day_of, run("git", "ls-tree", "--name-only", head, "specs/").split()) if d]
+        rows, files, vocab, pca, lines, drift_ref = trajectory(snaps, blobs, run_order(blobs.read(head, "plan.md"), spec_days)[0])
+        days, order, stop = roadmap(snaps, prs, blobs)
+        evidence_history(rows, days, snaps, blobs)
+        boundaries(rows, snaps, blobs)
+        now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
+                   head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
+                   current_day=next((d["day"] for d in days if d["status"] == "active"), None),
+                   next_step=next_step(days, open_prs, order, stop), stop_after=stop,
+                   open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
+        data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines, drift_ref=drift_ref,
+                               order=[d for d in order if d != PLATFORM],
+                               out_of_order=out_of_order(order),
+                               removals=removal_history(days, snaps, blobs),
+                               hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
+                               vocab_size=vocab, pca_var=pca, tokens=token_usage(),
+                               verification=verification(prs, runs),
+                               conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md")),
+                               meta=dict(caveats=CAVEATS)),
+                          separators=(",", ":"))
     target = args.build or args.out
     if args.build:
         data = build(data)

@@ -153,6 +153,7 @@ td.none { color: var(--code); font-weight: 600; }
 td.pre { color: var(--muted); font-style: italic; }
 .pre-tag { font: 500 10.5px/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .strip { display: block; width: 100%; min-width: 160px; height: 14px; background: var(--surface-2); border-radius: 3px; }
+.caveats { margin: 14px 0 0; }
 .finding ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 4px; }
 tr.sel td { background: var(--surface-2); }
 .method { font-size: 14px; color: var(--ink-2); display: grid; gap: 10px; max-width: 76ch; }

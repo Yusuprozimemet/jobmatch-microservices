@@ -53,13 +53,10 @@ class Repo:
         """fn(blobs), run in the repository."""
         cwd = os.getcwd()
         os.chdir(self.path)
-        blobs = sd.Blobs()
         try:
-            return fn(blobs)
+            with sd.Blobs() as blobs:
+                return fn(blobs)
         finally:
-            blobs.proc.stdin.close()
-            blobs.proc.stdout.close()
-            blobs.proc.wait()
             os.chdir(cwd)
 
     def close(self):
@@ -77,6 +74,32 @@ class SpecDriftTest(unittest.TestCase):
         rows = self.repo.merge({"src/Foo.java": "class FooService {}\n"}).rows()
         self.assertEqual(rows[0]["gap_full"], 90.0)
         self.assertLess(rows[1]["gap_full"], 90.0)
+
+    def test_name_coverage_is_the_share_of_spec_names_the_code_has(self):
+        rows = self.repo.merge({"src/Foo.java": "class FooService { FooService f; }\n"}).rows()
+        self.assertEqual((rows[0]["name_coverage"], rows[1]["name_coverage"]), (0.0, 0.5))  # bar_table not yet
+        rows = self.repo.merge({"src/Bar.java": "bar_table b;\n"}).rows()
+        self.assertEqual(rows[2]["name_coverage"], 1.0)
+        rows = self.repo.merge({"plan.md": "# Plan\n\nThe plan names nothing.\n"}).rows()
+        self.assertEqual(rows[3]["name_coverage"], 1.0)  # bar_table, in the code only, is not asked for
+
+    def test_jaccard_counts_a_name_the_specs_dropped_but_the_code_keeps(self):
+        rows = self.repo.merge({"src/Foo.java": "class FooService { bar_table b; }\n"}).rows()
+        self.assertEqual((rows[1]["name_coverage"], rows[1]["jaccard"]), (1.0, 1.0))
+        rows = self.repo.merge({"plan.md": "# Plan\n\nThe plan names nothing.\n"}).rows()
+        self.assertEqual((rows[2]["name_coverage"], rows[2]["jaccard"]), (1.0, 0.5))  # bar_table: code only
+
+    def test_a_failed_blob_read_names_the_commit_and_the_path(self):
+        sha = self.repo.snaps[0]["sha"]
+
+        def read_after_git_dies(blobs):
+            self.assertEqual(blobs.read(sha, "no/such/file"), "")  # missing is not a failure
+            blobs.proc.kill()
+            blobs.proc.wait()
+            return blobs.read(sha, "plan.md")
+        with self.assertRaises(RuntimeError) as failed:
+            self.repo.inside(read_after_git_dies)
+        self.assertIn(f"plan.md at {sha}", str(failed.exception))
 
     def test_a_run_from_the_cache_reads_what_a_fresh_one_does(self):
         # Merge 1 is cached before any spec names BazClient; merge 2's spec does, which shifts
