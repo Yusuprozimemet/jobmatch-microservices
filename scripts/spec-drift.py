@@ -56,7 +56,16 @@ EVIDENCE_TEST = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Test|IT|Tests))(?:\.([a-z][A
 # Days 39-41 ran before Day 28.
 BREAK_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?broken:[ \t]*(\S[^\n]*?)[ \t]*(?:→|->)[ \t]*\S", re.M)
 BREAK_LINE_FROM_PR = 310
+# A test CI can skip: switched off, or run only on a condition. A condition on a system property
+# is met when a workflow passes it as true (GatewayHarnessIT, -Dharness.gateway=true), so that
+# test runs. A bare @Disabled stays skippable.
 SKIPPABLE = re.compile(r"@Disabled\b|@(?:Enabled|Disabled)If")
+ON_PROPERTY = re.compile(r'@EnabledIfSystemProperty\(\s*named\s*=\s*"([^"]+)"\s*,\s*matches\s*=\s*"true"\s*\)')
+CI_PROPERTY = re.compile(r"-D([\w.-]+)=true\b")
+# Tests that moved to a class of another stem, which moves() cannot tell by name: the PR that
+# completed the move, and (old, new). Both kept every test method's name.
+RENAMED = {296: ("ApplicationsUserDeletedConsumerIT", "UserDeletedConsumerTest"),  # Day 25 E1a
+           298: ("CircuitBreakerIT", "PostingLookupBreakerTest")}  # Day 25 E1b
 # A removal check: a grep a criterion says prints nothing ("`grep ...` returns nothing", "gives 0"),
 # or a Verify line that echoes when it does (`grep ... || echo "clean"`).
 GREP_SAYS_NOTHING = re.compile(r"`(grep [^`]+)`[^.]{0,40}?\b(?:returns|prints|finds|gives) (?:nothing|0)\b")
@@ -603,9 +612,12 @@ def moves(snaps):
     moved PostingShortlistUnavailableIT to matching-service at 27% alike. So a move is told by
     name: a class leaves the tree, and a class of the same stem arrives in that merge or a later
     one. Day 17 deleted SavedJobCountsUnavailableIT in #174, and its Test arrived in #180. Only a
-    test moves: StubLlm leaving and StubLlmTest arriving is a helper gone and a test of it."""
+    test moves: StubLlm leaving and StubLlmTest arriving is a helper gone and a test of it. A
+    name can arrive more than once (InternalCallsObservedTest in matching-service on Day 21, then
+    in application-service in #305, after the IT left in #296): the first arrival at or after
+    the test left is where it went. A move to another stem is in RENAMED."""
     at = {s["sha"]: i for i, s in enumerate(snaps)}
-    added, deleted, i = {}, {}, None
+    added, deleted, i = collections.defaultdict(list), {}, None
     for line in run("git", "log", "--first-parent", "--diff-merges=first-parent", "--no-renames", "--reverse",
                     "--name-status", "--format=@%h", snaps[-1]["sha"], "--", "*.java", "*.kt").splitlines():
         if line.startswith("@"):
@@ -613,27 +625,32 @@ def moves(snaps):
         elif line[:1] in ("A", "D") and i is not None:
             name = os.path.splitext(os.path.basename(line.split("\t")[-1]))[0]
             if line[0] == "A":
-                added.setdefault(name, i)
+                added[name].append(i)
             else:
                 deleted[name] = i
     stem = lambda n: re.sub(r"(?:IT|Tests?)$", "", n)
     out = []
     for old, gone in ((n, k) for n, k in deleted.items() if stem(n) != n):
-        new = min(((k, n) for n, k in added.items() if n != old and stem(n) == stem(old) and k >= gone), default=None)
+        new = min(((k, n) for n, ks in added.items() if n != old and stem(n) == stem(old)
+                   for k in ks if k >= gone), default=None)
         if new:
             out.append((new[0], old, new[1]))
-    return out
+    pr_at = {s["pr"]: i for i, s in enumerate(snaps) if s.get("pr")}
+    return out + [(pr_at[n], old, new) for n, (old, new) in RENAMED.items() if n in pr_at]
 
 
 def test_state(tests, sha, blobs, moved=None):
     """Where each named test stands at a commit: present, skippable (a class or file CI can skip,
-    as GatewayHarnessIT is opt-in), or missing. CI runs every test that is present, so a hold
+    unless CI meets its condition), or missing. CI runs every test that is present, so a hold
     goes quiet only by its test leaving the tree or being switched off. A class that has left
     the tree is looked for under the name it moved to by then (moved: old to new)."""
-    files = collections.defaultdict(list)
+    files, ci = collections.defaultdict(list), set()
     for path in (line.split("\t", 1)[1] for line in at_commits("ls-tree", "-r", sha).splitlines()):
         if path.endswith((".java", ".kt")):
             files[os.path.splitext(os.path.basename(path))[0]].append(path)
+        elif path.startswith(".github/workflows/"):
+            ci.update(CI_PROPERTY.findall(blobs.read(sha, path)))
+    met = lambda m: "" if m.group(1) in ci else m.group(0)
     out = {}
     for t in tests:
         cls, _, member = t.partition(".")
@@ -645,7 +662,7 @@ def test_state(tests, sha, blobs, moved=None):
         if not any(not member or re.search(rf"\b{member}\b", x) for x in texts):
             out[t] = "missing"
         else:
-            out[t] = "skippable" if any(SKIPPABLE.search(x) for x in texts) else "present"
+            out[t] = "skippable" if any(SKIPPABLE.search(ON_PROPERTY.sub(met, x)) for x in texts) else "present"
     return out
 
 
