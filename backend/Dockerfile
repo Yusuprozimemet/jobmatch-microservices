@@ -17,7 +17,6 @@ WORKDIR /app
 COPY pom.xml .
 COPY shared/pom.xml shared/
 COPY identity/pom.xml identity/
-COPY applications/pom.xml applications/
 COPY app/pom.xml app/
 RUN mvn -B -e dependency:go-offline
 

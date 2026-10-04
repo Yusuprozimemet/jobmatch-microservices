@@ -2,7 +2,6 @@ package nl.hackyourfuture.project.backend.database;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.PostgresContainer;
-import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -29,7 +28,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ModuleConnectionsIT extends IntegrationTest {
 
     @Autowired @Qualifier("identityDataSource") private DataSource identity;
-    @Autowired @Qualifier("applicationsDataSource") private DataSource applications;
+    // applications_user's login left with application-service (Day 25); checked as matching_user's is.
+    private final DataSource applications = new DriverManagerDataSource(
+            PostgresContainer.jdbcUrl("applications"), "applications_user", PostgresContainer.rolePassword());
     private final DataSource jobs = new DriverManagerDataSource(
             PostgresContainer.jobsJdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
     // jobs_user keeps CONNECT on project_db, so what it must not read there is checked from there.
@@ -46,24 +47,11 @@ class ModuleConnectionsIT extends IntegrationTest {
         assertThat(whoAndWhere(jobs)).isEqualTo("jobs_user analytics");
     }
 
-    @Test
-    void identityCannotWriteApplicationsTables() {
-        TestUser user = aUser().create();
-
-        assertThatThrownBy(() -> JdbcClient.create(identity)
-                .sql("INSERT INTO applications.saved_jobs (user_id, posting_id) VALUES (:id, 'seed-0001')")
-                .param("id", user.id())
-                .update())
-                // Spring's exception says "bad SQL grammar"; Postgres's own words are underneath.
-                .rootCause()
-                .hasMessageContaining("permission denied for schema applications");
-    }
-
     // Days 08-10 removed the reads; Day 38 revoked what allowed them, before the modules leave
     // the process with these logins.
     @ParameterizedTest
-    @CsvSource({"identity, applications.saved_jobs", "jobs, identity.user_credentials",
-        "applications, matching.job_match_scores", "matching, identity.users"})
+    @CsvSource({"jobs, identity.user_credentials", "applications, matching.job_match_scores",
+        "matching, identity.users"})
     void noModuleCanReadAnothersSchema(String module, String table) {
         assertThatThrownBy(() -> JdbcClient.create(pool(module))
                 .sql("SELECT count(*) FROM " + table)
@@ -94,13 +82,15 @@ class ModuleConnectionsIT extends IntegrationTest {
     }
 
     // Default privileges registered for any creator but the owner, db-setup.py's admin among them.
+    // Not applications since Day 25: the revokes were its module's own V1, which left with the
+    // module; the migration that drops its table here carries them, as V15 does matching's.
     @Test
     void noModuleSchemaGrantsWhatIsCreatedLaterToAnyoneElse() {
         assertThat(jdbc()
                 .sql("""
                         SELECT n.nspname || ': ' || pg_get_userbyid(acl.grantee)
                         FROM pg_default_acl d JOIN pg_namespace n ON n.oid = d.defaclnamespace, aclexplode(d.defaclacl) acl
-                        WHERE n.nspname IN ('identity', 'applications', 'matching') AND acl.grantee <> n.nspowner
+                        WHERE n.nspname IN ('identity', 'matching') AND acl.grantee <> n.nspowner
                         """)
                 .query(String.class)
                 .list())

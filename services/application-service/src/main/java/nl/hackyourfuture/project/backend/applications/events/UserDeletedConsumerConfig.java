@@ -17,9 +17,9 @@ import java.net.URI;
 import java.time.Duration;
 
 /**
- * The user.deleted consumer and its SQS client (Day 27). Off when {@code app.events.consumer.enabled}
- * is false, as it is in the test harness: the run caches several contexts, and each one's consumer
- * would take another test's message from the shared queue.
+ * The user.deleted consumer and its SQS client (Day 27). Off unless {@code app.events.consumer.enabled}
+ * is true: compose turns it on with the queue it reads (Day 25, Track E2), and the harness's
+ * container reads a queue of its own.
  */
 @Configuration
 @ConditionalOnProperty(name = "app.events.consumer.enabled", havingValue = "true")

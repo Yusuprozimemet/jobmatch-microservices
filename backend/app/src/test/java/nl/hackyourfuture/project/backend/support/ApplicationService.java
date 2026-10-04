@@ -13,7 +13,7 @@ import java.net.URI;
  * image built beforehand; signs with {@link ServiceKey#APPLICATION}'s key; reads and writes apps_db
  * as applications_user; reaches identity through job-service's relay, job-service at its container;
  * trusts job-service and TestServiceCaller on /internal/**; its consumer reads a queue of its own
- * ({@link EventBus#APPLICATION_SERVICE_QUEUE}); no path routes to it until Track E1; Ryuk removes it.
+ * ({@link EventBus#APPLICATION_SERVICE_QUEUE}); {@link Services} routes saved jobs and /internal/saved-counts to it; Ryuk removes it.
  */
 public final class ApplicationService {
 
@@ -100,8 +100,8 @@ public final class ApplicationService {
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_0_NAME", TestServiceCaller.ISSUER)
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL",
                         "http://host.testcontainers.internal:" + testCallerPort + "/.well-known/service-jwks.json")
-                // The consumer's settings, read once Track E1 moves the consumer in; the queue is its
-                // own so it never takes the shared queue's messages.
+                // The consumer's settings; the queue is its own so it never takes the shared
+                // queue's messages.
                 .withEnv("EVENTS_CONSUMER_ENABLED", "true")
                 .withEnv("EVENTS_SQS_ENDPOINT", eventBusEndpoint)
                 .withEnv("EVENTS_SQS_REGION", "eu-west-1")

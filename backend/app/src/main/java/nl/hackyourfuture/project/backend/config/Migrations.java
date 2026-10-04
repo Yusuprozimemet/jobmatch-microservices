@@ -21,18 +21,17 @@ import javax.sql.DataSource;
  * the tables the moves brought in, so the module's own V1 still runs. Day 12's
  * {@code identity.refresh_tokens} is the first. jobs has none: it owns no tables. matching has
  * none since Day 23: matching-service keeps its scores in DynamoDB and has no database.
+ * applications has none since Day 25: application-service migrates saved_jobs in its own database.
  */
 @Configuration(proxyBeanMethods = false)
 class Migrations {
 
     @Bean
     FlywayMigrationStrategy ownerThenModules(
-            @Qualifier("identityDataSource") DataSource identity,
-            @Qualifier("applicationsDataSource") DataSource applications) {
+            @Qualifier("identityDataSource") DataSource identity) {
         return owner -> {
             owner.migrate();
             migrate("identity", identity);
-            migrate("applications", applications);
         };
     }
 

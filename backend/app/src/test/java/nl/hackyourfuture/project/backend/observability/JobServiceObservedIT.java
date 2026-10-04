@@ -1,18 +1,13 @@
 package nl.hackyourfuture.project.backend.observability;
 
-import io.opentelemetry.api.trace.SpanId;
-import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.sdk.trace.data.SpanData;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
-import nl.hackyourfuture.project.backend.support.EndedSpans;
+import nl.hackyourfuture.project.backend.support.ApplicationService;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.JobService;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfigureTracing;
 import org.springframework.boot.test.web.server.LocalManagementPort;
-import org.springframework.context.annotation.Import;
 
 import java.util.Arrays;
 import java.util.List;
@@ -25,18 +20,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * job-service is measured on its own port, and a trace crosses into it (Day 17, Track E2;
  * Day 40's hand-off). It runs directly and through the gateway, which continues the trace
- * (Day 15). The parent of an /internal/saved-counts span is job-service's client span,
- * which this JVM never records.
+ * (Day 15). Its /internal/saved-counts call goes on to application-service (Day 25), which
+ * logs it under the same trace.
  */
 @AutoConfigureTracing
-@Import(EndedSpans.Config.class)
 class JobServiceObservedIT extends IntegrationTest {
 
     @LocalManagementPort
     private int managementPort;
-
-    @Autowired
-    private EndedSpans spans;
 
     @Test
     void oneSearchIsCountedOnJobServicesPortOnly() {
@@ -59,7 +50,7 @@ class JobServiceObservedIT extends IntegrationTest {
     }
 
     @Test
-    void aTraceCrossesIntoJobServiceAndBackToTheMonolith() {
+    void aTraceCrossesIntoJobServiceAndOnToApplicationService() throws InterruptedException {
         var posting = aPosting().title("TracedEngineer").create();
         String traceId = randomTraceId();
         String parentSpanId = randomSpanId();
@@ -70,38 +61,10 @@ class JobServiceObservedIT extends IntegrationTest {
 
         assertThat(response.status()).isEqualTo(200);
 
-        SpanData internalSpan = poll(() -> {
-            List<SpanData> allSpans = spans.all();
-            return allSpans.stream()
-                    .filter(span -> span.getKind() == SpanKind.SERVER)
-                    .filter(span -> traceId.equals(span.getTraceId()))
-                    .filter(span -> span.getName().endsWith("/internal/saved-counts"))
-                    .findFirst();
-        }).orElseThrow(() -> {
-            List<SpanData> allSpans = spans.all();
-            List<String> serverSpanNamesWithTraceT = allSpans.stream()
-                    .filter(span -> span.getKind() == SpanKind.SERVER)
-                    .filter(span -> traceId.equals(span.getTraceId()))
-                    .map(SpanData::getName)
-                    .toList();
-            List<String> savedCountsTraceIds = allSpans.stream()
-                    .filter(span -> span.getKind() == SpanKind.SERVER)
-                    .filter(span -> span.getName().endsWith("/internal/saved-counts"))
-                    .map(SpanData::getTraceId)
-                    .toList();
-            return new AssertionError("No /internal/saved-counts span found with trace id " + traceId
-                    + ". Server span names with trace T: " + serverSpanNamesWithTraceT
-                    + "; trace ids of /internal/saved-counts spans: " + savedCountsTraceIds);
-        });
-
-        List<String> monolithSpanIds = spans.all().stream()
-                .map(SpanData::getSpanId)
-                .toList();
-
-        assertThat(SpanId.isValid(internalSpan.getParentSpanId()))
-                .as("parent span id is valid").isTrue();
-        assertThat(monolithSpanIds).as("parent is not in monolith's spans")
-                .doesNotContain(internalSpan.getParentSpanId());
+        List<String> savedCountsLines = linesUnder(ApplicationService::logs, traceId, "/internal/saved-counts");
+        assertThat(savedCountsLines)
+                .as("application-service logs /internal/saved-counts under the same trace")
+                .isNotEmpty();
     }
 
     private static double count(int port, String metric, String... labels) {
@@ -135,6 +98,17 @@ class JobServiceObservedIT extends IntegrationTest {
                 throw new IllegalStateException(e);
             }
             found = probe.get();
+        }
+        return found;
+    }
+
+    /** Log lines from logs() containing path and traceId; poll up to 5 s. */
+    private static List<String> linesUnder(Supplier<String> logs, String traceId, String path) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 5000;
+        List<String> found = logs.get().lines().filter(line -> line.contains(traceId) && line.contains(path)).toList();
+        while (found.isEmpty() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(100);
+            found = logs.get().lines().filter(line -> line.contains(traceId) && line.contains(path)).toList();
         }
         return found;
     }

@@ -1,12 +1,14 @@
 package nl.hackyourfuture.project.backend.tokens;
 
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.PostgresContainer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
 
@@ -18,8 +20,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * (Day 14). Since Day 38 no other module reads any of its schema, and the refusal is the
  * schema's; {@code ModuleConnectionsIT} checks that nothing identity creates later is granted.
  *
- * <p>Through the application's own pools, as {@code ModuleConnectionsIT} does, so the role refused
- * is the one each module really logs in as.
+ * <p>As the role each module logs in as: identity through the application's own pool,
+ * applications as applications_user, whose login left with application-service (Day 25).
  */
 class RefreshTokenGrantsIT extends IntegrationTest {
 
@@ -30,7 +32,7 @@ class RefreshTokenGrantsIT extends IntegrationTest {
     @CsvSource({"applications, refresh_tokens",
         "applications, pending_google_links"})
     void noOtherModuleCanReadThem(String module, String table) {
-        DataSource dataSource = context.getBean(module + "DataSource", DataSource.class);
+        DataSource dataSource = new DriverManagerDataSource(PostgresContainer.jdbcUrl(module), module + "_user", PostgresContainer.rolePassword());
 
         assertThatThrownBy(() -> JdbcClient.create(dataSource)
                 .sql("SELECT count(*) FROM identity." + table)

@@ -2,6 +2,7 @@ package nl.hackyourfuture.project.backend.contract;
 
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.TestDatabase;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
 
@@ -15,12 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Nothing in Days 01–04 called this route. Today the saved jobs go by a foreign key,
  * {@code fk_saved_jobs_user ... ON DELETE CASCADE}, from {@code saved_jobs} to {@code users}.
- * Day 11 moves those two tables into different schemas owned by different roles, and Day 27
- * replaces the key with a {@code user.deleted} event. Either change can leave a deleted user's
- * rows behind with every other test still green, which is what this is for.
+ * Day 11 moved those two tables into different schemas owned by different roles; Day 25 moves
+ * {@code saved_jobs} into application-service's own database, where no key reaches {@code users},
+ * and the rows go by the {@code user.deleted} event (Day 27). Either change can leave a deleted
+ * user's rows behind with every other test still green, which is what this is for.
  *
- * <p>The rows are counted in the table, not through the API: once the account is gone no route
- * can show what is left of it.
+ * <p>The rows are counted in apps_db's table, waiting for the event, not through the API: once
+ * the account is gone no route can show what is left of it.
  */
 class AccountDeletionIT extends IntegrationTest {
 
@@ -30,11 +32,11 @@ class AccountDeletionIT extends IntegrationTest {
         ApiClient client = authenticatedAs(user);
         client.post("/api/saved-jobs", Map.of("postingId", "seed-0001"));
         client.post("/api/saved-jobs", Map.of("postingId", "seed-0002"));
-        assertThat(savedJobsOf(user.id())).isEqualTo(2);
+        assertThat(savedJobsOf(user.id(), 2)).isEqualTo(2);
 
         assertThat(client.delete("/api/users/me").status()).isEqualTo(204);
 
-        assertThat(savedJobsOf(user.id())).isZero();
+        assertThat(savedJobsOf(user.id(), 0)).isZero();
     }
 
     @Test
@@ -47,7 +49,8 @@ class AccountDeletionIT extends IntegrationTest {
 
         authenticatedAs(user).delete("/api/users/me");
 
-        assertThat(savedJobsOf(stranger.id())).isEqualTo(1);
+        assertThat(savedJobsOf(user.id(), 0)).isZero();
+        assertThat(savedJobsOf(stranger.id(), 1)).isEqualTo(1);
         assertThat(strangerClient.get("/api/saved-jobs").at("/totalElements").asLong()).isEqualTo(1);
     }
 
@@ -61,10 +64,7 @@ class AccountDeletionIT extends IntegrationTest {
         assertThat(client.get("/api/users/me").status()).isEqualTo(401);
     }
 
-    private long savedJobsOf(UUID userId) {
-        return jdbc().sql("SELECT count(*) FROM saved_jobs WHERE user_id = :userId")
-                .param("userId", userId)
-                .query(Long.class)
-                .single();
+    private long savedJobsOf(UUID userId, long expected) {
+        return TestDatabase.savedJobsOf(userId, expected);
     }
 }
