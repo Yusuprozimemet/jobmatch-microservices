@@ -201,7 +201,7 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(rows[2]["gap_chance"], rows[1]["gap_chance"])  # the same counts, shuffled
 
     def test_the_drift_reference_splits_the_first_files_in_two(self):
-        ref = lambda repo: repo.inside(lambda blobs: sd.trajectory([dict(s) for s in repo.snaps], blobs)[5])
+        ref = lambda repo: repo.inside(lambda blobs: sd.trajectory([dict(s) for s in repo.snaps], blobs)[4])
         self.assertEqual(ref(self.repo), 90.0)  # two files: a word in both weighs nothing
         three = Repo().merge({"plan.md": "alpha\n", "specs/day-01-x.md": "beta gamma\n",
                               "specs/day-02-x.md": "beta delta\n"})

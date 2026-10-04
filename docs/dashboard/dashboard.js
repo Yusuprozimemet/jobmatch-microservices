@@ -92,12 +92,8 @@ document.getElementById("stats").innerHTML = `
 document.getElementById("headline").textContent = specShare >= -byKind.code / gapClosed
   ? "The plan moved to meet the code" : "The spec leads, the code follows";
 document.querySelectorAll(".vocab-n").forEach(e => { e.textContent = DATA.vocab_size; });
-document.getElementById("n-vectors").textContent = 2 * N;
 const merged = R.filter(r => r.pr).map(r => r.pr);
 document.getElementById("pr-range").textContent = `${N - 1} merges, #${Math.min(...merged)}–#${Math.max(...merged)}`;
-document.getElementById("pc1").textContent = Math.round(DATA.pca_var[0] * 100) + "%";
-document.getElementById("pc2").textContent = Math.round(DATA.pca_var[1] * 100) + "%";
-document.getElementById("pc-rest").textContent = (100 - Math.round(DATA.pca_var[0] * 100) - Math.round(DATA.pca_var[1] * 100)) + "%";
 document.querySelectorAll(".drift-ref").forEach(e => { e.textContent = DATA.drift_ref == null ? "–" : fmt(DATA.drift_ref) + "°"; });
 document.getElementById("gap-chance").textContent = fmt(last.gap_chance) + "°";
 document.getElementById("caveats").innerHTML = ((DATA.meta || {}).caveats || []).map(c => `<li>${esc(c)}</li>`).join("");
@@ -117,53 +113,6 @@ playBtn.addEventListener("click", () => {
   setSel(i);
   timer = setInterval(() => { i++; if (i >= N) return stop(); setSel(i); }, 260);
 });
-
-/* ---------- trajectory ---------- */
-const trajBox = document.getElementById("traj");
-const TW = 600, TH = 440, TP = 34;
-const pts = R.flatMap(r => [r.spec_xy, r.code_xy]);
-const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-const k = Math.min((TW - 2 * TP) / (x1 - x0), (TH - 2 * TP) / (y1 - y0));
-const ox = (TW - (x1 - x0) * k) / 2, oy = (TH - (y1 - y0) * k) / 2;
-const tx = x => ox + (x - x0) * k, ty = y => TH - (oy + (y - y0) * k);
-
-function drawTraj() {
-  trajBox.innerHTML = "";
-  const svg = el("svg", { viewBox: `0 0 ${TW} ${TH}`, role: "img", "aria-label": "Spec and code paths projected onto two principal components" }, trajBox);
-  el("rect", { x: 0.5, y: 0.5, width: TW - 1, height: TH - 1, rx: 8, fill: "none", stroke: "var(--grid)" }, svg);
-  el("line", { x1: tx(0), x2: tx(0), y1: 8, y2: TH - 8, stroke: "var(--grid)" }, svg);
-  el("line", { x1: 8, x2: TW - 8, y1: ty(0), y2: ty(0), stroke: "var(--grid)" }, svg);
-  el("text", { x: TW - 12, y: TH - 12, "text-anchor": "end" }, svg).textContent = `PC1 · ${Math.round(DATA.pca_var[0] * 100)}% of variance`;
-  el("text", { x: tx(0) + 6, y: 20 }, svg).textContent = `PC2 · ${Math.round(DATA.pca_var[1] * 100)}%`;
-  for (const side of ["spec", "code"]) {
-    const key = side + "_xy", col = `var(--${side})`;
-    const path = rs => rs.map(r => `${tx(r[key][0])},${ty(r[key][1])}`).join(" ");
-    el("polyline", { points: path(R), fill: "none", stroke: col, "stroke-width": 1.5, "stroke-opacity": 0.2, "stroke-linejoin": "round" }, svg);
-    el("polyline", { points: path(R.slice(0, sel + 1)), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
-  }
-  const s = R[sel];
-  el("line", { x1: tx(s.spec_xy[0]), y1: ty(s.spec_xy[1]), x2: tx(s.code_xy[0]), y2: ty(s.code_xy[1]), stroke: "var(--gap)", "stroke-width": 1.5, "stroke-dasharray": "5 4" }, svg);
-  const mx = (tx(s.spec_xy[0]) + tx(s.code_xy[0])) / 2, my = (ty(s.spec_xy[1]) + ty(s.code_xy[1])) / 2;
-  el("text", { x: mx, y: my - 8, "text-anchor": "middle", class: "lbl-strong" }, svg).textContent = `gap ${fmt(s.gap_full)}°`;
-  for (const side of ["spec", "code"]) {
-    R.forEach((r, i) => {
-      const cx = tx(r[side + "_xy"][0]), cy = ty(r[side + "_xy"][1]);
-      el("circle", { cx, cy, r: i === sel ? 6.5 : 3.6, fill: `var(--${side})`, stroke: "var(--surface)", "stroke-width": 2, opacity: i <= sel ? 1 : 0.22 }, svg);
-      const h = el("circle", { cx, cy, r: 9, class: "hit" }, svg);
-      h.addEventListener("mousemove", ev => showTip(ev, `<div style="color:var(--${side});font-weight:600;margin-bottom:2px">${side === "spec" ? "Spec" : "Code"} vector</div>` + rowTip(r)));
-      h.addEventListener("mouseleave", hideTip);
-      h.addEventListener("click", () => setSel(i));
-    });
-  }
-  const lab = (p, txt, dx, dy, anchor, cls = "lbl") => { el("text", { x: tx(p[0]) + dx, y: ty(p[1]) + dy, "text-anchor": anchor, class: cls }, svg).textContent = txt; };
-  lab(R[0].spec_xy, "plan as written, Sep 20", -10, -12, "end");
-  lab(R[0].code_xy, "monolith, Sep 20", 10, -12, "start");
-  if (sel > 3) {
-    lab(s.spec_xy, `spec at ${prLabel(s)}`, 0, 22, "middle", "lbl-strong");
-    lab(s.code_xy, `code at ${prLabel(s)}`, 0, 22, "middle", "lbl-strong");
-  }
-}
 
 function drawReadout() {
   const s = R[sel], prev = R[Math.max(0, sel - 1)];
@@ -610,7 +559,7 @@ function drawScrubNow() {
 }
 function setSel(i) {
   sel = i; scrub.value = i;
-  drawScrubNow(); drawTraj(); drawReadout(); drawLines(); drawDeltas(); drawHeat();
+  drawScrubNow(); drawReadout(); drawLines(); drawDeltas(); drawHeat();
   document.querySelectorAll("#tbl tr[data-i]").forEach(tr => tr.classList.toggle("sel", +tr.dataset.i === sel));
 }
 

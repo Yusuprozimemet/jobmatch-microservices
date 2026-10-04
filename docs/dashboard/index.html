@@ -67,18 +67,10 @@
 
   <section class="panel">
     <div class="panel-head">
-      <h2>Two vectors, one plane</h2>
-      <p>Each dot is one merge, projected from <span class="num vocab-n"></span> code names (the backticked identifiers the specs use) onto the two directions along which the snapshots vary most. Blue is the spec, orange is the code. The dashed line is the gap at the selected merge.</p>
+      <h2>The selected merge</h2>
+      <p>What the merge chosen above did to the spec and the code, over <span class="num vocab-n"></span> code names (the backticked identifiers the specs use).</p>
     </div>
-    <div class="legend">
-      <span><i style="background:var(--spec)"></i>Spec path (plan.md + specs/)</span>
-      <span><i style="background:var(--code)"></i>Code path (everything but *.md)</span>
-      <span><i class="dash"></i>Gap at selected merge</span>
-    </div>
-    <div class="two">
-      <div id="traj"></div>
-      <div class="readout" id="readout"></div>
-    </div>
+    <div class="readout" id="readout"></div>
   </section>
 
   <section class="panel">
@@ -178,7 +170,6 @@
         <p><b>Snapshots.</b> The initial commit plus every first-parent merge on <code>main</code> (<span id="pr-range"></span>). Code PRs, spec-change PRs and close-the-day PRs are told apart by branch name and title.</p>
         <p><b>Drift</b> uses the full spec text: word frequencies (log-scaled) of <code>plan.md</code> and <code>specs/*.md</code>, compared by angle with the Sep 20 version. Each word is weighted by how few of the Sep 20 files used it, so words every file uses (“the”, “day”) count for nothing and a rewrite is not diluted by them. 0° means unchanged. 90° would mean nothing in common, but the scale is not linear in change: the Sep 20 files split in two (even and odd by name) are <span class="num drift-ref"></span> apart, so a drift near that means the spec now differs from its first version about as much as one half of that version differs from the other.</p>
         <p><b>Gap</b> needs a space both sides share. It is built from the <span class="num vocab-n"></span> code-like names the specs put in backticks (<code>SavedJobCounts</code>, <code>saved_jobs</code>, <code>JobRepository</code>…). The spec vector counts how often each name appears in the specs. The code vector counts how often it appears in the code, with Markdown, <code>data/</code>, screenshots and comment lines left out: a comment naming a thing is not the thing. Both are log-scaled and compared by angle. Each merge’s gap uses only the names the specs had used by that merge, so a name a later spec adds does not move an earlier point. Counts are never negative, so even unrelated vectors sit well under 90°: the same code counts shuffled across the names would read <span class="num" id="gap-chance"></span> today (the dashed line). The gap is worth reading only as its distance below that line; the share of reached names found in the code (“The sawtooth, up close”) is the plainer measure.</p>
-        <p><b>The plane</b> is a principal-component projection of all <span class="num" id="n-vectors"></span> vectors (one spec and one code vector per snapshot) together. PC1 holds <span class="num" id="pc1"></span> of the variance and PC2 holds <span class="num" id="pc2"></span>; the other <span class="num" id="pc-rest"></span> is not shown, so distances in the plot are approximate.</p>
         <p><b>Where the work went</b> counts <code>git diff --numstat</code> between one merge and the one before it, every file, so nothing merged is counted twice and nothing is left out. A moved file counts only the lines that changed in the move, under the path it moved to. Binary files, <code>package-lock.json</code>, <code>screenshots/</code> and <code>docs/dashboard/token-usage.json</code> are written by tools, not people, and are not counted. The first rule that matches a file’s path decides its box:</p>
         <ol>
           <li><b>Specs:</b> <code>plan.md</code> and <code>specs/</code>, the template and README there included.</li>
