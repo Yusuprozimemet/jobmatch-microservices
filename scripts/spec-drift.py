@@ -45,18 +45,17 @@ WORDS = re.compile(r"[A-Za-z0-9_]+")
 COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*|--|<!--|#(\s|!|$))")
 COMMENT_TAIL = re.compile(r"/\*.*?\*/|\s(//|--|#)\s.*$")
 CRITERION = re.compile(r"^- \[( |x)\]", re.M)
-# A criterion's evidence: the PRs it cites, the tests it names (a class, or Class.member) and a
-# break it was seen to fail under ("Red with the permitAll line removed", "expected: 404 but was",
-# the template's "Broken on purpose: <what the check reported>"). "Red today" and "Red before" are
-# the baseline a new criterion starts from, and a break with nothing reported is only planned.
+# A criterion's evidence: the PRs it cites and the tests it names (a class, or Class.member).
 CITED_PR = re.compile(r"(?<![\w&])#(\d+)\b")
 EVIDENCE_TEST = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Test|IT|Tests))(?:\.([a-z][A-Za-z0-9_]*))?\b")
-SEEN_RED = re.compile(
-    r"\b[Rr]ed (?:with|as|without|when|on|again|in)\b|\b[Ss]een red\b|\bRed, (?:\d+ of \d+|all)\b"
-    r"|\b\d+ of \d+(?: [\w-]+){0,3} red\b|` red\b|went red|turned\b[^.]{0,80}\bred\b|but was"
-    r"|Broken\s+(?:on\s+purpose|as\s+named)\b[^.]*?(?:\bfail(?:ed|s\s+with)\b|\berror(?:ed|s)?\b"
-    r"|Failures: [1-9]|\bgave \d|\bshowed\b|\bstops with\b|\bexited\b|\bprinted\b|\b\d+ of \d+"
-    r"|\b\d+\s+(?:rows?|statements?)\b)")
+# A break on purpose, in one fixed line (specs/README.md): `broken: <what> → <what it reported>`,
+# on its own line in a PR description or under a ticked criterion; `broken: none → <why>` says
+# there was none. It replaced three regexes over free text (#310), which read a break described in
+# other words as none. Nothing earlier was asked for the line, so it is read from PR #310 on: a
+# PR before it, or a day none of whose PRs reaches it, is not measured. A day number would not do:
+# Days 39-41 ran before Day 28.
+BREAK_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?broken:[ \t]*(\S[^\n]*?)[ \t]*(?:→|->)[ \t]*\S", re.M)
+BREAK_LINE_FROM_PR = 310
 SKIPPABLE = re.compile(r"@Disabled\b|@(?:Enabled|Disabled)If")
 # A removal check: a grep a criterion says prints nothing ("`grep ...` returns nothing", "gives 0"),
 # or a Verify line that echoes when it does (`grep ... || echo "clean"`).
@@ -212,21 +211,19 @@ def work_kind(path):
     return "prod"
 
 
-CHECKLIST = re.compile(r"^\s*- \[[ x]\]")
-BREAK_SAID = re.compile(r"\b(?:broken|broke|breaks?|red)\b[^.\n]{0,60}?\b(?:on\s+purpose|deliberately)\b"
-                        r"|\bon\s+purpose\b[^.\n]{0,60}?\bfail(?:ed|s)\b|\bseen\s+(?:failing|to\s+fail|red)\b"
-                        r"|\ba\s+temporary\s+break\b", re.I)
-BREAK_NONE = re.compile(r"\b(?:nothing|not|never|no)\b[^.\n]{0,30}?\b(?:broken|broke)\s+on\s+purpose\b", re.I)
+def broke(text):
+    """Whether text has a `broken:` line for a break, not a `broken: none → <why>`."""
+    return any(w.lower() != "none" for w in BREAK_LINE.findall(text or ""))
 
 
-def break_state(body):
-    """What a PR description says about breaking the code on purpose: "recorded", "none" (it says
-    nothing was broken, and why) or "silent". The template's checklist asks every PR whether its
-    checks were "seen to fail", so its lines are not read."""
-    said = [l for l in (body or "").splitlines() if not CHECKLIST.match(l) and BREAK_SAID.search(l)]
-    if any(not BREAK_NONE.search(l) for l in said):
+def break_state(body, number):
+    """What a PR description says about breaking the code on purpose: "recorded", "none" (only
+    `broken: none → <why>`), "silent", or "not measured" for a PR from before the line."""
+    if number < BREAK_LINE_FROM_PR:
+        return "not measured"
+    if broke(body):
         return "recorded"
-    return "none" if said else "silent"
+    return "none" if BREAK_LINE.search(body or "") else "silent"
 
 
 def ci_pushes(runs):
@@ -247,7 +244,7 @@ def verification(prs, runs):
         if p.get("state") == "MERGED":
             pushes, failed, failed_in = ci.get(p["headRefName"], (0, 0, []))
             out.append(dict(number=p["number"], day=day_of(p["headRefName"]), kind=kind(p["title"], p["headRefName"]),
-                            breaks=break_state(p.get("body")), pushes=pushes, failed=failed, failed_in=failed_in))
+                            breaks=break_state(p.get("body"), p["number"]), pushes=pushes, failed=failed, failed_in=failed_in))
     return out
 
 
@@ -575,7 +572,7 @@ def excerpt(text, n):
 
 def criteria(section_text):
     """Each criterion under "Acceptance criteria": its kind, whether it is ticked, and the PRs,
-    tests and seen-red breaks written into it."""
+    tests and `broken:` lines written into it."""
     out = []
     for block in re.split(r"^(?=- \[[ x]\])", section_text, flags=re.M):
         if not block.startswith("- ["):
@@ -588,7 +585,7 @@ def criteria(section_text):
                         ticked=block.startswith("- [x]"), kind=tag.group(1) if tag else None,
                         claim=claim, prs=sorted({int(n) for n in CITED_PR.findall(block)}),
                         tests=sorted({c + ("." + m if m else "") for c, m in EVIDENCE_TEST.findall(block)}),
-                        red=bool(SEEN_RED.search(block))))
+                        red=broke(block)))
     return out
 
 
@@ -689,6 +686,7 @@ def roadmap(snaps, prs, blobs):
                          criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**")),
                          worked=[worked[0], worked[-1]] if worked else None,
                          evidence_format=in_evidence_format(ev),
+                         break_format=any(p["number"] >= BREAK_LINE_FROM_PR for p in mine),
                          evidence=ev, removal_checks=removal_checks(text)))
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])
     return evidence(settle(days, order), snaps, blobs), order, stop

@@ -32,7 +32,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Evidence behind the ticks</h2>
-      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped. A name counts only if it was in the tree when the day's last PR merged. Days marked <em>pre-format</em> were written before the evidence format (#55, from Day 9): nothing asked their ticks to record any of this, so a zero there is not measured, not missing.</p>
+      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped. A name counts only if it was in the tree when the day's last PR merged. Days marked <em>pre-format</em> were written before the evidence format (#55, from Day 9): nothing asked their ticks to record any of this, so a zero there is not measured, not missing. The <code>broken:</code> line was asked for from #310: “Seen red” is not measured for a day none of whose PRs reaches it.</p>
     </div>
     <div class="scroll-x"><table id="evidence"></table></div>
     <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
@@ -139,7 +139,7 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Verification the lines do not show</h2>
-      <p>A break on purpose never merges and a failed CI run leaves nothing in git, so neither is in “Where the work went”. Both are read from GitHub instead. First, each code PR's description: does it record a break on purpose (a line such as <b>Broken on purpose</b>, <b>Seen red on purpose</b> or <b>Seen failing</b>), say why there is none, or say nothing? The template's checklist asks every PR whether its checks were “seen to fail”, so checklist lines are not read. The rule was written down on Sep 23 (Day 8); a break described in other words shows as silent. Hover a bar for the silent PRs.</p>
+      <p>A break on purpose never merges and a failed CI run leaves nothing in git, so neither is in “Where the work went”. Both are read from GitHub instead. First, each code PR's description: does it record a break on purpose in the one line the rules fix (<code>broken: &lt;what&gt; → &lt;what it reported&gt;</code>), say why there is none (<code>broken: none → &lt;why&gt;</code>), or say nothing? The line was asked for from #310; a PR before it described its breaks in free text, read by phrasing until then, and is not measured. Hover a bar for the silent PRs.</p>
     </div>
     <div class="legend" id="breaks-legend"></div>
     <div id="breaks"></div>

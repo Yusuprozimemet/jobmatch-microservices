@@ -6,7 +6,8 @@
 
 <!-- The diff already shows what changed. Explain why you did it this way, and
      what you considered instead. "An AI wrote it" is not an answer here, and it
-     will not be an answer in review either. -->
+     will not be an answer in review either. Each break on purpose is one line of
+     its own, `broken: <what> → <what it reported>`, or `broken: none → <why>`. -->
 
 ## Contract impact
 

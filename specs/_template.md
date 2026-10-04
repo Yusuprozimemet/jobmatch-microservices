@@ -21,8 +21,8 @@
 ## Acceptance criteria
 - [ ] CNN.1 **new** — <checkable by someone who did not write the code>. Red today: <how it
       fails on the code as it is, e.g. "the grep finds two">.
-- [ ] CNN.2 **hold** — <true before the change and must stay true after it>. Broken on purpose:
-      <what was broken, and what the check reported>.
+- [ ] CNN.2 **hold** — <true before the change and must stay true after it>.
+      broken: <what was broken> → <what the check reported>
 
 ## Verify
 ```bash

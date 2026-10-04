@@ -460,6 +460,7 @@ function drawVerification() {
     { name: "break recorded", color: "var(--close)", count: vs => n(vs, "recorded") },
     { name: "says why none", color: "var(--other)", count: vs => n(vs, "none") },
     { name: "silent", color: "var(--muted)", outline: true, count: vs => n(vs, "silent") },
+    { name: "not measured (before #310)", color: "var(--grid)", count: vs => n(vs, "not measured") },
   ];
   const nums = vs => vs.map(v => "#" + v.number).join(", ");
   dayStack(document.getElementById("breaks"), code, breakParts, "Code PRs per day by whether they record a break on purpose",
@@ -645,7 +646,7 @@ function drawEvidence() {
       const ev = d.evidence.filter(c => c.ticked), states = ev.flatMap(c => Object.values(c.tests));
       const off = states.filter(s => s !== "present").length;
       const pre = !d.evidence_format;
-      return `<tr${pre ? ` title="Spec written before the evidence format (#55)"` : ""}><td class="num">${dd(d.day)}${pre ? ` <span class="pre-tag">pre-format</span>` : ""}</td>${cell(ev.filter(c => c.prs.length).length, ev.length, pre)}${cell(ev.filter(c => Object.keys(c.tests).length).length, ev.length, pre)}${cell(ev.filter(c => c.red).length, ev.length, pre)}<td class="r${off ? " none" : ""}">${states.length ? `${states.length - off}/${states.length} present` : "–"}</td><td class="t">${md(d.title)}</td></tr>`;
+      return `<tr${pre ? ` title="Spec written before the evidence format (#55)"` : ""}><td class="num">${dd(d.day)}${pre ? ` <span class="pre-tag">pre-format</span>` : ""}</td>${cell(ev.filter(c => c.prs.length).length, ev.length, pre)}${cell(ev.filter(c => Object.keys(c.tests).length).length, ev.length, pre)}${cell(ev.filter(c => c.red).length, ev.length, !d.break_format)}<td class="r${off ? " none" : ""}">${states.length ? `${states.length - off}/${states.length} present` : "–"}</td><td class="t">${md(d.title)}</td></tr>`;
     }).join("") + "</tbody>";
   const gaps = days.flatMap(d => d.evidence.flatMap(c => Object.entries(c.tests).filter(([, s]) => s !== "present")
     .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> is ${s} · ${md(c.claim)}</li>`)));
