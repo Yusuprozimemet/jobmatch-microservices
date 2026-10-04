@@ -9,10 +9,12 @@
 # identity_user owns identity, and so on; jobs_user owns nothing and only reads the analytics mart
 # from jobs_db. 20-jobs-db.sh creates that schema and jobs_db after this runs. No module reads
 # another's schema (Day 38), the rule db-setup.py applies; a volume created before Day 38 had
-# the grants, and each module's own migration revokes them.
+# the grants, and each module's own migration revokes them. applications_user connects only to
+# apps_db (30-apps-db.sh) since Day 25.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    -v project_db="$POSTGRES_DB" \
     -v identity_password="$IDENTITY_DB_PASSWORD" \
     -v applications_password="$APPLICATIONS_DB_PASSWORD" \
     -v matching_password="$MATCHING_DB_PASSWORD" \
@@ -25,4 +27,7 @@ CREATE ROLE jobs_user LOGIN PASSWORD :'jobs_password';
 CREATE SCHEMA identity AUTHORIZATION identity_user;
 CREATE SCHEMA applications AUTHORIZATION applications_user;
 CREATE SCHEMA matching AUTHORIZATION matching_user;
+
+REVOKE CONNECT ON DATABASE :"project_db" FROM PUBLIC;
+GRANT CONNECT ON DATABASE :"project_db" TO identity_user, matching_user, jobs_user;
 SQL

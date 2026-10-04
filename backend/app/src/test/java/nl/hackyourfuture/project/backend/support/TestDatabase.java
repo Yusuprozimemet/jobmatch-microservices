@@ -92,12 +92,13 @@ public final class TestDatabase {
     }
 
     /**
+     * A {@code postgres_fdw} foreign table over application-service's saved_jobs in apps_db.
      * The monolith no longer writes saved_jobs (Day 25); application-service does, in apps_db.
-     * The contract tests insert through {@code jdbc()}, so project_db's table becomes a
-     * postgres_fdw foreign table over apps_db's, with {@code job_state}'s default since their
-     * inserts omit it. Created after the monolith's migrations ran (a context exists by the first
-     * reset): {@code DROP TABLE} refuses a foreign table, so a migration dropping the table must
-     * run before this. Nothing in {@code main/} sees it.
+     * The contract tests insert through {@code jdbc()}, which is project_db, where V16 dropped
+     * the real table and its type. The foreign table mirrors it with {@code job_state} as text;
+     * postgres_fdw prepares remote statements without parameter types, so apps_db casts the text
+     * to its enum. Created after the monolith's migrations ran (a context exists by the first
+     * reset). Harness-only; nothing in {@code main/} sees it.
      */
     private static synchronized void bridgeSavedJobs() {
         if (bridged) {
@@ -120,10 +121,6 @@ public final class TestDatabase {
             return;
         }
 
-        if (relkind != null) {
-            JDBC.sql("DROP TABLE applications.saved_jobs").update();
-        }
-
         JDBC.sql("CREATE EXTENSION IF NOT EXISTS postgres_fdw").update();
         JDBC.sql("CREATE SERVER IF NOT EXISTS apps_db FOREIGN DATA WRAPPER postgres_fdw "
                 + "OPTIONS (host 'localhost', port '5432', dbname 'apps_db')").update();
@@ -133,7 +130,7 @@ public final class TestDatabase {
                 CREATE FOREIGN TABLE applications.saved_jobs (
                     user_id UUID NOT NULL,
                     posting_id TEXT NOT NULL,
-                    job_state applications.job_state NOT NULL DEFAULT 'SAVED'
+                    job_state TEXT NOT NULL DEFAULT 'SAVED'
                 ) SERVER apps_db OPTIONS (schema_name 'applications', table_name 'saved_jobs')
                 """).update();
 

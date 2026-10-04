@@ -4,7 +4,8 @@
 Creates three databases. 'project_db' has the 'app' schema, owned by 'app_user'. 'jobs_db'
 (Day 20) has the marts: 'analytics', owned by 'analytics_user', and 'analytics_dev', owned
 by 'analytics_dev_user'. Only those two roles and 'jobs_user' may connect to 'jobs_db'.
-'apps_db' (Day 25) has 'applications', owned by 'applications_user'; only it may connect.
+'apps_db' (Day 25) has 'applications', owned by 'applications_user'; only it may connect,
+and it may not connect to 'project_db'.
 Each role has full access to the schemas it owns and read-only access to the others in
 the same database, for both existing and future objects, except the module schemas below,
 which only their owner reads.
@@ -389,9 +390,16 @@ def main() -> None:
                     role=sql.Identifier(role), member=sql.Identifier(APP_ROLE))
         done("'%s' is a member of %s", APP_ROLE, ", ".join(MODULE_ROLES))
 
-        # Database-level grants. project_db: all roles. jobs_db: only analytics roles and jobs_user.
+        # Database-level grants. project_db: every role but applications_user (Day 25), which
+        # connects only to apps_db. jobs_db: only analytics roles and jobs_user.
         # apps_db: only applications_user.
-        grant_connect(conn, NEW_DATABASE, roles)
+        revoke_connect(conn, NEW_DATABASE)
+        # Earlier runs granted it by name, so revoking PUBLIC alone would leave it connecting.
+        for role in APPS_ROLES:
+            execute(conn, "REVOKE CONNECT ON DATABASE {database} FROM {role}",
+                    database=sql.Identifier(NEW_DATABASE), role=sql.Identifier(role))
+            done("Revoked CONNECT on database '%s' from %s", NEW_DATABASE, role)
+        grant_connect(conn, NEW_DATABASE, [r for r in roles if r not in APPS_ROLES])
         revoke_connect(conn, JOBS_DATABASE)
         grant_connect(conn, JOBS_DATABASE, list(JOBS_ROLES))
         revoke_connect(conn, APPS_DATABASE)

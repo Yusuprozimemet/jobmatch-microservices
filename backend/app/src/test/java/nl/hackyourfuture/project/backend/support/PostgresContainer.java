@@ -36,7 +36,7 @@ public final class PostgresContainer {
     /** Each module's schema, owned by a role of the same name plus {@code _user}. */
     public static final List<String> MODULE_SCHEMAS = List.of("identity", "applications", "matching");
 
-    /** What the monolith connects as; matching-service connects as matching_user since Day 21, application-service as applications_user since Day 25. */
+    /** What the monolith connects as; matching-service connects as matching_user since Day 21. */
     public static final List<String> CONNECTED_SCHEMAS = List.of("identity");
 
     /** Every schema a module's tables can be in, in the order unqualified names resolve. */
@@ -192,6 +192,8 @@ public final class PostgresContainer {
                         + " GRANT SELECT ON " + objects + " TO " + othersThan(schema));
             }
         }
+        statements.add("REVOKE CONNECT ON DATABASE project_db FROM PUBLIC");
+        statements.add("GRANT CONNECT ON DATABASE project_db TO identity_user, matching_user, jobs_user, analytics_user");
         execute(String.join(";\n", statements));
     }
 

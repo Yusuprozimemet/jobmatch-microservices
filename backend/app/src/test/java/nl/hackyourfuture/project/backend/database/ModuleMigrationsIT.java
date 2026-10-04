@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Each module keeps its own migration history, in its own schema, under its own role (Day 11).
  *
- * <p>app's history holds V1-V15, including the moves that brought each module's tables in. Each
+ * <p>app's history holds V1-V16, including the moves that brought each module's tables in. Each
  * module's own Flyway then baselines at 0, so what a module migrates from here, starting with
  * Day 12's {@code identity.refresh_tokens}, is recorded where only that module's login can write.
  */
@@ -48,7 +48,23 @@ class ModuleMigrationsIT extends IntegrationTest {
                 .sql("SELECT max(version::int) FROM app.flyway_schema_history WHERE success")
                 .query(Integer.class)
                 .single())
-                .isEqualTo(15);
+                .isEqualTo(16);
+    }
+
+    // V16 (Day 25): the key and the enum left project_db with the table. The harness puts a foreign
+    // table over apps_db's in its place (TestDatabase), so that name may only be a foreign table.
+    @Test
+    void savedJobsLeftProjectDbWithItsKey() {
+        assertThat(jdbc()
+                .sql("""
+                        SELECT (SELECT count(*) FROM pg_constraint WHERE conname = 'fk_saved_jobs_user')
+                            || ' ' || coalesce(to_regtype('applications.job_state')::text, 'none')
+                            || ' ' || coalesce((SELECT relkind::text FROM pg_class
+                                                WHERE oid = to_regclass('applications.saved_jobs')), 'none')
+                        """)
+                .query(String.class)
+                .single())
+                .isIn("0 none f", "0 none none");
     }
 
     // matching-service has had no Flyway since Day 23: its schema is migrated by app's V15 alone.
