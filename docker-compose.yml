@@ -80,11 +80,6 @@ services:
       EVENTS_USER_DELETED_TOPIC_ARN: arn:aws:sns:eu-west-1:000000000000:user-deleted
       EVENTS_SNS_ACCESS_KEY: test
       EVENTS_SNS_SECRET_KEY: test
-      # Day 27: the user.deleted consumer reads the applications queue on the same emulator.
-      EVENTS_SQS_ENDPOINT: http://localstack:4566
-      EVENTS_SQS_ACCESS_KEY: test
-      EVENTS_SQS_SECRET_KEY: test
-      EVENTS_USER_DELETED_QUEUE_URL: http://localstack:4566/000000000000/applications-user-deleted
     volumes:
       - jwt-keys:/run/keys:ro
     # No published port (Day 16): the gateway below is the way in, on 8080. 9090, the management
@@ -108,7 +103,8 @@ services:
       DB_JOBS_PASSWORD: ${JOBS_DB_PASSWORD:-password}
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/job-service.pem
       BACKEND_KEY_SET_URL: http://backend:8080/.well-known/service-jwks.json
-      INTERNAL_APPLICATIONS_URL: http://backend:8080
+      # Day 25: saved counts are application-service's.
+      INTERNAL_APPLICATIONS_URL: http://application-service:8080
       # Day 21: matching-service calls the shortlist route.
       APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-matching-service
       APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL: http://matching-service:8080/.well-known/service-jwks.json
@@ -140,7 +136,7 @@ services:
 
   # The event bus (Day 26): SNS topic user-deleted fanning out to one SQS queue per consumer,
   # each with a dead-letter queue and redrive policy after 5 receives. Created by the ready.d
-  # hook; in memory; no published port; the backend reads
+  # hook; in memory; no published port; application-service reads
   # applications-user-deleted and matching-service matching-user-deleted (Day 27).
   localstack:
     image: localstack/localstack:4.14.0
@@ -205,8 +201,8 @@ services:
       localstack:
         condition: service_healthy
 
-  # application-service (Day 25): saved jobs and the tracker, on apps_db. No published port,
-  # and not routed yet: the gateway and job-service's counts still go to the backend until Track E2.
+  # application-service (Day 25): saved jobs and the tracker, on apps_db. No published port;
+  # routed to by the gateway (/api/saved-jobs) and by job-service (/internal/saved-counts).
   application-service:
     build: ./services/application-service
     environment:
@@ -219,8 +215,15 @@ services:
       # identity is still the monolith's; user tokens are checked against its key set there.
       INTERNAL_IDENTITY_URL: http://backend:8080
       INTERNAL_JOBS_URL: http://job-service:8080
-      # job-service calls /internal/saved-counts here once E2 points it at this service.
+      # job-service calls /internal/saved-counts; its tokens are checked against this key set.
       JOB_SERVICE_KEY_SET_URL: http://job-service:8080/.well-known/service-jwks.json
+      # Day 27's user.deleted consumer, moved here on Day 25: it reads the applications queue on
+      # the emulator, which takes any key.
+      EVENTS_CONSUMER_ENABLED: "true"
+      EVENTS_SQS_ENDPOINT: http://localstack:4566
+      EVENTS_SQS_ACCESS_KEY: test
+      EVENTS_SQS_SECRET_KEY: test
+      EVENTS_USER_DELETED_QUEUE_URL: http://localstack:4566/000000000000/applications-user-deleted
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
     volumes:
@@ -237,6 +240,8 @@ services:
         condition: service_healthy
       jwt-key:
         condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
 
   # The API gateway (Day 15), the only way in to the backend: published on 8080, where the
   # backend used to be (Day 16). It listens on 8081 inside the network.
@@ -251,6 +256,8 @@ services:
       JOB_SERVICE_URL: http://job-service:8080
       # Day 21: top-matches goes to matching-service; unset, it would fall back to the backend.
       MATCHING_SERVICE_URL: http://matching-service:8080
+      # Day 25: saved jobs go to application-service; unset, they would fall back to the backend.
+      APPLICATION_SERVICE_URL: http://application-service:8080
       # Tracing as the backend's, above: off unless TRACING_EXPORT_ENABLED=true, to the same Tempo.
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
@@ -273,6 +280,8 @@ services:
       job-service:
         condition: service_healthy
       matching-service:
+        condition: service_healthy
+      application-service:
         condition: service_healthy
 
   frontend:
