@@ -72,6 +72,11 @@ services:
       # Written by jwt-key above, read-only here.
       JWT_PRIVATE_KEY_FILE: /run/keys/private.pem
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/service.pem
+      # Google sign-in (Day 28), off while the id is empty: set both in .env to turn it on. The
+      # redirect URI is APP_BASE_URL (localhost:3000) + /api/login/oauth2/code/google, through the
+      # frontend and the gateway, so the Google console entry is the one it always was.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # Day 26: the outbox relay publishes user.deleted to the emulator below, whose account id
       # is always 000000000000 and which takes any key.
       EVENTS_SNS_ENDPOINT: http://localstack:4566
@@ -118,7 +123,9 @@ services:
       interval: 2s
       timeout: 3s
       retries: 5
-      start_period: 30s
+      # 120s, not 30 (Day 28): on a fresh clone four services start at once and one took 39s;
+      # failures inside it do not count, and start_interval still reports healthy within a second.
+      start_period: 120s
       start_interval: 1s
     depends_on:
       db:
@@ -189,7 +196,7 @@ services:
       interval: 2s
       timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 120s
       start_interval: 1s
     depends_on:
       jwt-key:
@@ -231,7 +238,7 @@ services:
       interval: 2s
       timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 120s
       start_interval: 1s
     depends_on:
       db:
@@ -270,7 +277,7 @@ services:
       interval: 2s
       timeout: 3s
       retries: 5
-      start_period: 30s
+      start_period: 120s
       start_interval: 1s
     depends_on:
       identity-service:

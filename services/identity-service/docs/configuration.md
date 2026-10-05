@@ -36,10 +36,11 @@ past that one is a list of overrides rather than an edited file.
 yourself — `set -a; source .env; set +a`, an IDE plugin, or `--env-file` — or setting the variables
 in the run configuration.
 
-Under compose, the backend gets exactly what its `environment:` block names and nothing else. It
-does not name `GOOGLE_CLIENT_ID` or the mail settings, so the compose stack runs with Google
-sign-in off (its routes are 404) and no reset emails — see
-[section 7](#7-what-degrades-without-which-key). Run the backend by hand with `backend/.env` for
+Under compose, identity-service gets exactly what its `environment:` block names and nothing
+else. Since Day 28 that includes `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from the root
+`.env`, empty by default, so Google sign-in is off (its routes are 404) until you set them. It
+does not name the mail settings, so there are no reset emails — see
+[section 7](#7-what-degrades-without-which-key). Run the service by hand with its own `.env` for
 those. The model's key is matching-service's alone since Day 21: compose passes `LLM_API_KEY` from
 the root `.env` to it and to nothing else, and without it matching ranks by skill overlap.
 

@@ -91,7 +91,8 @@ implementer never commits or pushes.
 
 - Build job-service's image first, `docker build -t jobmatch-job-service:harness services/job-service`:
   every run starts it, and a stale one passes silently.
-- From `backend/`: `../mvnw clean verify` **and** `../mvnw -B checkstyle:check`. `verify` does not
+- From `services/identity-service/`: `../../mvnw clean verify` **and** `../../mvnw -B
+  checkstyle:check` (`mvnw` and `checkstyle.xml` are at the root since Day 28). `verify` does not
   run checkstyle, and CI does; 200+ green tests have hidden a violation more than once.
 - Delete `*/target/surefire-reports` first and read the reports, not the exit code. A stale report
   from an earlier run looks like a pass.
@@ -113,16 +114,18 @@ implementer never commits or pushes.
 
 ## Stop and ask, do not patch
 
-- A Day 1–4 test (`app/src/test/.../contract/`, or the Day 01 harness self-tests) needs an edit.
-  That is the signal the spec's premise is wrong. Changes to `support/` are allowed.
+- A Day 1–4 test (`services/identity-service/app/src/test/.../contract/`, or the Day 01 harness
+  self-tests) needs an edit. That is the signal the spec's premise is wrong. Changes to `support/`
+  are allowed.
 - A migration that has run needs an edit. Never edit V1–V14 or any applied migration; add a new one.
 - A criterion cannot be met as written. Record the departure; do not deviate silently.
 
 ## Where things live
 
-- **Migrations:** `app/src/main/resources/db/migration` holds V1–V14, applied as the owner
-  (`DB_USER`). Each module's own migrations are in `<module>/src/main/resources/db/<module>`,
-  applied by that module's Flyway as its role, baselined at 0, so the first is `V1__*.sql`
+- **Migrations:** in `services/identity-service/` (the monolith's remainder since Day 28),
+  `app/src/main/resources/db/migration` holds V1–V14, applied as the owner (`DB_USER`). Each
+  module's own migrations are in `<module>/src/main/resources/db/<module>`, applied by that
+  module's Flyway as its role, baselined at 0, so the first is `V1__*.sql`
   (`app/.../config/Migrations.java`).
 - **Database roles:** each module connects as `<module>_user` with its own schema as the search
   path; `jobs_user` only reads. The roles come from `scripts/db-setup.py` (production),

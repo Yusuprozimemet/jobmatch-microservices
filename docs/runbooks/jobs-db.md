@@ -59,7 +59,7 @@ pg jobs_db -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'analytics'" 
 ```bash
 # The rehearsal's stand-in for a publish, run from the repository root.
 for f in analytics-schema analytics-seed; do
-  pg "$DB" -c "SET ROLE analytics_user" -f - < backend/app/src/test/resources/fixtures/$f.sql
+  pg "$DB" -c "SET ROLE analytics_user" -f - < services/identity-service/app/src/test/resources/fixtures/$f.sql
 done
 ```
 

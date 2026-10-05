@@ -166,8 +166,7 @@ jobs:
   # job before it failed or was skipped, since a skipped required check counts as passed: skipped
   # jobs pass here, failed or cancelled ones do not.
   gate:
-    # Still "Backend gate": it is the required check's name until the maintainer swaps it (Day 28, H28.1).
-    name: Backend gate
+    name: Identity Service gate
     if: always()
     needs: [changes, lint-and-test, build]
     runs-on: ubuntu-latest
