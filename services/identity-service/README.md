@@ -14,10 +14,10 @@ You need **JDK 25** and a PostgreSQL database — in Docker, in the cloud, or in
 With the default `admin` / `password` credentials. Do not use those credentials in production!
 
 ```bash
-docker run --name hyf-postgres -e POSTGRES_DB=project_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18.4-alpine
+docker run --name hyf-postgres -e POSTGRES_DB=identity_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18.4-alpine
 ```
 
-> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates `project_db` with an `app` schema and one schema per backend module (`identity`, `applications`, `matching`; `applications` empty since Day 25), `jobs_db` with the analytics schemas the pipeline publishes into (Day 20), and `apps_db`, application-service's (Day 25), and one least-privilege role for each, plus a read-only `jobs_user`, which job-service connects to `jobs_db` as. Run the app with `DB_USER=app_user` for the migrations and each module's role for its own connection (`DB_IDENTITY_USER=identity_user`, and so on), with the passwords the script prints.
+> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates `identity_db` with an `app` schema and one schema per backend module (`identity`, `applications`, `matching`; `applications` empty since Day 25), `jobs_db` with the analytics schemas the pipeline publishes into (Day 20), and `apps_db`, application-service's (Day 25), and one least-privilege role for each, plus a read-only `jobs_user`, which job-service connects to `jobs_db` as. Run the app with `DB_USER=app_user` for the migrations and each module's role for its own connection (`DB_IDENTITY_USER=identity_user`, and so on), with the passwords the script prints.
 
 ### 2. Set up configuration
 
@@ -108,7 +108,7 @@ docker pull ghcr.io/<org>/<repo>/backend:latest
 Run it, pointing at your database:
 
 ```bash
-docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=project_db \
+docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=identity_db \
   -e DB_USER=app_user -e DB_PASSWORD=<password> \
   -e DB_IDENTITY_USER=identity_user -e DB_IDENTITY_PASSWORD=<password> \
   -v /path/to/keys:/run/keys:ro -e JWT_PRIVATE_KEY_FILE=/run/keys/private.pem \
@@ -133,7 +133,7 @@ All configuration lives in [`application.yaml`](src/main/resources/application.y
 |---|---|---|
 | `DB_HOST` | `localhost` | Database host (server name or IP address) |
 | `DB_PORT` | `5432` | Database port |
-| `DB_NAME` | `project_db` | Database name |
+| `DB_NAME` | `identity_db` | Database name |
 | `DB_USER` | `admin` | Owner of the migrations; only Flyway logs in as it. `app_user` where `db-setup.py` set the database up |
 | `DB_PASSWORD` | `password` | Its password |
 | `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path. Jobs, matching and applications connect from their services (Days 17, 21 and 25) |
@@ -278,7 +278,7 @@ Two rules keep these tests usable as the safety net for the [microservices split
 
 ### The database
 
-One container per run, started by [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) and never restarted. Between tests, [`TestDatabase`](src/test/java/nl/hackyourfuture/project/backend/support/TestDatabase.java) truncates every `app` table in `project_db` — read from the catalogue, so a table a future migration adds is cleaned up without anyone editing that class — and reseeds the mart in `jobs_db`.
+One container per run, started by [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) and never restarted. Between tests, [`TestDatabase`](src/test/java/nl/hackyourfuture/project/backend/support/TestDatabase.java) truncates every `app` table in `identity_db` — read from the catalogue, so a table a future migration adds is cleaned up without anyone editing that class — and reseeds the mart in `jobs_db`.
 
 Do not add a second `@TestConfiguration` with its own container, and do not put `@MockitoBean` on a test that extends `IntegrationTest`: either one makes Spring build a second context, which boots the application again and costs more than the whole suite.
 
@@ -327,7 +327,7 @@ The `user` package is your reference — deliberately small and complete.
 |---|---|
 | `Failed to configure a DataSource: 'url' attribute is not specified` | Config files missing from `target/classes`. Run `../mvnw clean package`, or Rebuild Project in IntelliJ — recompiling a single class doesn't copy resources |
 | `Connection refused` on port 5432 | PostgreSQL isn't running — start the container from [Quick start](#quick-start) |
-| `FATAL: database "project_db" does not exist` | The database was created under another name. Create `project_db`, or set `DB_NAME` to the name you have |
+| `FATAL: database "identity_db" does not exist` | The database was created under another name. Create `identity_db`, or set `DB_NAME` to the name you have |
 | `password authentication failed for user "admin"` | Wrong `DB_USER` / `DB_PASSWORD` for this database |
 | Flyway stops at V12 with `Day 11 moves identity's tables into schema identity ...` | The module roles and schemas do not exist in this database. Run `db-setup.py` against it, or for compose recreate the volume: `docker compose down -v` |
 | `permission denied for table ...` from the application | A module's login reached another module's table. Each module writes only its own schema; that is Postgres enforcing the boundary, not a grant to add |

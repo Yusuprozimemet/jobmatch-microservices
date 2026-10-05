@@ -49,7 +49,7 @@ class BackendApplicationTests extends IntegrationTest {
 
     @Test
     void martTablesAreOutsideTheAppSchema() {
-        // The split has to keep working because the mart lives in jobs_db, not in project_db,
+        // The split has to keep working because the mart lives in jobs_db, not in identity_db,
         // and neither database has the tables in `app`.
         assertThat(jobsJdbc()
                 .sql("SELECT tablename FROM pg_tables WHERE schemaname = 'analytics' ORDER BY tablename")

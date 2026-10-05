@@ -7,7 +7,7 @@ spring:
   # The owner of V1-V14, and only Flyway logs in as it: the modules each have their own login,
   # below under app.datasource. Its history stays in app.
   flyway:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:identity_db}
     user: ${DB_USER:admin}
     password: ${DB_PASSWORD:password}
     schemas: app
@@ -42,7 +42,7 @@ app:
   # another module's schema is refused by Postgres. jobs owns nothing and reads the mart.
   datasource:
     identity:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}?currentSchema=identity
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:identity_db}?currentSchema=identity
       username: ${DB_IDENTITY_USER:identity_user}
       password: ${DB_IDENTITY_PASSWORD:password}
   base-url: ${APP_BASE_URL:http://localhost:3000}

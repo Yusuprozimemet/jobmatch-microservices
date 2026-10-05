@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>As the role each module logs in as: identity through the application's own pool,
  * the others as matching_user, whose login left with matching-service (Day 21). Not
- * applications_user: since Day 25 it cannot connect to project_db at all.
+ * applications_user: since Day 25 it cannot connect to identity_db at all.
  */
 class RefreshTokenGrantsIT extends IntegrationTest {
 
