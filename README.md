@@ -1043,60 +1043,70 @@ rejected, with the evidence. It includes any service that should not have been e
 
 ## Running it
 
-Copy the environment file, bring up the database, the backend, the API gateway and the web app,
-and open [http://localhost:3000](http://localhost:3000):
+You need Docker (with Compose) and git, nothing else: every service builds inside its own image.
+Copy the environment file, bring up the stack, and open [http://localhost:3000](http://localhost:3000):
 
 ```bash
+git clone https://github.com/Yusuprozimemet/jobmatch-microservices.git && cd jobmatch-microservices
 cp .env.example .env
-scripts/dev-up.sh          # or: docker compose up --build
+docker compose up -d --build    # or scripts/dev-up.sh; the first build takes several minutes
+docker compose ps               # wait until every service is healthy
 ```
 
-The browser talks to the web app on 3000, which sends `/api` to the gateway; the gateway, published
-on [http://localhost:8080](http://localhost:8080/api/docs), is the only way in to the backend, which
-has no published port since Day 16. [`backend/docs/architecture.md`](backend/docs/architecture.md)
-draws it. Compose passes the backend no Google, model or mail keys, so Google sign-in is off
-and matches rank by skill overlap; [`backend/docs/configuration.md`](backend/docs/configuration.md)
-says how to add them.
-
-Run the contract test suite that Phase 0 is building:
-
-```bash
-docker build -t jobmatch-job-service:harness services/job-service   # the suite starts it (Day 17)
-cd backend && ../mvnw verify
-```
+The browser talks to the web app on 3000, which sends `/api` to the API gateway. The gateway,
+published on [http://localhost:8080](http://localhost:8080/api/docs), is the only way in: it
+sends each path to identity-, job-, matching- or application-service, none of which publishes a
+port. [`services/identity-service/docs/architecture.md`](services/identity-service/docs/architecture.md)
+draws identity-service. Google sign-in is off until you set `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` in `.env`; without `LLM_API_KEY` matches rank by skill overlap; compose
+passes no mail settings, so no reset emails.
+[`services/identity-service/docs/configuration.md`](services/identity-service/docs/configuration.md)
+says what each key does.
 
 Job listings come from the data pipeline, which publishes its marts into `jobs_db`, job-service's
 own database (Day 20). On a fresh database volume `/api/jobs` answers 500 until it has published
-them — see [`data/README.md`](data/README.md) — or until you load the test suite's mart:
+them — see [`data/README.md`](data/README.md) — so load the test suite's mart instead:
 
 ```bash
 for f in analytics-schema analytics-seed; do
-  docker compose exec -T db psql -U admin -d jobs_db -v ON_ERROR_STOP=1 \
-    -c "SET ROLE analytics_user" -f - < backend/app/src/test/resources/fixtures/$f.sql
+  docker compose exec -T db psql -U admin -d jobs_db -v ON_ERROR_STOP=1     -c "SET ROLE analytics_user" -f - < services/identity-service/app/src/test/resources/fixtures/$f.sql
 done
 ```
 
-A volume created before Day 20 has no `jobs_db`. Add it once, without deleting anything (never
-`down -v`): `docker compose up -d db`, so the container has the analytics passwords, then
-`docker compose exec -T db sh -c 'sh /docker-entrypoint-initdb.d/20-jobs-db.sh'` (quoted, so Git
-Bash on Windows does not rewrite the path). Its old
-`project_db.analytics` stays until you drop it; nothing in compose reads it any more.
+Run the contract test suite (it needs a JDK 25; the Maven wrapper is at the root):
+
+```bash
+docker build -t jobmatch-job-service:harness services/job-service   # the suite starts it (Day 17)
+cd services/identity-service && ../../mvnw verify
+```
+
+A volume from before Day 28 holds `project_db`, which is now `identity_db`: rename it once, as
+[`docs/runbooks/identity-db.md`](docs/runbooks/identity-db.md) says. A volume from before Day 20
+has no `jobs_db`. Add it once, without deleting anything (never `down -v`): `docker compose up -d
+db`, so the container has the analytics passwords, then `docker compose exec -T db sh -c 'sh
+/docker-entrypoint-initdb.d/20-jobs-db.sh'` (quoted, so Git Bash on Windows does not rewrite the
+path).
 
 ## Repository layout
 
 ```
 .
 ├── plan.md             The migration plan: seven phases, four hard parts, what we are not doing
-├── specs/              37 day specs — the contract for every change in this repository
-├── docs/
-│   └── original-readme.md   The monolith's own README, preserved
-├── backend/            Spring Boot monolith — the subject of the migration
-│   ├── src/test/.../contract/   Contract tests that must survive the split unchanged
-│   └── src/test/.../support/    The Phase 0 test harness
+├── specs/              The day specs — the contract for every change in this repository
+├── services/
+│   ├── api-gateway/          The only way in: routes, token checks, rate limits
+│   ├── identity-service/     What was the monolith: users, auth, profiles (Day 28)
+│   │   └── app/src/test/.../contract/   The Day 1–4 contract suite, unedited since
+│   ├── job-service/          Job search and postings, over jobs_db
+│   ├── matching-service/     Top matches and scoring
+│   └── application-service/  Saved jobs and applications
 ├── frontend/           Next.js web app (unchanged)
 ├── data/               Data pipeline (unchanged)
-├── scripts/            Local development and deployment scripts
-├── .github/workflows/  CI/CD and the pull request gates
+├── observability/      Prometheus, Grafana and Tempo for `docker compose --profile obs`
+├── docs/               Runbooks, the dashboard, the monolith's original README
+├── scripts/            Local development scripts and the migration measurement
+├── mvnw, checkstyle.xml  The Maven wrapper and style rules every service builds with
+├── .github/workflows/  CI/CD per service and the pull request gates
 └── docker-compose.yml  The local stack
 ```
 

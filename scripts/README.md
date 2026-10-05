@@ -13,7 +13,7 @@ chmod +x scripts/*.sh
 ## Commands
 
 - scripts/dev-up.sh
-  - Starts db, backend, frontend via docker compose.
+  - Starts db, identity-service, api-gateway, frontend via docker compose.
 - scripts/dev-down.sh
   - Stops the compose stack.
 - scripts/preflight.sh

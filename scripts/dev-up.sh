@@ -16,4 +16,4 @@ print_step "Starting local db, identity-service, api-gateway, and frontend"
 echo
 echo "App stack is up."
 echo "Frontend: http://localhost:3000"
-echo "Backend docs, through the gateway: http://localhost:8080/api/docs"
+echo "Identity-service API docs, through the gateway: http://localhost:8080/api/docs"

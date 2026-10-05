@@ -3,13 +3,14 @@
 #
 # Compose runs this on every start, in the jwt-key service, against the jwt-keys volume: the key
 # is made on the first start and kept until `docker compose down -v`. A new key on each start
-# would sign every user out. By hand, for a backend started outside compose:
+# would sign every user out. By hand, for identity-service started outside compose:
 #
-#   scripts/jwt-key.sh backend/.jwt/private.pem
-#   export JWT_PRIVATE_KEY_FILE="$PWD/backend/.jwt/private.pem"
+#   scripts/jwt-key.sh services/identity-service/.jwt/private.pem
+#   export JWT_PRIVATE_KEY_FILE="$PWD/services/identity-service/.jwt/private.pem"
 #
-# The key is a 2048-bit RSA private key in a PKCS#8 PEM, which is what the backend reads. It is
-# never committed: backend/.jwt/ is gitignored, and production's comes from its secret store.
+# The key is a 2048-bit RSA private key in a PKCS#8 PEM, which is what identity-service reads. It
+# is never committed: services/identity-service/.jwt/ is gitignored, and production's comes from
+# its secret store.
 set -eu
 
 key="${1:?usage: jwt-key.sh <path of the private key to write>}"
