@@ -14,7 +14,7 @@
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -v project_db="$POSTGRES_DB" \
+    -v identity_db="$POSTGRES_DB" \
     -v identity_password="$IDENTITY_DB_PASSWORD" \
     -v applications_password="$APPLICATIONS_DB_PASSWORD" \
     -v matching_password="$MATCHING_DB_PASSWORD" \
@@ -28,6 +28,6 @@ CREATE SCHEMA identity AUTHORIZATION identity_user;
 CREATE SCHEMA applications AUTHORIZATION applications_user;
 CREATE SCHEMA matching AUTHORIZATION matching_user;
 
-REVOKE CONNECT ON DATABASE :"project_db" FROM PUBLIC;
-GRANT CONNECT ON DATABASE :"project_db" TO identity_user, matching_user, jobs_user;
+REVOKE CONNECT ON DATABASE :"identity_db" FROM PUBLIC;
+GRANT CONNECT ON DATABASE :"identity_db" TO identity_user, matching_user, jobs_user;
 SQL

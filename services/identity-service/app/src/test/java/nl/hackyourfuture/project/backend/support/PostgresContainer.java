@@ -21,7 +21,7 @@ import java.util.List;
  * never stopped; Testcontainers' Ryuk sidecar removes it when the JVM exits.
  *
  * <p>The mart is created here, immediately after start and before Spring boots, in its own
- * {@code jobs_db} beside {@code project_db}, where job-service reads it and nothing creates it
+ * {@code jobs_db} beside {@code identity_db}, where job-service reads it and nothing creates it
  * but the publish. The application-service database, {@code apps_db}, is created here as well
  * (Day 25). So are the module roles and their schemas, which production gets from
  * {@code scripts/db-setup.py} and compose from {@code scripts/db-init/}: a precondition of the
@@ -58,7 +58,7 @@ public final class PostgresContainer {
 
     static {
         CONTAINER = new PostgreSQLContainer(DockerImageName.parse(IMAGE))
-                .withDatabaseName("project_db")
+                .withDatabaseName("identity_db")
                 .withUsername("app_user")
                 .withPassword("password")
                 // pg_stat_statements lets a test count the statements a request ran without
@@ -192,8 +192,8 @@ public final class PostgresContainer {
                         + " GRANT SELECT ON " + objects + " TO " + othersThan(schema));
             }
         }
-        statements.add("REVOKE CONNECT ON DATABASE project_db FROM PUBLIC");
-        statements.add("GRANT CONNECT ON DATABASE project_db TO identity_user, matching_user, jobs_user, analytics_user");
+        statements.add("REVOKE CONNECT ON DATABASE identity_db FROM PUBLIC");
+        statements.add("GRANT CONNECT ON DATABASE identity_db TO identity_user, matching_user, jobs_user, analytics_user");
         execute(String.join(";\n", statements));
     }
 

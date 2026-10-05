@@ -210,7 +210,7 @@ It is yours, not your team's. Paste it only into your local `.env`, never into
 Slack, a pull request or an LLM prompt.
 
 **3. Create your local database.** The backend's own script makes
-`project_db` with the `app` schema and `jobs_db` with the `analytics` and
+`identity_db` with the `app` schema and `jobs_db` with the `analytics` and
 `analytics_dev` schemas, with a login role for each. Start the database first,
 from the repository root:
 
@@ -634,7 +634,7 @@ one pipeline.
 The other direction: your credential can read the backend's own tables, so a
 model can join against how the application is actually being used.
 `src/publishing/sync.py` has `read_backend_table` ready for it; note that it
-reads the `app` schema in `project_db`, a different database from the one where
+reads the `app` schema in `identity_db`, a different database from the one where
 you publish the mart (`jobs_db`). Add a task once you have agreed with the
 backend which table you are reading, and keep it before `dbt_build` so the
 models can use what it lands.

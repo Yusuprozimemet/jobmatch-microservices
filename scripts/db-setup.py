@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Set up the Postgres databases, their schemas, roles and permissions.
 
-Creates three databases. 'project_db' has the 'app' schema, owned by 'app_user'. 'jobs_db'
+Creates three databases. 'identity_db' has the 'app' schema, owned by 'app_user'. 'jobs_db'
 (Day 20) has the marts: 'analytics', owned by 'analytics_user', and 'analytics_dev', owned
 by 'analytics_dev_user'. Only those two roles and 'jobs_user' may connect to 'jobs_db'.
 'apps_db' (Day 25) has 'applications', owned by 'applications_user'; only it may connect,
-and it may not connect to 'project_db'.
+and it may not connect to 'identity_db'.
 Each role has full access to the schemas it owns and read-only access to the others in
 the same database, for both existing and future objects, except the module schemas below,
 which only their owner reads.
@@ -25,8 +25,10 @@ handing a trainee the credential that owns production, so they get their own.
 
 The script is idempotent: re-running it never changes existing state, so a
 failed run can simply be repeated. Existing roles keep their current password
-unless you confirm a reset when asked. A 'project_db' set up before Day 20 keeps its
-analytics schemas; the runbook, docs/runbooks/jobs-db.md, drops them.
+unless you confirm a reset when asked. A database set up before Day 20 keeps its
+analytics schemas; the runbook, docs/runbooks/jobs-db.md, drops them. One set up before Day 28
+is still named 'project_db': rename it first (docs/runbooks/identity-db.md), or this script
+creates an empty 'identity_db' beside it.
 
 Connection details come from CLI arguments or environment variables:
 
@@ -57,7 +59,7 @@ except ImportError:
 
 # --- Configuration ---------------------------------------------------------
 
-NEW_DATABASE = "project_db"  # the primary database this script creates
+NEW_DATABASE = "identity_db"  # the primary database this script creates
 JOBS_DATABASE = "jobs_db"  # the analytics mart database
 APPS_DATABASE = "apps_db"  # application-service's database (Day 25)
 MAINTENANCE_DATABASE = "postgres"  # the database connected to while creating it
@@ -84,7 +86,7 @@ JOBS_ROLES = (ANALYTICS_ROLE, ANALYTICS_DEV_ROLE, JOBS_ROLE)
 APPLICATIONS_ROLE = "applications_user"
 APPS_ROLES = (APPLICATIONS_ROLE,)
 
-# Schemas in project_db, and the role that owns each: app and the module schemas.
+# Schemas in identity_db, and the role that owns each: app and the module schemas.
 # A role gets full access to schemas it owns and read-only access to the others,
 # so adding a schema here is the only edit needed.
 SCHEMA_OWNERS = {
@@ -390,7 +392,7 @@ def main() -> None:
                     role=sql.Identifier(role), member=sql.Identifier(APP_ROLE))
         done("'%s' is a member of %s", APP_ROLE, ", ".join(MODULE_ROLES))
 
-        # Database-level grants. project_db: every role but applications_user (Day 25), which
+        # Database-level grants. identity_db: every role but applications_user (Day 25), which
         # connects only to apps_db. jobs_db: only analytics roles and jobs_user.
         # apps_db: only applications_user.
         revoke_connect(conn, NEW_DATABASE)

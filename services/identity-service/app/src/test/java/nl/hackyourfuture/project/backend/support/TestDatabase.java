@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Puts the database back to its starting state between tests: empty module schemas in project_db,
+ * Puts the database back to its starting state between tests: empty module schemas in identity_db,
  * application-service's saved jobs in apps_db, the baseline mart in jobs_db, and the DynamoDB
  * score table.
  *
@@ -94,7 +94,7 @@ public final class TestDatabase {
     /**
      * A {@code postgres_fdw} foreign table over application-service's saved_jobs in apps_db.
      * The monolith no longer writes saved_jobs (Day 25); application-service does, in apps_db.
-     * The contract tests insert through {@code jdbc()}, which is project_db, where V16 dropped
+     * The contract tests insert through {@code jdbc()}, which is identity_db, where V16 dropped
      * the real table and its type. The foreign table mirrors it with {@code job_state} as text;
      * postgres_fdw prepares remote statements without parameter types, so apps_db casts the text
      * to its enum. Created after the monolith's migrations ran (a context exists by the first

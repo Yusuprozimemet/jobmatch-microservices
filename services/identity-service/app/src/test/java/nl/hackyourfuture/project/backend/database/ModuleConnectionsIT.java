@@ -30,8 +30,8 @@ class ModuleConnectionsIT extends IntegrationTest {
     @Autowired @Qualifier("identityDataSource") private DataSource identity;
     private final DataSource jobs = new DriverManagerDataSource(
             PostgresContainer.jobsJdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
-    // jobs_user keeps CONNECT on project_db, so what it must not read there is checked from there.
-    private final DataSource jobsOnProjectDb = new DriverManagerDataSource(
+    // jobs_user keeps CONNECT on identity_db, so what it must not read there is checked from there.
+    private final DataSource jobsOnIdentityDb = new DriverManagerDataSource(
             PostgresContainer.jdbcUrl("public"), "jobs_user", PostgresContainer.rolePassword());
     // matching_user's login left with matching-service (Day 21); checked as jobs_user's is.
     private final DataSource matching = new DriverManagerDataSource(
@@ -44,16 +44,16 @@ class ModuleConnectionsIT extends IntegrationTest {
     }
 
     @Test
-    void applicationsCannotConnectToProjectDb() {
+    void applicationsCannotConnectToIdentityDb() {
         // Since Day 25 it connects only to apps_db; Postgres refuses at login.
-        DataSource applicationsOnProjectDb = new DriverManagerDataSource(
+        DataSource applicationsOnIdentityDb = new DriverManagerDataSource(
                 PostgresContainer.jdbcUrl("applications"), "applications_user", PostgresContainer.rolePassword());
-        assertThatThrownBy(() -> JdbcClient.create(applicationsOnProjectDb)
+        assertThatThrownBy(() -> JdbcClient.create(applicationsOnIdentityDb)
                 .sql("SELECT 1")
                 .query(Integer.class)
                 .single())
                 .rootCause()
-                .hasMessageContaining("permission denied for database \"project_db\"");
+                .hasMessageContaining("permission denied for database \"identity_db\"");
     }
 
     // Days 08-10 removed the reads; Day 38 revoked what allowed them, before the modules leave
@@ -137,7 +137,7 @@ class ModuleConnectionsIT extends IntegrationTest {
         return switch (module) {
             case "identity" -> identity;
             case "matching" -> matching;
-            case "jobs" -> jobsOnProjectDb;
+            case "jobs" -> jobsOnIdentityDb;
             default -> throw new IllegalArgumentException(module);
         };
     }
