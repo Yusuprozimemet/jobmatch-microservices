@@ -45,7 +45,7 @@ class SecurityTest {
 
     @DynamicPropertySource
     static void upstreams(DynamicPropertyRegistry registry) {
-        registry.add("gateway.backend-url", BACKEND::url);
+        registry.add("gateway.identity-service-url", BACKEND::url);
         registry.add("gateway.jwks-url", KEYS::jwksUrl);
         // Its public routes include login and register; the limit is RateLimitTest's.
         registry.add("gateway.rate-limit.auth-per-minute", () -> "1000");

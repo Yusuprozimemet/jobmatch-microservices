@@ -40,7 +40,7 @@ class Routes {
     static final String USER_ID = "X-User-Id";
 
     @Bean
-    RouterFunction<ServerResponse> backend(@Value("${gateway.backend-url}") String backendUrl,
+    RouterFunction<ServerResponse> backend(@Value("${gateway.identity-service-url}") String identityServiceUrl,
                                            @Value("${gateway.job-service-url}") String jobServiceUrl,
                                            @Value("${gateway.matching-service-url}") String matchingServiceUrl,
                                            @Value("${gateway.application-service-url}") String applicationServiceUrl,
@@ -55,7 +55,7 @@ class Routes {
                         .setPeriod(Duration.ofMinutes(1))
                         .setKeyResolver(RateLimit.client(trustedProxies))
                         .setStatusCode(HttpStatus.TOO_MANY_REQUESTS)))
-                .before(uri(backendUrl))
+                .before(uri(identityServiceUrl))
                 .before(userId())
                 .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build();
@@ -83,9 +83,11 @@ class Routes {
                 .before(userId())
                 .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build();
-        return credentials.and(matching).and(jobs).and(applications).and(route("backend")
+        // What is left under /api/** after the three services took theirs, and the user key set, are
+        // identity-service's (Day 28).
+        return credentials.and(matching).and(jobs).and(applications).and(route("identity-service")
                 .route(path("/api/**").or(path("/.well-known/jwks.json")), http())
-                .before(uri(backendUrl))
+                .before(uri(identityServiceUrl))
                 .before(userId())
                 .onError(ResourceAccessException.class, Routes::backendFailed)
                 .build());

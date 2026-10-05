@@ -71,7 +71,7 @@ public final class Gateway {
         GenericContainer<?> gateway = new GenericContainer<>(DockerImageName.parse(IMAGE))
                 // A local build, never a pull: an image by this name on a registry is not ours.
                 .withImagePullPolicy(name -> false)
-                .withEnv("BACKEND_URL", "http://host.testcontainers.internal:" + applicationPort)
+                .withEnv("IDENTITY_SERVICE_URL", "http://host.testcontainers.internal:" + applicationPort)
                 .withEnv("JOB_SERVICE_URL", insideContainer(Services.url(Services.JOB_SERVICE, applicationPort, serviceUrls)))
                 .withEnv("MATCHING_SERVICE_URL", insideContainer(Services.url(Services.MATCHING_SERVICE, applicationPort, serviceUrls)))
                 .withEnv("APPLICATION_SERVICE_URL", insideContainer(Services.url(Services.APPLICATION_SERVICE, applicationPort, serviceUrls)))
