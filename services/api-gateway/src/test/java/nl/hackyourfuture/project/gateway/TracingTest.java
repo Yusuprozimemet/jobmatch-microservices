@@ -40,7 +40,7 @@ class TracingTest {
 
     @DynamicPropertySource
     static void backend(DynamicPropertyRegistry registry) {
-        registry.add("gateway.backend-url", BACKEND::url);
+        registry.add("gateway.identity-service-url", BACKEND::url);
     }
 
     @AfterAll

@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (Day 15). Port 1 is closed on any test machine.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "gateway.backend-url=http://127.0.0.1:1")
+        properties = "gateway.identity-service-url=http://127.0.0.1:1")
 class UnreachableBackendTest {
 
     @LocalServerPort

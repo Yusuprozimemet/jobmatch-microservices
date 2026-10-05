@@ -93,10 +93,10 @@ The gateway's settings, all with defaults that suit compose:
 
 | Variable | Default | |
 | --- | --- | --- |
-| `BACKEND_URL` | `http://localhost:8080` — `http://backend:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
-| `JOB_SERVICE_URL` | `BACKEND_URL`'s value — `http://job-service:8080` in compose | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. The backend no longer serves these (Day 17), so outside compose it must be set |
-| `MATCHING_SERVICE_URL` | `BACKEND_URL`'s value — `http://matching-service:8080` in compose | Where `/api/jobs/top-matches` goes. The backend no longer serves it (Day 21), so outside compose it must be set |
-| `APPLICATION_SERVICE_URL` | `BACKEND_URL`'s value — `http://application-service:8080` in compose | Where `/api/saved-jobs/**` goes. The backend no longer serves it (Day 25), so outside compose it must be set |
+| `IDENTITY_SERVICE_URL` | `http://localhost:8080` — `http://identity-service:8080` in compose | Where it forwards, and where it fetches `/.well-known/jwks.json` |
+| `JOB_SERVICE_URL` | `IDENTITY_SERVICE_URL`'s value — `http://job-service:8080` in compose | Where job search goes: `/api/jobs`, `/api/jobs/filters`, `/api/jobs/{postingId}`. Not `top-matches`, which is matching's. The backend no longer serves these (Day 17), so outside compose it must be set |
+| `MATCHING_SERVICE_URL` | `IDENTITY_SERVICE_URL`'s value — `http://matching-service:8080` in compose | Where `/api/jobs/top-matches` goes. The backend no longer serves it (Day 21), so outside compose it must be set |
+| `APPLICATION_SERVICE_URL` | `IDENTITY_SERVICE_URL`'s value — `http://application-service:8080` in compose | Where `/api/saved-jobs/**` goes. The backend no longer serves it (Day 25), so outside compose it must be set |
 | `RATE_LIMIT_AUTH_PER_MINUTE` | `10` | Login, register and the two password-reset steps, per client |
 | `GATEWAY_TRUSTED_PROXIES` | empty | A regex of proxy addresses whose `X-Forwarded-For` is believed. Leave it empty behind the frontend, which passes a client's own header through; set it only for a proxy that overwrites it |
 | `GATEWAY_CONNECT_TIMEOUT` / `GATEWAY_READ_TIMEOUT` | `5s` / `30s` | Past them the gateway answers 502 / 504 |
@@ -109,7 +109,7 @@ job-service's settings (Day 17), as compose sets them:
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `jobs_db` | Its own database, holding the analytics mart (Day 20); compose passes `JOBS_DB_NAME` |
 | `DB_JOBS_USER` / `DB_JOBS_PASSWORD` | `jobs_user` / `password` | The read-only role ([§6](#6-the-database-schemas-and-roles)); compose passes `JOBS_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-job-service`. **Required**; compose's `jwt-key` service writes it |
-| `BACKEND_KEY_SET_URL` | empty | The monolith's service key set, so `jobmatch-backend` may call its `/internal/**` routes. Compose: `http://backend:8080/.well-known/service-jwks.json` |
+| `BACKEND_KEY_SET_URL` | empty | The monolith's service key set, so `jobmatch-backend` may call its `/internal/**` routes. Compose: `http://identity-service:8080/.well-known/service-jwks.json` |
 | `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` / `..._0_KEYSETURL` | none | Further trusted issuers, as the backend's ([auth.md](auth.md#service-tokens-and-internal)) |
 | `INTERNAL_APPLICATIONS_URL` | empty | Where it asks for saved counts (`/internal/saved-counts`): application-service, `http://application-service:8080` in compose (Day 25). Empty would mean itself, which has no such route |
 | `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
@@ -121,7 +121,7 @@ matching-service's settings (Day 21), in its
 | Variable | Default | |
 | --- | --- | --- |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-matching-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
-| `INTERNAL_IDENTITY_URL` | none | Where it asks whether a user exists (`/internal/users/{id}`) and for their profile (`/internal/profiles/{userId}`): the backend, `http://backend:8080` in compose. **Required**: it does not start without it |
+| `INTERNAL_IDENTITY_URL` | none | Where it asks whether a user exists (`/internal/users/{id}`) and for their profile (`/internal/profiles/{userId}`): identity-service, `http://identity-service:8080` in compose. **Required**: it does not start without it |
 | `INTERNAL_JOBS_URL` | none | Where it asks for the shortlist (`/internal/postings/shortlist`): job-service, `http://job-service:8080` in compose. **Required** |
 | `IDENTITY_JWKS_URL` | `INTERNAL_IDENTITY_URL` + `/.well-known/jwks.json` | The user key set it checks tokens against |
 | `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
@@ -152,7 +152,7 @@ application-service's settings (Day 25), in its
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `apps_db` | Its own database; compose passes `APPS_DB_NAME` |
 | `DB_APPLICATIONS_USER` / `DB_APPLICATIONS_PASSWORD` | `applications_user` / `password` | The only role that connects to `apps_db` ([§6](#6-the-database-schemas-and-roles)); compose passes `APPLICATIONS_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-application-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
-| `INTERNAL_IDENTITY_URL` | empty | Where it asks whether a user exists (`/internal/users/{id}`): the backend, `http://backend:8080` in compose |
+| `INTERNAL_IDENTITY_URL` | empty | Where it asks whether a user exists (`/internal/users/{id}`): identity-service, `http://identity-service:8080` in compose |
 | `INTERNAL_JOBS_URL` | empty | Where it fetches posting details for the saved list (`/internal/postings/batch`): job-service, `http://job-service:8080` in compose |
 | `JOB_SERVICE_KEY_SET_URL` | empty | job-service's service key set, so it may call `/internal/saved-counts` |
 | `IDENTITY_JWKS_URL` | `INTERNAL_IDENTITY_URL` + `/.well-known/jwks.json` | The user key set it checks tokens against |
@@ -352,7 +352,7 @@ What must be set beyond the defaults, in one place:
 - [ ] `LLM_API_KEY` on matching-service, or accept overlap-only matching; with
       `INTERNAL_IDENTITY_URL` and `INTERNAL_JOBS_URL`, without which it does not start
 - [ ] `BACKEND_API_URL` on the frontend, pointing at the gateway's internal address, and
-      `BACKEND_URL` on the gateway at the backend's. Only the gateway gets the public ingress
+      `IDENTITY_SERVICE_URL` on the gateway at identity-service's. Only the gateway gets the public ingress
 - [ ] `GATEWAY_TRUSTED_PROXIES`, only if the ingress overwrites `X-Forwarded-For`; otherwise every
       user shares the ingress's one rate-limit bucket
 - [ ] The pipeline publishing to `analytics`, not `analytics_dev`

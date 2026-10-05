@@ -30,7 +30,7 @@ class RoutesTest {
 
     @DynamicPropertySource
     static void backend(DynamicPropertyRegistry registry) {
-        registry.add("gateway.backend-url", BACKEND::url);
+        registry.add("gateway.identity-service-url", BACKEND::url);
         registry.add("gateway.jwks-url", KEYS::jwksUrl);
     }
 

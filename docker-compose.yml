@@ -36,7 +36,7 @@ services:
       - jwt-keys:/keys
       - ./scripts/jwt-key.sh:/jwt-key.sh:ro
 
-  backend:
+  identity-service:
     build: ./services/identity-service
     environment:
       DB_HOST: db
@@ -100,7 +100,7 @@ services:
       DB_JOBS_USER: jobs_user
       DB_JOBS_PASSWORD: ${JOBS_DB_PASSWORD:-password}
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/job-service.pem
-      BACKEND_KEY_SET_URL: http://backend:8080/.well-known/service-jwks.json
+      BACKEND_KEY_SET_URL: http://identity-service:8080/.well-known/service-jwks.json
       # Day 25: saved counts are application-service's.
       INTERNAL_APPLICATIONS_URL: http://application-service:8080
       # Day 21: matching-service calls the shortlist route.
@@ -166,7 +166,7 @@ services:
       AWS_SECRET_ACCESS_KEY: local
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/matching-service.pem
       # identity is still the monolith's; user tokens are checked against its key set there.
-      INTERNAL_IDENTITY_URL: http://backend:8080
+      INTERNAL_IDENTITY_URL: http://identity-service:8080
       INTERNAL_JOBS_URL: http://job-service:8080
       # The model call (Day 21): only this service has the key. With no key top-matches ranks by
       # skill overlap. LLM_TIMEOUT_SECONDS is left to the service's 13 s, which keeps a request
@@ -211,7 +211,7 @@ services:
       DB_APPLICATIONS_PASSWORD: ${APPLICATIONS_DB_PASSWORD:-password}
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/application-service.pem
       # identity is still the monolith's; user tokens are checked against its key set there.
-      INTERNAL_IDENTITY_URL: http://backend:8080
+      INTERNAL_IDENTITY_URL: http://identity-service:8080
       INTERNAL_JOBS_URL: http://job-service:8080
       # job-service calls /internal/saved-counts; its tokens are checked against this key set.
       JOB_SERVICE_KEY_SET_URL: http://job-service:8080/.well-known/service-jwks.json
@@ -241,7 +241,7 @@ services:
       localstack:
         condition: service_healthy
 
-  # The API gateway (Day 15), the only way in to the backend: published on 8080, where the
+  # The API gateway (Day 15), the only way in to the services. Published on 8080, where the
   # backend used to be (Day 16). It listens on 8081 inside the network.
   #
   # GATEWAY_TRUSTED_PROXIES is left unset on purpose. The frontend passes a client's own
@@ -250,11 +250,11 @@ services:
   api-gateway:
     build: ./services/api-gateway
     environment:
-      BACKEND_URL: http://backend:8080
+      IDENTITY_SERVICE_URL: http://identity-service:8080
       JOB_SERVICE_URL: http://job-service:8080
-      # Day 21: top-matches goes to matching-service; unset, it would fall back to the backend.
+      # Day 21: top-matches goes to matching-service; unset, it would fall back to identity-service.
       MATCHING_SERVICE_URL: http://matching-service:8080
-      # Day 25: saved jobs go to application-service; unset, they would fall back to the backend.
+      # Day 25: saved jobs go to application-service; unset, they would fall back to identity-service.
       APPLICATION_SERVICE_URL: http://application-service:8080
       # Tracing as the backend's, above: off unless TRACING_EXPORT_ENABLED=true, to the same Tempo.
       TRACING_EXPORT_ENABLED: ${TRACING_EXPORT_ENABLED:-false}
@@ -273,7 +273,7 @@ services:
       start_period: 30s
       start_interval: 1s
     depends_on:
-      backend:
+      identity-service:
         condition: service_started
       job-service:
         condition: service_healthy
