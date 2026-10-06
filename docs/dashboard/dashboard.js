@@ -570,7 +570,7 @@ function setSel(i) {
 
 /* ---------- where we are ---------- */
 const PHASES = ["Make the split safe", "Modularise in place", "Gateway + JWT", "Extract job-service",
-  "Extract matching-service", "Extract application-service", "Functions + uploads bucket", "Kubernetes + IaC"];
+  "Extract matching-service", "Extract application-service", "Functions + uploads bucket (deferred)", "ECS + Terraform"];
 const STOPS = [16, 20, 24, 28, 31, 37];
 const STATUS = { done: "Done", closed: "Closed, boxes open", active: "In progress", ready: "Ready", provisional: "Provisional" };
 const finished = d => d.status === "done" || d.status === "closed";
