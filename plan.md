@@ -20,6 +20,57 @@ extract before building what replaces the extracted code, and assume a test harn
 a service credential and a deletion path nobody builds. The course correction below
 changes their order and scope.
 
+Phases 3–5 are done too (Day 28): five services, no monolith. The course correction after
+Phase 5, next, decides what follows.
+
+---
+
+## Course correction after Phase 5
+
+Day 28 was the stopping point. The plan-auditor read the whole plan against the code
+(`specs/day-28-identity-service.md`, Notes), and the maintainer chose the course:
+
+- **Phases 0–5 delivered what this plan asked of them.** `backend/` is gone, five services
+  run behind the gateway, and the Day 1–4 `contract/` suite still passes, with two approved
+  edits (Day 40 moved `ObservabilityIT` out; Day 25's).
+- **Days 32–37 contradict this plan.** They are drafts for Azure and Kubernetes: Pulumi,
+  Helm, Argo CD, a blob backend for state. *Target cloud* below rules out each of them. They
+  are rewritten, not edited.
+- **Phase 6 fails the scope rule.** No upload or CV code exists to move, so the uploads bucket
+  and `cv-parse` would be new features. Mail is already sent after commit and asynchronously
+  (`EmailService` is `@Async`). Phase 6 is **deferred until after Phase 7**, and is cut if it
+  still adds only features then: its Lambdas re-enter through Phase 7's ALB anyway.
+- **What Phases 3–5 left behind, which no day owns, goes to a cleanup day (Day 42) before
+  Phase 7.** That day removes identity's unused service issuer and minter, `InternalClients`,
+  the dead posting seam and `jobs-url`, and job-service's mandatory `BACKEND_KEY_SET_URL`.
+  It brings the three role-setup copies to the same CONNECT grants, and adds the missing
+  null-reason batch test. It gives every service the structured production logging that only
+  identity has, stops identity logging emails, and scrapes application-service's metrics.
+- **Phase 7 is rewritten for ECS on Fargate as about four days, numbered 32–35:**
+  1. IaC with the data stores (RDS, DynamoDB, SNS/SQS with DLQ retention and the depth
+     alarm).
+  2. The services, the ALB, task roles and secrets, in place of the dummy keys and
+     `PROFILE_CACHE_WINDOW`'s default.
+  3. Observability.
+  4. One deployment, then `terraform destroy`.
+
+  Days 36–37 are dropped. Phase 7 is the only phase left that answers "is the system
+  independently deployable", and today no service workflow deploys anything.
+- **Kept as they are, and recorded:**
+  - The `matching` and `applications` roles and schemas stay in `identity_db`, because
+    V12–V15 raise or grant without them. A fresh RDS in Phase 7 may start from a consolidated
+    baseline instead.
+  - Services keep their `nl.hackyourfuture.project.backend.*` packages, and identity keeps
+    its three Maven modules: renaming moves every file and changes no behaviour.
+  - Service-token code is copied by hand across services, and no test compares the copies.
+  - Only identity-service's workflow runs the contract suite and builds every image.
+  - `/api/docs` documents identity's endpoints only.
+- **Existing-database runbooks** (`jobs-db.md`, `identity-db.md`, `copy-saved-jobs.py`) have no
+  day: Phase 7 deploys fresh. Its rewrite either rehearses them against a restored copy or
+  retires them.
+- **Pace:** 192 track PRs against 132 estimated over 31 days (1.45×). The last seven days ran
+  1.35× their rewritten estimates.
+
 ---
 
 ## Course correction after Phase 2
@@ -203,6 +254,7 @@ foreign key that deletes saved jobs with their user still exists; then the table
 - **Day 28 (identity-service) is the stopping point.** Evaluate before Phase 6.
 
 ### Phase 6 — Functions + uploads bucket
+**Deferred until after Phase 7** (course correction after Phase 5); cut if it adds only features.
 - New private S3 `uploads` bucket. The pipeline's landing zone stays on Azure.
 - `identity-service` issues short-lived presigned PUT URLs; the browser uploads directly.
 - `cv-parse` Lambda: triggered by the S3 upload, extracts skills, PUTs them to identity-service.
@@ -211,6 +263,7 @@ foreign key that deletes saved jobs with their user still exists; then the table
   this when the phase is reached.
 
 ### Phase 7 — ECS on Fargate
+After the cleanup day (Day 42); rewritten as Days 32–35 (course correction after Phase 5).
 - **Terraform** for everything long-lived: network, ECS cluster and services, RDS, DynamoDB,
   S3, SNS/SQS, ECR, the ALB, Secrets Manager and CloudWatch.
 - One task definition per service, generated from one Terraform module.
@@ -275,7 +328,7 @@ the README's Day entries record two estimates, the provisional spec's and the re
 All seven phases and the platform step are broken into 40 day specs in [`specs/`](specs/). Read
 [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-24 and 38-41 (Phases 0-4 and the platform step) are done. Days 25-37 are **provisional**:
+Days 1-28 and 38-41 (Phases 0-5 and the platform step) are done. Days 29-37 are **provisional**:
 written from this plan before the course correction, so each is rewritten against the code,
 with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
 links hold; they run in this order, and the dashboard follows it:
@@ -285,4 +338,7 @@ links hold; they run in this order, and the dashboard follows it:
 3. Phase 4: Day 41 (the profile endpoint and user id, split out of Day 24) first, then Days 21,
    22 (no dual write), 23, 24.
 4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
-5. Phases 6–7 (Days 29–37): rewritten for AWS after the evaluation, or not started.
+5. The cleanup day (course correction after Phase 5): its spec is written next, numbered
+   after the last.
+6. Phase 7 rewritten as Days 32–35 for ECS on Fargate; Days 36–37 dropped.
+7. Phase 6 (Days 29–31), after Phase 7, or cut.
