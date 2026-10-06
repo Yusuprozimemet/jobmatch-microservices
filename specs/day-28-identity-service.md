@@ -66,7 +66,7 @@ The last module leaves `backend/`. Five services, no monolith.
   - the `applications` role and schema left in `project_db` after `saved_jobs` moved: V13
     raises without them, V12 and V14 grant to the role (Day 25);
   - `jobs_user`'s CONNECT on `project_db` (`db-init/10-module-roles.sh:32`,
-    `db-setup.py:393-402`, `PostgresContainer.java:196`) (Day 20);
+    `db-setup.py:395-404`, `PostgresContainer.java:196`) (Day 20);
   - the DLQ depth alarm, the DLQs' retention (SQS's default, 4 days, holds a failed message's
     `userId`), and the topic, queues, DynamoDB table and `apps_db` in Terraform (Days 22, 25,
     26, 27);
@@ -84,11 +84,22 @@ The last module leaves `backend/`. Five services, no monolith.
   - job-service's (20 files) and application-service's (22 files) `…project.backend` packages,
     beside matching's and identity's;
   - dummy AWS keys on identity-service (`docker-compose.yml:84-85`) and application-service
-    (`:228-230`), beside matching-service's;
+    (`:238-239`), beside matching-service's (`:181-182`, `:198-199`);
   - `matching_user`'s and the harness's `analytics_user`'s CONNECT on `identity_db`, beside
     `jobs_user`'s; the three role-setup copies (`db-init/10-module-roles.sh:32`,
     `PostgresContainer.java:196`, `db-setup.py:404`) do not grant the same roles;
   - `/api/docs` lacks Saved Jobs and top-matches as well as Jobs: only identity serves springdoc.
+  - only identity-service has structured production logging (`application-prod.yaml`); the
+    other four set only the correlation pattern (Day 40);
+  - identity's seam code with no caller: the posting interfaces in `shared/jobs`,
+    `InternalClients`, `PageResponse`, and compose's `INTERNAL_JOBS_URL` "for saved counts",
+    which application-service has served since Day 25;
+  - the hand-kept copies of the service-token, security and tracing classes across services
+    (four of `ServiceTokens`, differing only by issuer), with no test comparing them;
+  - the runbooks for an existing database (`docs/runbooks/jobs-db.md`, `identity-db.md`,
+    `scripts/copy-saved-jobs.py`), which no day runs (Days 20, 25, this day);
+  - the system suite lives in identity-service: its workflow builds every image and pushes
+    identity's on any service's change.
 
 ## Out of scope
 - Functions — Phase 6.
@@ -221,3 +232,97 @@ maintainer's stack first, or the two share it.
 - **Hand-off** H28.1 → the maintainer: once Track A1 is merged, replace the required "Backend
   gate" with "Identity Service gate" when Track C renames the job, and add "Application Service
   gate", which Day 25 left with the maintainer.
+- **Defect** — found: auditor · cause: spec · The plan-auditor's second whole-plan run (Track D,
+  on 7a0607f) found five more items missing from the review list: logging, dead seam code,
+  hand-kept copies, runbooks for an existing database, and where the system suite lives. They
+  are added above. Two citations had gone stale after the moves (`:228-230`, `db-setup.py:393-402`).
+
+### The stopping-point review (Track D)
+
+**The plan-auditor, the whole plan, on 7a0607f.** Its verdict: 9 findings, none blocking the
+close.
+- **Phases 0–5 delivered what `plan.md` asked.** `git ls-files backend | wc -l` gives 0.
+  `contract/` has one approved edit, Day 25's.
+- **Days 32–37 contradict `plan.md`.** They are Azure and Kubernetes drafts: Pulumi in Day 33,
+  Helm in Day 34, `argocd app rollback` in Day 36.
+- **Phase 6 fails the scope rule.** No upload or CV code exists, and `EmailService` is already
+  `@Async`.
+- **Pace.** 192 track PRs against 132 estimated over 31 days. Phase 3 ran 2.4× its
+  provisional estimates. The provisional Days 29–37 add up to 27 PRs, about 65 at that rate.
+- **Stale status claims.** `plan.md`'s status lines are stale. The README's phase table and
+  its infrastructure row still describe Kubernetes, and none of the five service workflows
+  deploys anything ("independently deployable", README).
+- **Not checked:** the dashboard and branch protection (the `gh` token was invalid in the
+  session), and calendar pace (the clone was shallow).
+
+**Continue, change course, or stop.** The auditor gave three cases:
+- **Stop at `phase-5`:** the deployability question stays untested.
+- **Continue as written:** not viable.
+- **Change course:** a cleanup day, then Phase 7 for ECS.
+
+The maintainer chose to change course. `plan.md` changes (this PR, "Course correction after
+Phase 5"):
+1. A cleanup day, Day 42.
+2. Phase 7 rewritten as Days 32–35; Days 36–37 dropped.
+3. Phase 6 deferred until after Phase 7, or cut.
+
+**The review list, decided:**
+
+| Item | Decision |
+|---|---|
+| `matching` role, schema, `MATCHING_DB_PASSWORD`, grants in V12–V15 | Kept: V14 raises without the role. H28.2 |
+| `applications` role and schema in `identity_db` | Kept; no CONNECT on `identity_db`, harmless. H28.2 |
+| `jobs_user`'s CONNECT on `identity_db` | No service connects with it. H28.3 |
+| DLQ depth alarm, DLQ retention, Terraform for the topic, queues, table and `apps_db` | Local emulator only today; retention decided with the real queues. H28.4 |
+| `PROFILE_CACHE_WINDOW`, task roles in place of dummy AWS keys (matching) | Matters only on AWS. H28.5 |
+| `…project.backend` packages (matching, identity, `ScoreTableStartupTest`), identity's three Maven modules | Dropped: a rename moves every file and changes no behaviour |
+| `/api/docs` lacks Jobs | Dropped with the claim: the closing PR's README says `/api/docs` documents identity's endpoints only |
+| Service issuer `jobmatch-backend` and its key | Removed, not renamed: identity calls no service. H28.6 |
+| No test for a `null` reason dropping a 25-item batch | H28.7 |
+| The missing `phase-3` tag | H28.8 |
+| job- and application-service's `…backend` packages | Dropped, as above |
+| Dummy AWS keys on identity and application-service | Emulators need them; with task roles. H28.5 |
+| CONNECT on `identity_db` for `matching_user` and `analytics_user`; the three role-setup copies disagree | H28.3 |
+| `/api/docs` lacks Saved Jobs and top-matches | Dropped, as for Jobs |
+| Structured production logging in identity only | H28.9 |
+| Identity's seam code with no caller, compose's `INTERNAL_JOBS_URL` | With the issuer. H28.6 |
+| Hand-kept copies across services | Kept, recorded as a known limitation in `plan.md`; a shared library only if a later day needs one |
+| Runbooks for an existing database | H28.10 |
+| The system suite in identity-service's workflow | Kept, recorded in `plan.md`; H28.11 for the deploy half |
+
+The auditor also found stale working docs. `CLAUDE.md` and `implementer.md` say "V1–V14", but
+V15 and V16 have been applied. `spec-auditor.md:43` greps `backend`. `docker-compose.yml:184,229`
+say identity "is still the monolith's". These go to the cleanup day, H28.12. The README's phase
+table and its Kubernetes line go to this day's closing PR.
+
+- **Hand-off** H28.2 → the Phase 7 rewrite (Day 32): a fresh RDS starts identity from a
+  consolidated baseline, so the `matching` and `applications` roles, schemas and
+  `MATCHING_DB_PASSWORD` can go; until then they stay.
+- **Hand-off** H28.3 → Day 42: the three role-setup copies (`db-init/10-module-roles.sh`,
+  `PostgresContainer.java`, `db-setup.py`) grant CONNECT on `identity_db` to the same roles,
+  neither `jobs_user` nor `matching_user` among them, and a test compares the copies.
+- **Hand-off** H28.4 → the Phase 7 rewrite (Day 32): the `user.deleted` topic, queues, DLQs
+  with a retention decided for a message that holds a `userId` (SQS keeps it 4 days by default),
+  the DLQ depth alarm, the DynamoDB table and `apps_db`, in Terraform.
+- **Hand-off** H28.5 → the Phase 7 rewrite (Day 33): task roles in place of the dummy AWS keys on
+  identity-, matching- and application-service, and `PROFILE_CACHE_WINDOW` set per environment.
+- **Hand-off** H28.6 → Day 42: identity's service key, `ServiceTokens` minter,
+  `SERVICE_JWT_PRIVATE_KEY_FILE`, `jobs-url`, `InternalClients`, the posting interfaces in
+  `shared/jobs` and `PageResponse` are removed, and job-service's mandatory
+  `BACKEND_KEY_SET_URL` with them; compose's `INTERNAL_JOBS_URL` on identity goes too.
+  `ServiceJwksIT` (C28.6) retires with the key: the maintainer's call in that day's spec.
+- **Hand-off** H28.7 → Day 42: a test that a stored score with a `null` reason does not drop its
+  25-item DynamoDB batch (`JobMatchScoreRepository`).
+- **Hand-off** H28.8 → the maintainer: tag `phase-3` on Day 20's closing merge, or record in the
+  README that it is missing.
+- **Hand-off** H28.9 → Day 42: one structured production logging configuration for all five
+  services, as identity's `application-prod.yaml` has.
+- **Hand-off** H28.10 → the Phase 7 rewrite (Day 35): the runbooks for an existing database
+  (`jobs-db.md`, `identity-db.md`, `copy-saved-jobs.py` with a `db-setup.py` rerun) are rehearsed
+  against a restored copy, or retired as not applicable to a fresh deployment.
+- **Hand-off** H28.11 → the Phase 7 rewrite (Day 35): a deploy job per service, so "each service
+  builds, tests and deploys from its own workflow" has evidence, and identity-service's image is
+  pushed only on its own changes.
+- **Hand-off** H28.12 → Day 42: the working docs say V1–V16 where they say V1–V14 (`CLAUDE.md`,
+  `implementer.md`), `spec-auditor.md` greps no `backend` directory, and compose's comments stop
+  calling identity "the monolith's".
