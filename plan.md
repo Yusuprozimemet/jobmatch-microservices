@@ -18,7 +18,9 @@ tests and the auth model. Phases 0–2 are done (tag `phase-2`). Phases 3–7 tu
 not to be deployment work that can wait unchanged: read against the code, they
 extract before building what replaces the extracted code, and assume a test harness,
 a service credential and a deletion path nobody builds. The course correction below
-changes their order and scope.
+changes their order and scope. Phases 3–5 end with Day 28 (tag `phase-5` at its close):
+five services, no monolith. The evaluation at that stop, below, cuts Phase 6 and holds Phase 7
+until it can be deployed.
 
 ---
 
@@ -73,6 +75,34 @@ than the one it replaces.
 
 ---
 
+## The evaluation at Day 28
+
+The plan-auditor read the whole plan at the stop; its report and each item decided are in
+Day 28's Notes. Phases 0–5 delivered what this plan asked of them: the four hard parts are done,
+and the Day 1–4 contract suite still passes, edited twice in all, both by approval (Day 40 moved
+`ObservabilityIT` out; Day 25 counts `AccountDeletionIT` in `apps_db`). What it found about the
+rest, and what this plan now does:
+
+- **Phases 6–7's specs contradict this plan.** Days 29–37 were written for Azure and Kubernetes
+  (SAS, Key Vault, Helm, Argo CD, Pulumi) before AWS was chosen; none can run as written.
+- **Phase 6 has nothing to move.** The system has no uploads, so the bucket and `cv-parse` are
+  a new feature and a new store of personal data, which the scope rule does not admit, and the
+  mailer has nothing to replace. **Cut.**
+- **Phase 5 left work no day owns:** module logins that can still connect to `identity_db`, a
+  service issuer identity no longer uses, application-service's metrics unscraped. **One day,
+  Day 42, before anything else** (H28.2–H28.4, H28.8).
+- **Phase 7 needs what the repository cannot supply:** an AWS account and a budget. **It is
+  written when they exist,** as Terraform and one ECS deployment and teardown, and takes Day
+  28's hand-offs by their IDs (H28.5, H28.6, H28.9, H28.10). Until then, Day 28 is where the
+  migration stands.
+- **Pace:** 1.2–1.6× the estimated track PRs in Phases 0–2 and the platform step, 1.15× and 1.5×
+  in Phases 4 and 5 against rewritten specs, 2.4× in Phase 3 against provisional ones (Day 17:
+  3 → 14). Days 32–37 are provisional.
+
+The plan stays smaller than the one it replaces: one day added, three cut.
+
+---
+
 ## Target cloud: AWS, decided before Phase 4
 
 Until Phase 3 the plan named Azure where it named anything (Cosmos DB, SAS URLs, blob
@@ -94,8 +124,6 @@ is part of what the repository measures, not a silent drift.
 |---|---|---|---|
 | Score store with a TTL | DynamoDB | `amazon/dynamodb-local` | 22–23 |
 | `user.deleted` to two consumers | SNS topic → one SQS queue per consumer | emulator | 26–27 |
-| Uploads bucket, direct browser upload | S3, presigned PUT URLs | emulator | 29 |
-| `cv-parse`, `mailer` | Lambda (S3 event, SQS), SES | emulator | 30–31 |
 | Postgres | RDS for PostgreSQL | the compose Postgres | 37 |
 | Services | ECS on Fargate behind an ALB, images in ECR | compose | 34–37 |
 | Secrets | Secrets Manager, ECS task roles | environment variables | 36 |
@@ -104,7 +132,7 @@ is part of what the repository measures, not a silent drift.
 
 Observability needs no code change: Day 5 made the services export OTLP, and only the
 collector's destination differs. Day numbers are where the provisional specs sit today;
-Days 29–37 are rewritten after Day 28, as before, now for AWS.
+Phase 7's days are rewritten for AWS when it starts; Phase 6's were cut at Day 28.
 
 ---
 
@@ -117,16 +145,18 @@ services/
   job-service/          jobs + mart (read-only)
   application-service/  saved jobs + tracker
   matching-service/     shortlist + LLM scorer
-functions/
-  cv-parse/  mailer/    Lambda
 infra/terraform/        network, ECS services and task definitions, RDS, DynamoDB,
-                        S3, SNS/SQS, ECR, ALB, Secrets Manager, CloudWatch
-frontend/               unchanged
+                        SNS/SQS, ECR, ALB, Secrets Manager, CloudWatch
+frontend/               unchanged but for the API client (Day 13)
 data/                   unchanged
 ```
 
-Each service: own `Dockerfile`, own `pom.xml`, own Flyway migrations, own database,
-own CI workflow (the repo already has per-area workflows — copy that pattern).
+Each service: own `Dockerfile`, own `pom.xml`, own CI workflow (the repo already has per-area
+workflows — copy that pattern), and its own store if it keeps data: identity and application
+have their own database and Flyway migrations, job-service reads the mart, matching keeps its
+scores in DynamoDB. The Day 1–4 contract suite tests the system, not one service: it runs from
+identity-service (`app/src/test/.../contract`), in process and through the gateway, in
+identity's workflow.
 
 ---
 
@@ -199,20 +229,24 @@ foreign key that deletes saved jobs with their user still exists; then the table
 - A service that trusts the token's `sub` refuses a deleted user; an access token outlives
   its user by up to 15 minutes.
 - **Done when:** deleting a user clears every store that holds user data, and
-  `AccountDeletionIT` stays green through every day of the phase.
-- **Day 28 (identity-service) is the stopping point.** Evaluate before Phase 6.
+  `AccountDeletionIT` stays green through every day of the phase. Met at Day 28, with two
+  places the cascade does not reach, handed to Phase 7: a failed message's `userId` in a
+  dead-letter queue for SQS's default four days (H28.5), and emails in identity's logs (H28.9).
+- **Day 28 (identity-service) is the stopping point.** Evaluated: *The evaluation at Day 28*.
 
-### Phase 6 — Functions + uploads bucket
-- New private S3 `uploads` bucket. The pipeline's landing zone stays on Azure.
-- `identity-service` issues short-lived presigned PUT URLs; the browser uploads directly.
-- `cv-parse` Lambda: triggered by the S3 upload, extracts skills, PUTs them to identity-service.
-- `mailer` Lambda: SQS-triggered, sends through SES. There is no notification service to
-  replace, and reset mail is already sent after commit and asynchronously; shrink or cut
-  this when the phase is reached.
+### Phase 6 — Functions + uploads bucket: cut at Day 28
+Planned: a private S3 `uploads` bucket, presigned PUT URLs from identity-service, a `cv-parse`
+Lambda that extracts skills, a `mailer` Lambda on SES. Cut, because it moves nothing: the system
+has no uploads (`privacy-data.md`: "No CV, no documents, no uploads"), so the bucket and
+`cv-parse` would be a new feature and a new store of personal data, and reset mail is already
+sent after commit and asynchronously. Days 29–31 are not run; Day 27's hand-off of an uploads
+consumer goes with them. CV upload is product work, outside this migration.
 
 ### Phase 7 — ECS on Fargate
+**Written when an AWS account and a budget exist,** after Day 42, in as few days as it takes;
+Days 32–37 are rewritten or deleted then, and take Day 28's hand-offs by their IDs.
 - **Terraform** for everything long-lived: network, ECS cluster and services, RDS, DynamoDB,
-  S3, SNS/SQS, ECR, the ALB, Secrets Manager and CloudWatch.
+  SNS/SQS, ECR, the ALB, Secrets Manager and CloudWatch.
 - One task definition per service, generated from one Terraform module.
   Flyway runs as a one-off ECS task before the deploy, not at startup.
 - Secrets from Secrets Manager into the task definition, AWS access through task roles —
@@ -224,8 +258,7 @@ foreign key that deletes saved jobs with their user still exists; then the table
 - An ADOT collector sidecar sends the services' OTLP to CloudWatch and X-Ray.
 - Criteria are written for one maintainer and an agent: no contributor counts, on-call
   rotas or alert owners. The secret sweep checks for secrets, not for the word `password`.
-- The Lambdas re-enter through the ALB with a service token; the services are not public
-  otherwise.
+- The services are not public but through the ALB.
 - **Done when:** one real deployment serves the five public API surfaces under a budget
   alarm, and `terraform destroy` leaves nothing billable behind.
 
@@ -260,29 +293,34 @@ did on Day 16.
 | 1 modularise | large — the real work |
 | 2 gateway + JWT | medium, high risk |
 | platform step | medium: harness, service credential, grants, compose |
-| 3–5 extractions | medium each, low risk only seam-first |
-| 6 functions | small |
+| 3–5 extractions | medium each, low risk only seam-first; measured 29, 45 and about 49 track PRs |
+| 6 functions | cut at Day 28 |
 | 7 ECS + Terraform | large, mostly new skills; smaller than the Kubernetes phase it replaces |
 
-Measured so far: 1.5× the estimated track PRs in each of Phases 0–2. From the platform step on,
-the README's Day entries record two estimates, the provisional spec's and the rewritten one's
-(Day 20: 3 and 5; took 5).
+Measured: 1.2–1.6× the estimated track PRs in each of Phases 0–2 and the platform step. From
+the platform step on, the README's Day entries record two estimates, the provisional spec's and
+the rewritten one's (Day 20: 3 and 5; took 5). Against rewritten specs Phases 4 and 5 took
+1.15× and 1.5×; against provisional ones Phase 3 took 2.4×.
 
 ---
 
 ## Day-by-day specs
 
-All seven phases and the platform step are broken into 40 day specs in [`specs/`](specs/). Read
-[`specs/README.md`](specs/README.md) for the workflow.
+All seven phases and the platform step are broken into 41 day specs in [`specs/`](specs/), and
+Day 42 is written next. Read [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-24 and 38-41 (Phases 0-4 and the platform step) are done. Days 25-37 are **provisional**:
+Days 1-28 and 38-41 (Phases 0-5 and the platform step) are done, Day 28 at its close. Days 32-37 are **provisional**:
 written from this plan before the course correction, so each is rewritten against the code,
-with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
-links hold; they run in this order, and the dashboard follows it:
+with the spec-auditor, when it is reached, not before; Days 29-31 are cut. Days keep their
+numbers, so history and links hold; they run in this order, and the dashboard follows it:
 
 1. The record fix and the platform step (new day specs, numbered from 38).
 2. Phase 3: Days 18, 19, 17, 20.
 3. Phase 4: Day 41 (the profile endpoint and user id, split out of Day 24) first, then Days 21,
    22 (no dual write), 23, 24.
-4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
-5. Phases 6–7 (Days 29–37): rewritten for AWS after the evaluation, or not started.
+4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate:** done at the stop (*The evaluation at
+   Day 28*); nothing after it starts until the maintainer says so.
+5. One day for what Phase 5 left that no day owns, numbered after the last spec, written next.
+6. Phase 7 (Days 32–37): rewritten for ECS when an AWS account and a budget exist, or not
+   started.
+7. Phase 6 (Days 29–31): cut at the evaluation, not run.
