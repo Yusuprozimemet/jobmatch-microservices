@@ -132,68 +132,113 @@ if the path changes in poms, workflows and `support/` still pass 400, it takes a
 line, as Days 21 and 25 did.
 
 ## Acceptance criteria
-- [ ] C28.1 **new** — `backend/` no longer exists: `git ls-files backend | wc -l` gives 0. Red
+- [x] C28.1 **new** — `backend/` no longer exists: `git ls-files backend | wc -l` gives 0. Red
       today: 232.
-- [ ] C28.2 **hold** — Every Day 1–4 test passes **unedited** from `services/identity-service`:
+      #315; at the close on 6b2a994, 0.
+- [x] C28.2 **hold** — Every Day 1–4 test passes **unedited** from `services/identity-service`:
       `./mvnw clean verify` 0 failures, 0 errors (435 tests, 1 skipped on a410461), and CI's
       through-the-gateway run 0 failures (229 tests on a410461); `git diff a410461 -M --stat --
       '*/contract/*'` shows renames only.
       broken: `ProfileResponse.userId` serialised as `"user"` → `ProfileIT` 11 run, 4 failures
       (`eachUserReadsOnlyTheirOwnProfile`, expected "6d24…") (auditor, a410461).
-- [ ] C28.3 **new** — No pom or workflow reads from `backend/`: `grep -rn "backend/" services/*/pom.xml
+      After every track: 435 tests, 0 failures, 0 errors, 1 skipped in process (#314–#318, from
+      the surefire reports), and through the gateway 229 in CI and 236 locally with
+      `GoogleLinkClaimIT` and `PendingGoogleLinksIT` (#316–#318). At the close on 6b2a994:
+      435 tests, 0 failures, 0 errors, 1 skipped (82 reports), checkstyle clean.
+      `git diff a410461 -M --stat -- '*/contract/*'`: 22 files, 0 insertions, 0 deletions.
+- [x] C28.3 **new** — No pom or workflow reads from `backend/`: `grep -rn "backend/" services/*/pom.xml
       .github/workflows` finds nothing. Red today: 4 poms and 5 workflows.
-- [ ] C28.4 **new** — `docker compose --env-file .env.example config --services` lists
+      #314, #315 (a comment in `application-service/pom.xml:47` reworded); nothing at the close.
+- [x] C28.4 **new** — `docker compose --env-file .env.example config --services` lists
       `identity-service`, `api-gateway`, `job-service`, `matching-service`,
       `application-service`, `frontend`, `db`, `localstack`, `dynamodb`, `jwt-key`, and not
       `backend`; and `grep -rnE "^  backend:|backend:[0-9]" docker-compose.yml observability/`
       finds nothing (6 lines on a410461; Tempo's own `backend: local` is not the service). Red
       today: `backend` listed, no `identity-service`.
-- [ ] C28.5 **new** — `docker compose -p day28 --env-file .env.example up -d --build`: every
+      #316, with the grep as #321 corrected it. At the close: the ten services listed, no
+      `backend`; the grep finds nothing.
+- [x] C28.5 **new** — `docker compose -p day28 --env-file .env.example up -d --build`: every
       service healthy, and through the gateway (`localhost:${GATEWAY_PORT}`) register 201, login
       200, `GET /api/profile` 200, `GET /api/jobs` 200, `POST /api/saved-jobs` 201, top-matches
       200, `DELETE /api/users/me` 204, and `GET /.well-known/jwks.json` 200 with one RSA key.
       Red today: no `identity-service` to start.
-- [ ] C28.6 **hold** — `tokens/ServiceJwksIT` green in process (5 run, 0 failures on a410461);
+      At the close on 6b2a994, `-p day28` on a fresh volume: `up --wait` exit 0 in 100 s, every
+      service with a healthcheck healthy (`dynamodb` and `frontend` have none). Through the
+      gateway: register 201, login 200, `PUT` then `GET /api/profile` 200, save 201,
+      top-matches 200, `jwks.json` 200 with one RSA key, `service-jwks.json` 401, delete
+      204, login after it 401. `GET /api/jobs` 500 before the README's mart step and 200
+      after it (departure below). `down -v` on `day28` only.
+- [x] C28.6 **hold** — `tokens/ServiceJwksIT` green in process (5 run, 0 failures on a410461);
       the gateway still does not route `/.well-known/service-jwks.json` (its `SecurityTest`).
       broken: to be recorded in Track A2, the service key set path routed by the gateway.
-- [ ] C28.7 **new** — In compose, the database is `identity_db`: `psql -U admin -lqt`
+      #316.
+      broken: the gateway also routes `/.well-known/service-jwks.json` → `SecurityTest` 15
+      run, 1 failure (expected 404 but was 200). `ServiceJwksIT` 5 of 5 after #316–#318.
+- [x] C28.7 **new** — In compose, the database is `identity_db`: `psql -U admin -lqt`
       (`.env.example:3`) on a fresh `-p day28` volume lists `identity_db`, `jobs_db`, `apps_db` and not
       `project_db`; the harness's `PostgresContainer` names `identity_db`. Red today:
       `project_db`.
-- [ ] C28.8 **hold** — Google sign-in, including the account-linking branch:
+      #317.
+      broken: `PostgresContainer` back to `project_db` → `ModuleConnectionsIT` 8 run, 1
+      failure (`applicationsCannotConnectToIdentityDb`). At the close, fresh `-p day28`:
+      `apps_db identity_db jobs_db`, no `project_db`.
+- [x] C28.8 **hold** — Google sign-in, including the account-linking branch:
       `contract/AuthGoogleSignInIT`, `GoogleLinkClaimIT`, `PendingGoogleLinksIT` green in process
       and through the gateway after every track. The redirect URI is unchanged
       (`/api/login/oauth2/code/google` under `APP_BASE_URL`).
       broken: to be recorded in Track A1, the redirect path changed.
-- [ ] C28.9 **new** — Compose forwards `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to
+      #315.
+      broken: callback path `/api/login/oauth2/code/*` → `/api/oauth2/callback/*` →
+      `AuthGoogleSignInIT` 8 run, 8 failures; `GoogleLinkClaimIT` 1, 1 failure;
+      `PendingGoogleLinksIT` 6, 2 failures, 1 error. Green in process and, run locally,
+      through the gateway after #315–#318; CI's gateway run does not include the two
+      `tokens/` tests (defect and H28.16 below).
+- [x] C28.9 **new** — Compose forwards `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to
       identity-service: `docker compose --env-file .env.example config | grep -c GOOGLE_CLIENT`
       gives 2. Red today: 0.
-- [ ] C28.10 **new** — No doc or script outside `specs/`, `docs/paper/`, the README's
+      #318.
+      broken: `GOOGLE_CLIENT_SECRET` dropped → 1. At the close, 2.
+- [x] C28.10 **new** — No doc or script outside `specs/`, `docs/paper/`, the README's
       measurement record and the moved `docs/` names `backend/` or the `backend` service: `grep
       -rln --include='*.sh' --include='*.md' "backend/\|compose.*backend\b\|db, backend" scripts
       CLAUDE.md .claude/agents docs/runbooks` finds nothing (`spec-drift.py` reads past paths
       from git history and is not a doc). Red today: 6 files, `dev-up.sh`, `jwt-key.sh`,
       `scripts/README.md`, `CLAUDE.md`, `implementer.md`, `jobs-db.md`.
+      #318.
+      broken: "db, backend" restored in `scripts/README.md` → the grep lists it. At the
+      close, nothing.
 - [ ] C28.11 **new** — The README's "Running it" takes a fresh clone to a running app: a person
       who did not write it follows it from `git clone` on a machine with Docker and nothing of
       this project, timed, under 30 minutes, steps and time recorded in Notes. Red today: it
       starts `backend`.
-- [ ] C28.12 **new** — The review is in this day's Notes: the plan-auditor's report on the whole
+      Not met at the close: a person who did not write the README has not followed it. The
+      maintainer's (departure below).
+- [x] C28.12 **new** — The review is in this day's Notes: the plan-auditor's report on the whole
       plan, and each item on the list above kept, dropped or handed on (a `Hand-off` line each),
       with `plan.md` changed or confirmed. Red today: no review.
+      #321: the review below, H28.2–H28.14, and `plan.md`'s "Course correction after Phase 5".
 - [ ] C28.13 **new** — Tag `phase-5` on the closing merge. Red today: `git tag` lists phase-2,
       phase-2.1, phase-4.
-- [ ] C28.14 **new** — identity-service has a compose healthcheck and the gateway waits for it:
+      On this PR's merge commit, after "merged".
+- [x] C28.14 **new** — identity-service has a compose healthcheck and the gateway waits for it:
       `docker compose --env-file .env.example config` shows a `healthcheck` under
       `identity-service` and `condition: service_healthy` for it under `api-gateway`, and on
       `-p day28` `docker inspect --format '{{.State.Health.Status}}'` gives `healthy`. Red today:
       no healthcheck (`docker-compose.yml:39`), the gateway waits on `service_started` (`:284`).
+      #320.
+      broken: the healthcheck on port 9091 → identity-service "health: starting" after 45 s
+      and the gateway never started. At the close: both in `config`, and `healthy` on
+      `-p day28`.
 
 ## Verify
 ```bash
 git clone <repo> fresh && cd fresh
 docker compose -p day28 --env-file .env.example up -d --build
 docker compose -p day28 ps                 # every service healthy
+for f in analytics-schema analytics-seed; do   # the README's mart step: /api/jobs is 500 without it
+  docker compose -p day28 exec -T db psql -U admin -d jobs_db -v ON_ERROR_STOP=1 \
+    -c "SET ROLE analytics_user" -f - < services/identity-service/app/src/test/resources/fixtures/$f.sql
+done
 # through the gateway: register 201, login 200, profile 200, jobs 200, save 201, matches 200,
 # delete account 204 (C28.5)
 docker compose -p day28 exec db psql -U admin -lqt | cut -d'|' -f1   # identity_db, no project_db
@@ -361,3 +406,60 @@ phase table and its Kubernetes line go to this day's closing PR.
   (`AuthenticationService.java:64,199`, `EmailService.java:45,47`,
   `OAuth2LoginSuccessHandler.java:58,67,94`) stop doing so, before Phase 7 sends logs to
   CloudWatch.
+
+### The close
+
+- **Track order: 0 (#314), A1 (#315), A2 (#316), B (#317), C (#318), E (#320), D (#321),** the
+  spec's after the second spec change (#319) added E before D. Estimated 7 PRs; took 7, in 791
+  track lines, none split and none `Oversized:`: A1's 230 renames counted 45 lines. Two spec
+  changes (#313, #319). #323, after D, pointed identity-service's README at the
+  `identity-service` image; it is not a track.
+- **Departures, each recorded in its PR or here:**
+  - **C28.5 needs the README's mart step.** On a fresh volume `jobs_db` has no mart until the
+    pipeline publishes one, so `GET /api/jobs` answers 500 (#316). Track C made the step part of
+    "Running it" rather than change job-service (#318); the Verify above now runs it.
+  - **The JVM services' `start_period` went from 30 s to 120 s** in #318: application-service
+    started in 39.4 s and its check gave up at about 40 s, so the gateway never started.
+  - **C28.11 is not met.** It needs a person who did not write the README to follow it from a
+    clone. The mechanical half was run at the close on 6b2a994: a fresh `-p day28` volume, with
+    images built before, `up --wait` in 100 s, then the mart step and the C28.5 walk. That is not
+    the criterion. H28.18.
+  - **C28.13 waits for the merge:** the tag goes on this PR's merge commit.
+- **Defect** — found: review (Track A2) · cause: spec · C28.5 and the Verify could not pass on a
+  fresh clone: `/api/jobs` is 500 until a mart is loaded, and neither named the step. The Verify
+  above now does.
+- **Defect** — found: Track C · cause: implementation · compose's 30 s `start_period` for the
+  JVM services (Day 25's for application-service) was shorter than application-service's 39 s
+  start, so a fresh `up` failed with "application-service is unhealthy". 120 s in #318.
+- **Defect** — found: review (Track A1) · cause: spec · C28.8 says "through the gateway after
+  every track", but CI's gateway run (`identity-service-ci-cd.yaml:116`) names only
+  `contract.*IT` and a list that leaves out `GoogleLinkClaimIT` and `PendingGoogleLinksIT`. They
+  were run through the gateway by hand in #315–#318. H28.16.
+- **Defect** — found: review (Track A1) · cause: process · #315 found that the move left the
+  relative links in identity-service's README and `docs/` one level short and asked for an owner;
+  neither Track C nor the review list took them. 74 links in those files point nowhere today, 16
+  did on a410461. H28.15.
+- **Defect** — found: review (Track B) · cause: implementation · the implementer's draft left
+  three current-tense `project_db` comments (`TestDatabase.java:9,97`,
+  `RefreshTokenGrantsIT.java:25`). Fixed in #317.
+- **Defect** — found: close · cause: process · #321 was opened from `claude/focused-bell-qqwqdx`,
+  not `day-28/track-d-…`, so after it merged `spec-drift.py` still named Track D as the next step,
+  and its Jira sub-task (KAN-82) stayed In Progress.
+- **Defect** — found: close · cause: process · my own: the close's first compose run reused the
+  `day28` project #318 had left up, three hours old, and read as a fresh volume. Seen from
+  `docker compose ps` ("Up 3 hours"); torn down with `down -v` and rerun.
+- **The close's Verify, on 6b2a994:** the C28 checks above, each rerun; the suite as C28.2 says.
+- **Hand-off** H28.15 → Day 42: the relative links in `services/identity-service/README.md` and
+  its `docs/` point at files that exist (74 broken today, 58 of them by the move), with a check
+  that finds none.
+- **Hand-off** H28.16 → Day 42: CI's through-the-gateway run adds `GoogleLinkClaimIT` and
+  `PendingGoogleLinksIT` (`identity-service-ci-cd.yaml:116`), so Google sign-in's linking branch
+  is checked through the gateway on every PR, not by hand.
+- **Hand-off** H28.17 → the Phase 7 rewrite (Day 32): a fresh deployment's `jobs_db` has no mart
+  until the pipeline publishes, and `GET /api/jobs` answers 500 until then. Either the deploy
+  waits for a published mart, or job-service answers an empty page.
+- **Hand-off** H28.18 → the maintainer: someone who did not write "Running it" follows it from
+  `git clone` on a machine with Docker and nothing of this project, timed, and the steps and time
+  go into these Notes (C28.11).
+- **Hand-off** H28.19 → Day 42: `docs/target-architecture.png` is redrawn for ECS on Fargate:
+  it still shows a cluster and Phase 6's functions. This close fixed the README's text around it.
