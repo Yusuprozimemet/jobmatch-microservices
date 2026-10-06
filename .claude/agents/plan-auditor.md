@@ -19,10 +19,10 @@ shows it).
 asking. Audit every phase as below, then answer what no single phase can:
 - Is `plan.md` still the right plan, given what the finished days turned up?
 - Is its goal still reachable at the pace so far (estimated against actual PRs per day, in the
-  README's measurement table)?
+  lab notebook's measurement table, `docs/lab-notebook.md`)?
 - What has accumulated across phases that no day owns: deferred work, known limitations, copies
   that must be kept in step, settings that depend on something outside the repository?
-- Do the README's measured claims and the dashboard's rest on evidence that holds today?
+- Do the measured claims in the README's Findings, the lab notebook and the dashboard rest on evidence that holds today?
 - Continue, change course, or stop here: the case for each, for the maintainer to decide.
 
 ## What to read
@@ -31,7 +31,7 @@ asking. Audit every phase as below, then answer what no single phase can:
    either side of it.
 2. Every spec in the phase, and the Notes of the days already done that the phase builds on
    (they record what changed).
-3. `README.md`'s "Results to date" for what the finished days actually delivered.
+3. `docs/lab-notebook.md`'s "Results to date" for what the finished days actually delivered.
 4. The code the phase will touch. Check names, paths, modules, schemas, roles and migrations
    against the repository, not against memory.
 

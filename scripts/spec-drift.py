@@ -867,11 +867,11 @@ def hand_offs(days, order, sha, blobs):
     return sorted(out, key=lambda h: (ahead.get(h["to"], len(order)), h["picked"], h["source"]))
 
 
-def conclusion(readme):
-    """What the README says at the head of main: its phase reads, and its measurement table."""
-    reads = [dict(phase=int(m.group(1)), text=m.group(0).strip()) for m in PHASE_READ.finditer(readme)]
+def conclusion(notebook):
+    """What the lab notebook says at the head of main: its phase reads, and its measurement table."""
+    reads = [dict(phase=int(m.group(1)), text=m.group(0).strip()) for m in PHASE_READ.finditer(notebook)]
     rows = [[c.strip() for c in r.strip().strip("|").split("|")]
-            for r in section(readme, "What is being measured").splitlines() if r.startswith("|")]
+            for r in section(notebook, "What is being measured").splitlines() if r.startswith("|")]
     return dict(reads=reads, measured=[r for r in rows[2:] if len(r) == 2])
 
 
@@ -972,7 +972,7 @@ def main():
                                hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
                                vocab_size=vocab, tokens=token_usage(),
                                verification=verification(prs, runs),
-                               conclusion=conclusion(blobs.read(snaps[-1]["sha"], "README.md")),
+                               conclusion=conclusion(blobs.read(snaps[-1]["sha"], "docs/lab-notebook.md")),
                                meta=dict(caveats=CAVEATS, provenance=provenance())),
                           separators=(",", ":"))
     target = args.build or args.out

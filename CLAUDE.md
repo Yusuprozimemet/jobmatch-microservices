@@ -28,8 +28,8 @@ maintainer, and nothing starts after a phase ends until they say so.
    stack branches. `day-NN/track-<letter>-<slug>`, titled `Day NN track X: <what it does>`. A
    Track 0 holds the tests that must pass before and after the change, and lands first.
 3. **A closing PR:** `day-NN/close-the-day`. Tick each criterion with its evidence (test or
-   command, and the PR it landed in), add Notes to the spec, and update the README's Day entry
-   and measurement table. Run `python scripts/token-usage.py` and commit the refreshed
+   command, and the PR it landed in), add Notes to the spec, and update the Day entry and measurement
+   table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings). Run `python scripts/token-usage.py` and commit the refreshed
    `docs/dashboard/token-usage.json`: CI cannot read the transcripts it counts.
 4. **After opening any PR, stop and wait for the maintainer to say "merged".** Do not start the
    next step, and do not start a new phase, until told.
@@ -102,9 +102,9 @@ implementer never commits or pushes.
   dashboard reads no other wording.
 - The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
   split the PR along a line where each part stands alone. An `Oversized:` line in the
-  description turns the failure into a warning. It has been used five times: #1, #2 and #3
-  (Days 1-2 and the README rewrite), then #224 (Day 21 E1a, 950 lines) and #296 (Day 25 E1a,
-  1,225 lines). The two extraction tracks could not split and stay green: once a module's code
+  description turns the failure into a warning. It has been used six times: #1, #2 and #3
+  (Days 1-2 and the README rewrite), then #224 (Day 21 E1a, 950 lines), #296 (Day 25 E1a,
+  1,225 lines) and #326 (the README's results moved to `docs/lab-notebook.md`, outside the days). The two extraction tracks could not split and stay green: once a module's code
   leaves the monolith, its database tests fail and the harness must route its endpoints to the
   new container in the same PR. Both specs expected the line. The moved code showed as renames;
   the counted lines were monolith tests deleted and rebuilt on the service's base, and in #296

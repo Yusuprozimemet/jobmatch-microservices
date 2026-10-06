@@ -53,7 +53,7 @@ flowchart TD
     W2 --> Dash["refresh dashboard"]
     Dash --> More{"More tracks?"}
     More -- yes --> Track
-    More -- no --> Close["closing PR: tick criteria,<br/>Notes, README"]
+    More -- no --> Close["closing PR: tick criteria,<br/>Notes, lab notebook"]
     Close --> W3{{"wait: 'merged'"}}
     W3 --> Dash2["refresh dashboard"]
     Dash2 --> Last{"Last day<br/>of the phase?"}
