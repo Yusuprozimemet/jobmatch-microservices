@@ -584,7 +584,7 @@ function drawNow() {
   document.getElementById("eyebrow").textContent = cur
     ? `jobmatch-microservices · Day ${dd(now.current_day)} of ${days.length} · ${N - 1} merged PRs`
     : `jobmatch-microservices · between days · ${N - 1} merged PRs`;
-  // Between days: the next piece of work has no day spec yet (the platform step), or work has stopped.
+  // Between days: the next piece of work has no day spec yet (the platform step, the cleanup day), or work has stopped.
   if (!cur) document.getElementById("today").innerHTML = `
     <div class="eyebrow">Between days</div>
     <div class="phase">${done} of ${days.length} days finished</div>${nextBox}`;
