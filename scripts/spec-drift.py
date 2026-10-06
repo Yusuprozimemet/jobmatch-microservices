@@ -81,6 +81,9 @@ TRACK_NAMED = re.compile(r"(?<![-\w])(?<!Day \d\d's )(?<!Day \d\d )([A-Z]\d+[a-z
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
+# The cleanup day after Phase 5 (plan.md, "Course correction after Phase 5"), numbered after the last day.
+CLEANUP = "cleanup"
+PLACEHOLDERS = (PLATFORM, CLEANUP)
 # plan.md's target services ("Target repo structure"), by the monolith packages each one takes.
 # shared, config and the gateway are no service's, so depending on them crosses nothing.
 SERVICE = dict(auth="identity", user="identity", profile="identity", identity="identity",
@@ -360,7 +363,7 @@ def snapshots(prs):
 
 def ranker(order):
     """A day's place in the run order: 0 (and plan.md) first, a day the order does not list after it by number."""
-    pos = {d: i for i, d in enumerate(d for d in order if d != PLATFORM)}
+    pos = {d: i for i, d in enumerate(d for d in order if d not in PLACEHOLDERS)}
     return lambda d: -1 if not d else pos.get(d, len(pos) + d)
 
 
@@ -485,9 +488,13 @@ def section(text, heading):
 def run_order(plan, spec_days):
     """The order days run in, from plan.md's "Day-by-day specs" list, and the day after which work
     stops to be evaluated. Days the list does not name (the finished ones) come first. A day named
-    twice runs at its last mention: Day 24's profile endpoint comes first, the rest of it last."""
+    twice runs at its last mention: Day 24's profile endpoint comes first, the rest of it last.
+    "Numbered after the last" is a day not yet written, after every day the list names. A stop is
+    lifted once plan.md has the course correction for its phase."""
     listed, stop = [], None
-    for line in re.findall(r"^\d+\.\s+(.*(?:\n {3}.*)*)", section(plan, "Day-by-day specs"), re.M):
+    lines = re.findall(r"^\d+\.\s+(.*(?:\n {3}.*)*)", section(plan, "Day-by-day specs"), re.M)
+    last = max((int(n) for line in lines for n in re.findall(r"\d+", line) if int(n) >= 10), default=0)
+    for line in (" ".join(line.split()) for line in lines):  # an item may wrap mid-phrase
         days = []
         for a, b in re.findall(r"(\d+)(?:\s*[–-]\s*(\d+))?", line):
             if int(a) < 10:  # a phase number, not a day
@@ -496,8 +503,12 @@ def run_order(plan, spec_days):
                 days += sorted(d for d in spec_days if d >= int(a)) or [PLATFORM]
             else:
                 days += range(int(a), int(b or a) + 1)
+        if "numbered after the last" in line:
+            days = sorted(d for d in spec_days if d > last) or [CLEANUP]
         listed += days
-        if "Stop and evaluate" in line and days:
+        phase = re.search(r"Phase (\d+)", line)
+        if "Stop and evaluate" in line and days and not (
+                phase and section(plan, f"Course correction after Phase {phase.group(1)}")):
             stop = days[-1]
     listed = [d for i, d in enumerate(listed) if d not in listed[i + 1:]]
     return [d for d in sorted(spec_days) if d not in listed] + listed, stop
@@ -507,7 +518,7 @@ def out_of_order(order):
     """The days that do not run in numeric order: those outside the longest run of the order that
     rises by number: Days 38-40 ran ahead of Day 17, Day 17 behind Days 18-19, and Day 25 is planned
     behind Days 26-27."""
-    days = [d for d in order if d != PLATFORM]
+    days = [d for d in order if d not in PLACEHOLDERS]
     best = []  # best[i]: the longest rising run that ends at days[i]
     for i, d in enumerate(days):
         best.append(max((best[j] for j in range(i) if days[j] < d), key=len, default=[]) + [d])
@@ -531,7 +542,7 @@ def settle(days, order):
             d["status"] = "ready"
     by_day = {d["day"]: d for d in days}
     for d in order:
-        if d == PLATFORM:
+        if d in PLACEHOLDERS:
             break
         if by_day[d]["status"] not in FINISHED:
             by_day[d]["status"] = "active"
@@ -911,11 +922,14 @@ def next_step(days, open_prs, order, stop):
     if open_prs:
         return "Waiting on " + ", ".join(f"#{p['number']} {p['title']}" for p in open_prs)
     by_day = {d["day"]: d for d in days}
-    left = [d for d in order if d == PLATFORM or by_day[d]["status"] not in FINISHED]
+    left = [d for d in order if d in PLACEHOLDERS or by_day[d]["status"] not in FINISHED]
     if not left:
         return "Every day is done."
     if left[0] == PLATFORM:
         return "The platform step: write its day spec, numbered from 38 (plan.md, Course correction after Phase 2)"
+    if left[0] == CLEANUP:
+        n = max(d for d in order if d not in PLACEHOLDERS) + 1
+        return f"The cleanup day: write its day spec, Day {n:02d} (plan.md, Course correction after Phase 5)"
     if stop is not None and order.index(left[0]) > order.index(stop):
         return f"Day {stop:02d} is done: stop and evaluate before going on (plan.md)"
     day = by_day[left[0]]
@@ -966,7 +980,7 @@ def main():
                    next_step=next_step(days, open_prs, order, stop), stop_after=stop,
                    open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
         data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
-                               order=[d for d in order if d != PLATFORM],
+                               order=[d for d in order if d not in PLACEHOLDERS],
                                out_of_order=out_of_order(order),
                                removals=removal_history(days, snaps, blobs),
                                hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),

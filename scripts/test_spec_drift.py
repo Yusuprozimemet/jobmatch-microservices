@@ -532,8 +532,22 @@ Days keep their numbers; they run in this order:
             plan = f.read()
         days = sorted({sd.day_of(n) for n in os.listdir(os.path.join(HERE, os.pardir, "specs")) if sd.day_of(n)})
         order, stop = sd.run_order(plan, days)
-        self.assertEqual(sorted(d for d in order if d != sd.PLATFORM), days)
-        self.assertEqual(stop, 28)
+        self.assertEqual(sorted(d for d in order if d not in sd.PLACEHOLDERS), days)
+        self.assertIsNone(stop)  # evaluated: plan.md has the course correction after Phase 5
+
+    def test_the_cleanup_day_comes_after_the_stop_once_it_is_evaluated(self):
+        plan = self.PLAN.replace("5. Phases 6–7 (Days 29–37): rewritten after the evaluation, or not started.",
+                                 "5. The cleanup day: its spec is written next, numbered\n"
+                                 "   after the last.\n"
+                                 "6. Phases 6–7 (Days 29–37).") + "\n## Course correction after Phase 5\n\nCleanup first.\n"
+        order, stop = sd.run_order(plan, list(range(1, 39)))
+        self.assertIsNone(stop)
+        self.assertEqual(order[order.index(28) + 1], sd.CLEANUP)
+        days = sd.settle([a_day(28, kinds=["close"]), a_day(29)], [28, sd.CLEANUP, 29])
+        self.assertIn("cleanup day: write its day spec, Day 30", sd.next_step(days, [], [28, sd.CLEANUP, 29], None))
+        order, _ = sd.run_order(plan, list(range(1, 40)))
+        self.assertEqual(order[order.index(28) + 1], 39)  # written: the day takes the placeholder's place
+        self.assertEqual(sd.run_order(plan.split("\n## Course correction")[0], list(range(1, 42)))[1], 28)
 
     def test_a_higher_number_does_not_finish_a_day_that_runs_later(self):
         days = sd.settle([a_day(17), a_day(18, kinds=["code"])], [18, 17])
