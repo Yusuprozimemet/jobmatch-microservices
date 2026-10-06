@@ -316,7 +316,7 @@ not job-service's alone, and V1–V16, not V1–V14.
 - **Hand-off** H28.7 → the maintainer (item 10): tag `phase-3` on Day 20's closing merge.
 - **Hand-off** H28.8 → Day 42: a Prometheus scrape job for application-service.
 - **Hand-off** H28.9 → Day 37: before logs leave for CloudWatch, every service logs JSON in
-  production, and the nine log lines that print an email (`AuthenticationService`,
+  production, and the seven log lines that print a user's email (`AuthenticationService`,
   `EmailService`, `OAuth2LoginSuccessHandler`; `privacy-data.md:230-235`) stop doing so.
 - **Hand-off** H28.10 → Day 37: the production data path no day owns: Day 20's `jobs_db` runbook,
   Day 25's deployment step (`copy-saved-jobs.py` before V16, then `db-setup.py` again), this day's
