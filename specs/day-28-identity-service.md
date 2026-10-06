@@ -1,8 +1,9 @@
 # Day 28 — identity-service, and the monolith is gone
 
-**Phase:** 5 · **Depends on:** Day 27 · **Expected PRs:** 6 (Tracks 0, A1, A2, B, C, D)
+**Phase:** 5 · **Depends on:** Day 27 · **Expected PRs:** 7 (Tracks 0, A1, A2, B, C, E, D)
 **Status:** read against the code by the spec-auditor on a410461; revised in the spec change
-(KAN-76).
+(KAN-76); after the plan-auditor's whole-plan report, Track E and the rest of the review
+list added (KAN-83).
 
 Last of Phase 5 (**26 → 27 → 25 → 28**), and the stopping point: the architecture is evaluated
 before Phases 6–7 are started or rewritten (`plan.md`, "Course correction").
@@ -79,7 +80,15 @@ The last module leaves `backend/`. Five services, no monolith.
     today (only the `jobs-url` property is left, `application.yaml:75`), yet job-service will not
     start without `BACKEND_KEY_SET_URL` (`InternalCallers.java:47-52`);
   - no test for a `null` reason dropping a 25-item DynamoDB batch (Day 22);
-  - the missing `phase-3` tag (Day 20).
+  - the missing `phase-3` tag (Day 20);
+  - job-service's (20 files) and application-service's (22 files) `…project.backend` packages,
+    beside matching's and identity's;
+  - dummy AWS keys on identity-service (`docker-compose.yml:84-85`) and application-service
+    (`:228-230`), beside matching-service's;
+  - `matching_user`'s and the harness's `analytics_user`'s CONNECT on `identity_db`, beside
+    `jobs_user`'s; the three role-setup copies (`db-init/10-module-roles.sh:32`,
+    `PostgresContainer.java:196`, `db-setup.py:404`) do not grant the same roles;
+  - `/api/docs` lacks Saved Jobs and top-matches as well as Jobs: only identity serves springdoc.
 
 ## Out of scope
 - Functions — Phase 6.
@@ -97,9 +106,11 @@ The last module leaves `backend/`. Five services, no monolith.
 | A2 | | Compose service `identity-service`, every URL reader listed above, the gateway's route and property, prometheus, the harness's `JobService`. |
 | B | | `project_db` → `identity_db`: `.env.example`, `db-setup.py`, `PostgresContainer`, the runbook step. |
 | C | | Google credentials forwarded in compose; scripts, `CLAUDE.md`, `implementer.md`, the runbook path, the README's two sections; the job renamed "Identity Service gate" once H28.1 is done. |
+| E | | identity-service gets the compose healthcheck the other services have (readiness on its management port), and the gateway waits for it healthy, not started. |
 | D | | The plan-auditor on the whole plan; the review list decided; `plan.md` changed or confirmed (a plan-change PR if it changes). |
 
-In order: each depends on the one before, except B, which needs only A1. A1 is mostly renames,
+In order: each depends on the one before, except B, which needs only A1, and E, added after C
+merged, which lands before D so that C28.5 can be run at the close. A1 is mostly renames,
 which the size gate counts as their changed lines only (`git diff --numstat`, `pr-checks.yml:79`);
 if the path changes in poms, workflows and `support/` still pass 400, it takes an `Oversized:`
 line, as Days 21 and 25 did.
@@ -155,6 +166,11 @@ line, as Days 21 and 25 did.
       with `plan.md` changed or confirmed. Red today: no review.
 - [ ] C28.13 **new** — Tag `phase-5` on the closing merge. Red today: `git tag` lists phase-2,
       phase-2.1, phase-4.
+- [ ] C28.14 **new** — identity-service has a compose healthcheck and the gateway waits for it:
+      `docker compose --env-file .env.example config` shows a `healthcheck` under
+      `identity-service` and `condition: service_healthy` for it under `api-gateway`, and on
+      `-p day28` `docker inspect --format '{{.State.Health.Status}}'` gives `healthy`. Red today:
+      no healthcheck (`docker-compose.yml:39`), the gateway waits on `service_started` (`:284`).
 
 ## Verify
 ```bash
@@ -198,6 +214,10 @@ maintainer's stack first, or the two share it.
   `/api/docs` (Day 17), `apps_db` in Terraform (Day 25) and the issuer (Day 39) were missing
   from the review list; Track C missed six files; no criterion had an ID or a tag; the Verify
   could not run on a fresh clone.
+- **Defect** — found: auditor · cause: spec · C28.5 asked for "every service healthy", but
+  identity-service had no healthcheck: Day 40 handed it to "Day 34's probes", and Day 34 is a
+  Helm day that will be rewritten. Now Track E and C28.14. The plan-auditor's whole-plan report
+  (Track D) also found five items missing from the review list; added above.
 - **Hand-off** H28.1 → the maintainer: once Track A1 is merged, replace the required "Backend
   gate" with "Identity Service gate" when Track C renames the job, and add "Application Service
   gate", which Day 25 left with the maintainer.
