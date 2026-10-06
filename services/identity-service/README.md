@@ -102,7 +102,7 @@ Stage 1 compiles the JAR in a Maven image; stage 2 copies just that JAR into a s
 Pull the published image from GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/<org>/<repo>/backend:latest
+docker pull ghcr.io/<org>/<repo>/identity-service:latest
 ```
 
 Run it, pointing at your database:
@@ -113,7 +113,7 @@ docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=identit
   -e DB_IDENTITY_USER=identity_user -e DB_IDENTITY_PASSWORD=<password> \
   -v /path/to/keys:/run/keys:ro -e JWT_PRIVATE_KEY_FILE=/run/keys/private.pem \
   -e SERVICE_JWT_PRIVATE_KEY_FILE=/run/keys/service.pem \
-  ghcr.io/<org>/<repo>/backend:latest
+  ghcr.io/<org>/<repo>/identity-service:latest
 ```
 
 Two things to watch:
