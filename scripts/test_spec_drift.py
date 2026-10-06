@@ -573,6 +573,17 @@ Days keep their numbers; they run in this order:
         self.assertEqual(sd.track_names("| 0a | | Work |\n| 0b | | Work |\n| A | | Work |"), ["0a", "0b", "A"])
         self.assertEqual(sd.merged_tracks(["day-20/track-0a-jobs-db-seams"], ["0a", "0b", "A"]), ["0a"])
 
+    def test_a_branch_that_names_no_day_is_read_by_its_title(self):
+        # #321, Day 28's Track D, came from a branch that named no day.
+        pr = dict(headRefName="claude/focused-bell-qqwqdx",
+                  title="KAN-82 Day 28 track D: stopping-point review, plan changed after Phase 5")
+        self.assertEqual(sd.merged_tracks([sd.day_branch(pr)], ["0", "A1", "E", "D"]), ["D"])
+        # A day's own branch wins over its title, and a title that names no track changes nothing.
+        own = dict(headRefName="day-28/track-e-KAN-84-identity-healthcheck", title="Day 28 track D: wrong")
+        self.assertEqual(sd.day_branch(own), own["headRefName"])
+        other = dict(headRefName="claude/focused-sagan-96xo1w", title="identity-service README: pull the image")
+        self.assertEqual(sd.day_branch(other), other["headRefName"])
+
 
 if __name__ == "__main__":
     unittest.main()

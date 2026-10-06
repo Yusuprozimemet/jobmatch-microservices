@@ -187,6 +187,18 @@ def day_of(path):
     return int(m.group(1)) if m else None
 
 
+TITLED_TRACK = re.compile(r"\bDay (\d{2}) track ([0-9A-Za-z]+):")
+
+
+def day_branch(pr):
+    """The branch a PR is read by. One whose branch names no day but whose title names its track
+    is read as that track's branch: #321, Day 28's Track D, was opened from
+    `claude/focused-bell-qqwqdx`, and the day showed D unmerged. CI runs stay on the real branch."""
+    branch = pr["headRefName"]
+    m = None if day_of(branch) else TITLED_TRACK.search(pr.get("title") or "")
+    return f"day-{m.group(1)}/track-{m.group(2).lower()}-titled" if m else branch
+
+
 def code_like(tok):
     return bool(re.search(r"[a-z][A-Z]", tok)) or ("_" in tok.strip("_") and tok.lower() == tok)
 
@@ -252,7 +264,7 @@ def verification(prs, runs):
     for p in sorted(prs.values(), key=lambda p: p["number"]):
         if p.get("state") == "MERGED":
             pushes, failed, failed_in = ci.get(p["headRefName"], (0, 0, []))
-            out.append(dict(number=p["number"], day=day_of(p["headRefName"]), kind=kind(p["title"], p["headRefName"]),
+            out.append(dict(number=p["number"], day=day_of(day_branch(p)), kind=kind(p["title"], day_branch(p)),
                             breaks=break_state(p.get("body"), p["number"]), pushes=pushes, failed=failed, failed_in=failed_in))
     return out
 
@@ -558,7 +570,7 @@ def unopened_tracks(day_prs):
     """Tracks a day's PRs name that no branch of the day ever did: #298 announced E1c, and the day
     read as done for a day before #305 opened it. A branch covers the tracks it begins (`track-e1`
     covers E1c) and those that begin it (`track-b` was Day 22's B1). Only letters a branch uses count."""
-    branches = {m.group(1) for p in day_prs if (m := re.search(r"/track-([0-9a-z]+?)(?:-|$)", p["headRefName"]))}
+    branches = {m.group(1) for p in day_prs if (m := re.search(r"/track-([0-9a-z]+?)(?:-|$)", day_branch(p)))}
     found = {}
     for p in sorted(day_prs, key=lambda p: p["number"]):
         for t in TRACK_NAMED.findall(p.get("body") or ""):
@@ -681,8 +693,8 @@ def roadmap(snaps, prs, blobs):
         tracks = track_names(section(text, "Tracks"))
         work = {r.split("|")[1].strip(): r.split("|")[3].strip() for r in section(text, "Tracks").splitlines()
                 if TRACK_ROW.match(r)}
-        mine = sorted((p for p in merged if p["headRefName"].startswith(f"day-{d:02d}/")), key=lambda p: p["number"])
-        done_tracks = merged_tracks([p["headRefName"] for p in mine], tracks)
+        mine = sorted((p for p in merged if day_branch(p).startswith(f"day-{d:02d}/")), key=lambda p: p["number"])
+        done_tracks = merged_tracks([day_branch(p) for p in mine], tracks)
         worked = sorted(s["date"] for s in snaps if s["pr"] in {p["number"] for p in mine})
         ticked, total = crit.count("- [x]"), len(CRITERION.findall(crit))
         exp = re.search(r"Expected PRs:\*\* *(\d+)", text)
@@ -697,9 +709,9 @@ def roadmap(snaps, prs, blobs):
                          expected_first=int(exp0.group(1)) if exp0 else None,
                          tracks=tracks, track_work=work, tracks_merged=done_tracks,
                          tracks_unopened=unopened_tracks([p for p in prs.values()
-                                                          if p["headRefName"].startswith(f"day-{d:02d}/")]),
-                         track_prs=sum(kind(p["title"], p["headRefName"]) == "code" for p in mine),
-                         prs=[dict(number=p["number"], kind=kind(p["title"], p["headRefName"]), title=p["title"]) for p in mine],
+                                                          if day_branch(p).startswith(f"day-{d:02d}/")]),
+                         track_prs=sum(kind(p["title"], day_branch(p)) == "code" for p in mine),
+                         prs=[dict(number=p["number"], kind=kind(p["title"], day_branch(p)), title=p["title"]) for p in mine],
                          criteria=dict(total=total, ticked=ticked, new=crit.count("**new**"), hold=crit.count("**hold**")),
                          worked=[worked[0], worked[-1]] if worked else None,
                          evidence_format=in_evidence_format(ev),

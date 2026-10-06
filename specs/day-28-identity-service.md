@@ -217,9 +217,10 @@ line, as Days 21 and 25 did.
       plan, and each item on the list above kept, dropped or handed on (a `Hand-off` line each),
       with `plan.md` changed or confirmed. Red today: no review.
       #321: the review below, H28.2–H28.14, and `plan.md`'s "Course correction after Phase 5".
-- [ ] C28.13 **new** — Tag `phase-5` on the closing merge. Red today: `git tag` lists phase-2,
+- [x] C28.13 **new** — Tag `phase-5` on the closing merge. Red today: `git tag` lists phase-2,
       phase-2.1, phase-4.
-      On this PR's merge commit, after "merged".
+      `phase-5` on fa4e662, #324's merge commit: `git tag` lists phase-2, phase-2.1, phase-4,
+      phase-5.
 - [x] C28.14 **new** — identity-service has a compose healthcheck and the gateway waits for it:
       `docker compose --env-file .env.example config` shows a `healthcheck` under
       `identity-service` and `condition: service_healthy` for it under `api-gateway`, and on
@@ -424,7 +425,7 @@ phase table and its Kubernetes line go to this day's closing PR.
     clone. The mechanical half was run at the close on 6b2a994: a fresh `-p day28` volume, with
     images built before, `up --wait` in 100 s, then the mart step and the C28.5 walk. That is not
     the criterion. H28.18.
-  - **C28.13 waits for the merge:** the tag goes on this PR's merge commit.
+  - **C28.13 waited for the merge:** `phase-5` went on #324's merge commit, fa4e662.
 - **Defect** — found: review (Track A2) · cause: spec · C28.5 and the Verify could not pass on a
   fresh clone: `/api/jobs` is 500 until a mart is loaded, and neither named the step. The Verify
   above now does.
