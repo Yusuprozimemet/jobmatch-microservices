@@ -85,6 +85,15 @@ services:
       EVENTS_SNS_SECRET_KEY: test
     volumes:
       - jwt-keys:/run/keys:ro
+    # Day 28: healthy once readiness is UP on the management port 9090, as the other services;
+    # the gateway waits on it.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 120s
+      start_interval: 1s
     # No published port (Day 16): the gateway below is the way in, on 8080. 9090, the management
     # port, is not published either; Prometheus reaches it over the compose network.
     depends_on:
@@ -281,7 +290,7 @@ services:
       start_interval: 1s
     depends_on:
       identity-service:
-        condition: service_started
+        condition: service_healthy
       job-service:
         condition: service_healthy
       matching-service:
