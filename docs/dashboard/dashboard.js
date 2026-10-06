@@ -683,8 +683,8 @@ function drawHandOffs() {
 }
 
 /* ---------- conclusion ---------- */
-// Everything here comes from the README at the head of main or from git, so it cannot go stale
-// between refreshes. When the README falls behind the phases, the panel says so.
+// Everything here comes from the lab notebook at the head of main or from git, so it cannot go
+// stale between refreshes. When the notebook falls behind the phases, the panel says so.
 function drawConclusion() {
   const days = DATA.days, now = DATA.now, { reads, measured } = DATA.conclusion;
   const phases = [...new Set(days.map(d => d.phase))].filter(p => p != null);
@@ -693,8 +693,8 @@ function drawConclusion() {
   document.getElementById("conclusion-eyebrow").textContent = closed < 0
     ? "Conclusion · no phase closed yet"
     : `Conclusion · after Phase ${closed} · ${N - 1} merges`;
-  const behind = !read ? `<p class="stale">The README has no phase read yet.</p>`
-    : read.phase < closed ? `<p class="stale">The README's latest read is from the end of Phase ${read.phase}; Phase ${closed} has closed since and has none yet.</p>` : "";
+  const behind = !read ? `<p class="stale">The lab notebook has no phase read yet.</p>`
+    : read.phase < closed ? `<p class="stale">The lab notebook's latest read is from the end of Phase ${read.phase}; Phase ${closed} has closed since and has none yet.</p>` : "";
   document.getElementById("read").innerHTML = behind + (read
     ? read.text.split(/\n\s*\n/).map(p => `<p>${md(p.replace(/\s*\n\s*/g, " "))}</p>`).join("")
     : "");
@@ -719,7 +719,7 @@ function drawConclusion() {
   document.getElementById("measured").innerHTML = measured.length
     ? `<thead><tr><th>Question</th><th>Evidence so far</th></tr></thead><tbody>` +
       measured.map(([q, e]) => `<tr><td class="t">${md(q)}</td><td class="t">${md(e)}</td></tr>`).join("") + "</tbody>"
-    : `<tbody><tr><td class="t">The README has no measurement table.</td></tr></tbody>`;
+    : `<tbody><tr><td class="t">The lab notebook has no measurement table.</td></tr></tbody>`;
 }
 
 /* ---------- tokens ---------- */
