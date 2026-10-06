@@ -31,8 +31,8 @@ Day 28 was the stopping point. The plan-auditor read the whole plan against the 
 (`specs/day-28-identity-service.md`, Notes), and the maintainer chose the course:
 
 - **Phases 0–5 delivered what this plan asked of them.** `backend/` is gone, five services
-  run behind the gateway, and the Day 1–4 `contract/` suite still passes, with one approved
-  edit (Day 25's).
+  run behind the gateway, and the Day 1–4 `contract/` suite still passes, with two approved
+  edits (Day 40 moved `ObservabilityIT` out; Day 25's).
 - **Days 32–37 contradict this plan.** They are drafts for Azure and Kubernetes: Pulumi,
   Helm, Argo CD, a blob backend for state. *Target cloud* below rules out each of them. They
   are rewritten, not edited.
@@ -45,7 +45,7 @@ Day 28 was the stopping point. The plan-auditor read the whole plan against the 
   the dead posting seam and `jobs-url`, and job-service's mandatory `BACKEND_KEY_SET_URL`.
   It brings the three role-setup copies to the same CONNECT grants, and adds the missing
   null-reason batch test. It gives every service the structured production logging that only
-  identity has.
+  identity has, stops identity logging emails, and scrapes application-service's metrics.
 - **Phase 7 is rewritten for ECS on Fargate as about four days, numbered 32–35:**
   1. IaC with the data stores (RDS, DynamoDB, SNS/SQS with DLQ retention and the depth
      alarm).
@@ -338,6 +338,7 @@ links hold; they run in this order, and the dashboard follows it:
 3. Phase 4: Day 41 (the profile endpoint and user id, split out of Day 24) first, then Days 21,
    22 (no dual write), 23, 24.
 4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
-5. The cleanup day (course correction after Phase 5), a new day spec numbered from 42.
+5. The cleanup day (course correction after Phase 5): its spec is written next, numbered
+   after the last.
 6. Phase 7 rewritten as Days 32–35 for ECS on Fargate; Days 36–37 dropped.
 7. Phase 6 (Days 29–31), after Phase 7, or cut.
