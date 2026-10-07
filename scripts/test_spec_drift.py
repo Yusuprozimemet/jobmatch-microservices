@@ -36,6 +36,9 @@ class Repo:
         """One commit, standing in for one merge on main."""
         for name, text in files.items():
             full = os.path.join(self.path, name)
+            if text is None:  # deleted, or moved when the new path is in the same merge
+                os.remove(full)
+                continue
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, "w", encoding="utf-8", newline="\n") as f:
                 f.write(text)
@@ -412,6 +415,34 @@ class RemovalTest(unittest.TestCase):
             # B.txt is not *.java, other/ is not under backend/, and pom.txt is not under */src/.
             self.assertEqual(run(0), [("backend", [2, 0, 1]), ("backend", [0, 0, 1])])
             self.assertEqual(run(1), [("backend", [0, 1]), ("backend", [0, 1])])
+        finally:
+            repo.close()
+
+    def test_a_path_follows_a_move_and_a_parent_of_it_also_reads_where_it_went(self):
+        moves = [("backend/jobs", "services/job-service"), ("backend", "services/identity-service")]
+        self.assertEqual(sd.follow("backend/jobs/src", moves), ["services/job-service/src"])
+        self.assertEqual(sd.follow("backend/docs", moves), ["services/identity-service/docs"])
+        self.assertEqual(sd.follow("backend/*/src/main", moves),
+                         ["services/job-service/src/main", "services/identity-service/*/src/main"])
+        self.assertEqual(sd.follow("backend", moves[:1]), ["services/job-service", "backend"])
+        self.assertEqual(sd.follow("docker-compose.yml", moves), ["docker-compose.yml"])
+
+    def test_a_check_reads_moved_code_counts_its_files_and_lists_its_lines_on_the_last_merge(self):
+        repo = Repo().merge({"backend/jobs/src/A.java": "class A {}\n", "backend/app/src/B.java": "class B {}\n"})
+        repo.merge({"backend/jobs/src/A.java": None, "services/job-service/src/A.java": "// TODO day-01 here\n"})
+        repo.merge({"backend/app/src/B.java": None, "services/job-service/src/A.java": "class A {}\n"})
+        def run(moved):
+            days = [dict(day=1, ended_at=0, removal_checks=sd.removal_checks(REMOVALS))]
+            return repo.inside(lambda blobs: sd.removal_history(days, repo.snaps, blobs, moved))[1]
+        try:
+            # Merge 2's tree has no backend/ left: unfollowed, the check reads nothing and passes.
+            still = run([])
+            self.assertEqual((still["files"], still["hits"]), ([2, 1, 0], [0, 0, 0]))
+            followed = run([(1, "backend/jobs", "services/job-service")])
+            self.assertEqual((followed["files"], followed["hits"], followed["found"]), ([2, 2, 1], [0, 1, 0], []))
+            repo.merge({"services/job-service/src/A.java": "x\n// TODO day-01 again\n"})
+            self.assertEqual(run([(1, "backend/jobs", "services/job-service")])["found"],
+                             [dict(path="services/job-service/src/A.java", line=2, text="// TODO day-01 again")])
         finally:
             repo.close()
 
