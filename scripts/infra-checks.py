@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""
+Reads plan JSON (terraform show -json) and validates infrastructure criteria.
+With --localstack, also checks applied state and resources against specifications.
+Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
+and C32.5 (secret sweep).
+Track B adds network/database checks; Track C adds bus/scores.
+Exits 1 with a list of failures, each prefixed with criterion ID.
+"""
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any, Generator
+
+
+def find_blocks(content: str, header: str) -> list[str]:
+    """Find each block with the given header (e.g. 'backend "s3"' or 'provider "aws"')
+    and return the text between its { and the matching } by counting braces.
+    header is matched with flexible whitespace via regex.
+    """
+    blocks = []
+    # Build regex that allows flexible whitespace between header parts
+    header_pattern = r'\s+'.join(re.escape(p) for p in header.split()) + r'\s*\{'
+
+    pattern = f'({header_pattern})'
+
+    for match in re.finditer(pattern, content, re.DOTALL):
+        brace_start = match.end() - 1
+        # Count braces to find the matching closing brace
+        brace_count = 1
+        brace_end = brace_start + 1
+        while brace_end < len(content) and brace_count > 0:
+            if content[brace_end] == "{":
+                brace_count += 1
+            elif content[brace_end] == "}":
+                brace_count -= 1
+            brace_end += 1
+
+        block_content = content[brace_start + 1:brace_end - 1]
+        blocks.append(block_content)
+
+    return blocks
+
+
+def resources(plan: dict) -> Generator[dict, None, None]:
+    """Yield every resource dict in planned_values.root_module recursively."""
+    if "root_module" not in plan.get("planned_values", {}):
+        return
+
+    def walk_module(module: dict):
+        if "resources" in module:
+            for resource in module["resources"]:
+                yield resource
+        if "child_modules" in module:
+            for child in module["child_modules"]:
+                yield from walk_module(child)
+
+    yield from walk_module(plan["planned_values"]["root_module"])
+
+
+def config_resources(plan: dict) -> Generator[dict, None, None]:
+    """Yield every resource dict in configuration.root_module recursively with expressions."""
+    if "configuration" not in plan:
+        return
+
+    def walk_module(module: dict):
+        if "resources" in module:
+            for resource in module["resources"]:
+                yield resource
+        if "module_calls" in module:
+            for module_name, module_call in module["module_calls"].items():
+                if "module" in module_call:
+                    yield from walk_module(module_call["module"])
+
+    yield from walk_module(plan["configuration"]["root_module"])
+
+
+def check_c32_2(plan: dict) -> list[str]:
+    """Check bootstrap plan: S3 bucket, versioning, public access block, encryption, and budget."""
+    failures = []
+
+    # Find S3 buckets and related resources
+    buckets = []
+    versionings = []
+    access_blocks = []
+    encryptions = []
+
+    for resource in resources(plan):
+        if resource["type"] == "aws_s3_bucket":
+            buckets.append(resource)
+        elif resource["type"] == "aws_s3_bucket_versioning":
+            versionings.append(resource)
+        elif resource["type"] == "aws_s3_bucket_public_access_block":
+            access_blocks.append(resource)
+        elif resource["type"] == "aws_s3_bucket_server_side_encryption_configuration":
+            encryptions.append(resource)
+
+    # Check exactly one bucket
+    if len(buckets) != 1:
+        failures.append(f"C32.2 expected exactly 1 aws_s3_bucket, got {len(buckets)}")
+        return failures
+
+    bucket = buckets[0]
+    bucket_name = bucket["values"].get("bucket", "unknown")
+
+    # Check versioning
+    versioning_found = False
+    for v in versionings:
+        if v["values"].get("bucket") == bucket_name:
+            versioning_found = True
+            status = v["values"].get("versioning_configuration", [{}])[0].get("status")
+            if status != "Enabled":
+                failures.append(f"C32.2 {v['address']} (bucket {bucket_name}): status {status}, want Enabled")
+
+    if not versioning_found:
+        failures.append(f"C32.2 aws_s3_bucket_versioning for bucket {bucket_name} not found")
+
+    # Check public access block
+    access_block_found = False
+    for ab in access_blocks:
+        if ab["values"].get("bucket") == bucket_name:
+            access_block_found = True
+            values = ab["values"]
+            if not all([
+                values.get("block_public_acls"),
+                values.get("block_public_policy"),
+                values.get("ignore_public_acls"),
+                values.get("restrict_public_buckets"),
+            ]):
+                failures.append(f"C32.2 {ab['address']} (bucket {bucket_name}): not all four blocks true")
+
+    if not access_block_found:
+        failures.append(f"C32.2 aws_s3_bucket_public_access_block for bucket {bucket_name} not found")
+
+    # Check encryption
+    encryption_found = False
+    for enc in encryptions:
+        if enc["values"].get("bucket") == bucket_name:
+            encryption_found = True
+            rules = enc["values"].get("rule", [])
+            if not rules:
+                failures.append(f"C32.2 {enc['address']} (bucket {bucket_name}): missing or empty sse_algorithm")
+            else:
+                rule = rules[0]
+                apply_default = rule.get("apply_server_side_encryption_by_default", [])
+                if not apply_default or not apply_default[0].get("sse_algorithm"):
+                    failures.append(f"C32.2 {enc['address']} (bucket {bucket_name}): missing or empty sse_algorithm")
+
+    if not encryption_found:
+        failures.append(f"C32.2 aws_s3_bucket_server_side_encryption_configuration for bucket {bucket_name} not found")
+
+    # Check budget
+    budgets = [r for r in resources(plan) if r["type"] == "aws_budgets_budget"]
+    if len(budgets) != 1:
+        failures.append(f"C32.2 expected exactly 1 aws_budgets_budget, got {len(budgets)}")
+        return failures
+
+    budget = budgets[0]
+    values = budget["values"]
+    budget_name = values.get("name", "unknown")
+
+    if values.get("budget_type") != "COST":
+        failures.append(f"C32.2 {budget['address']} ({budget_name}): budget_type {values.get('budget_type')}, want COST")
+
+    if values.get("time_unit") != "MONTHLY":
+        failures.append(f"C32.2 {budget['address']} ({budget_name}): time_unit {values.get('time_unit')}, want MONTHLY")
+
+    # Check that limit_amount and notification email are variables in config
+    config_found = False
+    for config_res in config_resources(plan):
+        if config_res["type"] == "aws_budgets_budget":
+            config_found = True
+            config_values = config_res.get("expressions", {})
+
+            # Check limit_amount references a variable
+            limit_expr = config_values.get("limit_amount", {})
+            if not isinstance(limit_expr, dict) or "references" not in limit_expr:
+                failures.append(f"C32.2 {config_res['address']} ({budget_name}): limit_amount does not reference a variable")
+            else:
+                refs = limit_expr.get("references", [])
+                if not any("var." in str(r) for r in refs):
+                    failures.append(f"C32.2 {config_res['address']} ({budget_name}): limit_amount does not reference a var.")
+
+            # Check notification has email and it references a variable
+            notifications = config_values.get("notification", [])
+            if not notifications:
+                failures.append(f"C32.2 {config_res['address']} ({budget_name}): no notification block")
+            else:
+                notification_has_var = False
+                for notif in notifications:
+                    email_expr = notif.get("subscriber_email_addresses", {})
+                    if isinstance(email_expr, dict) and "references" in email_expr:
+                        refs = email_expr.get("references", [])
+                        if any("var." in str(r) for r in refs):
+                            notification_has_var = True
+                            break
+                if not notification_has_var:
+                    failures.append(f"C32.2 {config_res['address']} ({budget_name}): notification subscriber_email_addresses does not reference a var.")
+
+    return failures
+
+
+def check_c32_3_text(bootstrap_dir: str, main_dir: str, localstack_dir: str, bootstrap_plan: dict | None = None) -> list[str]:
+    """Check backend and skip_* flags in text (grep), and bootstrap bucket matches main backend."""
+    failures = []
+
+    # Parse main root backends
+    main_backends = parse_backends(main_dir)
+    if len(main_backends) != 1:
+        failures.append(f"C32.3 main root: expected 1 s3 backend, got {len(main_backends)}")
+    elif main_backends[0].get("type") != "s3":
+        failures.append(f"C32.3 main root: expected s3 backend, got {main_backends[0].get('type')}")
+    else:
+        backend = main_backends[0]
+
+        # Check bucket literal
+        if "bucket" not in backend:
+            failures.append("C32.3 main root backend: bucket not found")
+
+        # Check use_lockfile = true
+        if backend.get("use_lockfile") != "true":
+            failures.append(f"C32.3 main root backend: use_lockfile {backend.get('use_lockfile')}, want true")
+
+        # Check no dynamodb_table
+        if "dynamodb_table" in backend:
+            failures.append(f"C32.3 main root backend: has dynamodb_table, should not")
+
+    # Parse localstack root backends
+    localstack_backends = parse_backends(localstack_dir)
+    if len(localstack_backends) != 1:
+        failures.append(f"C32.3 localstack root: expected 1 s3 backend, got {len(localstack_backends)}")
+    else:
+        ls_backend = localstack_backends[0]
+
+        # Check it has same bucket, key, region, use_lockfile
+        if main_backends:
+            main_backend = main_backends[0]
+            if ls_backend.get("bucket") != main_backend.get("bucket"):
+                failures.append(f"C32.3 localstack backend bucket {ls_backend.get('bucket')} != main {main_backend.get('bucket')}")
+            if ls_backend.get("key") != main_backend.get("key"):
+                failures.append(f"C32.3 localstack backend key {ls_backend.get('key')} != main {main_backend.get('key')}")
+            if ls_backend.get("region") != main_backend.get("region"):
+                failures.append(f"C32.3 localstack backend region {ls_backend.get('region')} != main {main_backend.get('region')}")
+            if ls_backend.get("use_lockfile") != main_backend.get("use_lockfile"):
+                failures.append(f"C32.3 localstack backend use_lockfile {ls_backend.get('use_lockfile')} != main {main_backend.get('use_lockfile')}")
+
+        # Check use_path_style = true
+        if ls_backend.get("use_path_style") != "true":
+            failures.append(f"C32.3 localstack backend: use_path_style {ls_backend.get('use_path_style')}, want true")
+
+    # Check bootstrap has no backend
+    bootstrap_backends = parse_backends(bootstrap_dir)
+    if bootstrap_backends:
+        failures.append(f"C32.3 bootstrap: has backend blocks, should not")
+
+    # Check main root has no skip_* in non-override files
+    skip_flags = check_skip_flags(main_dir)
+    if skip_flags:
+        failures.append(f"C32.3 main root: has skip_* flags in provider: {', '.join(skip_flags)}")
+
+    # Check bootstrap bucket matches main backend bucket
+    if bootstrap_plan and main_backends:
+        bootstrap_bucket_name = None
+        for resource in resources(bootstrap_plan):
+            if resource["type"] == "aws_s3_bucket":
+                bootstrap_bucket_name = resource["values"].get("bucket")
+                break
+
+        main_backend_bucket = main_backends[0].get("bucket")
+        if bootstrap_bucket_name and main_backend_bucket:
+            if bootstrap_bucket_name != main_backend_bucket:
+                failures.append(f"C32.3 backend bucket {main_backend_bucket} is not the bootstrap's bucket {bootstrap_bucket_name}")
+
+    return failures
+
+
+def parse_backends(directory: str) -> list[dict]:
+    """Parse s3 backend blocks from .tf files (skip *_override.tf)."""
+    backends = []
+    dir_path = Path(directory)
+
+    if not dir_path.exists():
+        return backends
+
+    for tf_file in dir_path.glob("*.tf"):
+        if "_override.tf" in str(tf_file):
+            continue
+
+        content = tf_file.read_text(encoding="utf-8")
+
+        # Find all backend "s3" blocks using the helper
+        backend_blocks = find_blocks(content, 'backend "s3"')
+
+        for backend_content in backend_blocks:
+            backend = {"type": "s3"}
+
+            # Parse key = value pairs (handling HCL syntax)
+            for line in backend_content.split("\n"):
+                # Ignore lines starting with # or //
+                stripped = line.strip()
+                if stripped.startswith("#") or stripped.startswith("//"):
+                    continue
+
+                if "=" in stripped:
+                    # Handle lines with = sign
+                    key, value = stripped.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+
+                    # Skip nested blocks (endpoints = { ... })
+                    if value.startswith("{"):
+                        continue
+
+                    # Remove trailing comma
+                    value = value.rstrip(",")
+
+                    # Remove quotes if present
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                    elif value == "true" or value == "false":
+                        pass  # Keep as is
+
+                    backend[key] = value
+
+            backends.append(backend)
+
+    return backends
+
+
+def check_skip_flags(directory: str) -> list[str]:
+    """Check if provider block has skip_* flags as argument names."""
+    dir_path = Path(directory)
+    skip_flags = []
+
+    if not dir_path.exists():
+        return skip_flags
+
+    for tf_file in dir_path.glob("*.tf"):
+        if "_override.tf" in str(tf_file):
+            continue
+
+        content = tf_file.read_text(encoding="utf-8")
+        # Find provider "aws" blocks using the helper
+        provider_blocks = find_blocks(content, 'provider "aws"')
+
+        for provider_content in provider_blocks:
+            if "skip_" in provider_content:
+                # Extract only skip_* that are argument names (^\s*skip_\w+\s*=)
+                skip_pattern = r'^\s*skip_\w+(?=\s*=)'
+                found_skips = re.findall(skip_pattern, provider_content, re.MULTILINE)
+                skip_flags.extend([s.strip() for s in found_skips])
+
+    return skip_flags
+
+
+def check_c32_5_sweep(plan: dict, path_label: str) -> list[str]:
+    """Sweep for secrets: AWS access key IDs, private key headers, and password values."""
+    failures = []
+
+    # AWS access key ID pattern: AKIA or ASIA followed by 16 chars
+    access_key_pattern = re.compile(r'\b(AKIA|ASIA)[A-Z0-9]{16}\b')
+
+    # Private key header pattern
+    private_key_pattern = re.compile(r'-----BEGIN.*PRIVATE KEY-----')
+
+    def sweep_value(value: Any, path: str):
+        if isinstance(value, str):
+            if access_key_pattern.search(value):
+                failures.append(f"C32.5 {path_label} {path}: AWS access key ID found (not printing value)")
+            if private_key_pattern.search(value):
+                failures.append(f"C32.5 {path_label} {path}: Private key header found (not printing value)")
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                # Skip sensitivity markers: they mark password even when null
+                if k in ("after_sensitive", "before_sensitive", "sensitive_values", "after_unknown"):
+                    continue
+
+                new_path = f"{path}.{k}" if path else k
+                if k == "password" and v is not None:
+                    failures.append(f"C32.5 {path_label} {new_path}: password has a non-null value (not printing value)")
+                else:
+                    sweep_value(v, new_path)
+        elif isinstance(value, list):
+            for idx, item in enumerate(value):
+                new_path = f"{path}[{idx}]" if path else f"[{idx}]"
+                sweep_value(item, new_path)
+
+    sweep_value(plan, "")
+
+    return failures
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Validate Terraform infrastructure against criteria"
+    )
+    parser.add_argument("--bootstrap-plan", help="Path to bootstrap plan JSON")
+    parser.add_argument("--main-plan", help="Path to main root plan JSON")
+    parser.add_argument("--localstack", help="LocalStack endpoint URL (e.g., http://localhost:4566)")
+
+    args = parser.parse_args()
+
+    failures = []
+
+    bootstrap_plan: dict | None = None
+    main_plan: dict | None = None
+
+    # Track which checks ran
+    checks_run = []
+
+    # C32.2: Bootstrap plan checks
+    if args.bootstrap_plan:
+        checks_run.append("bootstrap plan")
+        try:
+            with open(args.bootstrap_plan, "r", encoding="utf-8") as f:
+                bootstrap_plan = json.load(f)
+            failures.extend(check_c32_2(bootstrap_plan))
+        except Exception as e:
+            failures.append(f"C32.2 error reading bootstrap plan: {e}")
+
+    # C32.3: Text checks
+    repo_root = Path(__file__).parent.parent
+    bootstrap_dir = repo_root / "infra" / "terraform" / "bootstrap"
+    main_dir = repo_root / "infra" / "terraform"
+    localstack_dir = repo_root / "infra" / "terraform" / "localstack"
+
+    if args.main_plan:
+        checks_run.append("main plan")
+        try:
+            with open(args.main_plan, "r", encoding="utf-8") as f:
+                main_plan = json.load(f)
+        except Exception as e:
+            failures.append(f"C32.3 error reading main plan: {e}")
+
+    failures.extend(check_c32_3_text(
+        str(bootstrap_dir),
+        str(main_dir),
+        str(localstack_dir),
+        bootstrap_plan
+    ))
+    checks_run.append("backends")
+
+    # C32.5: Secret sweep on bootstrap plan
+    if args.bootstrap_plan and bootstrap_plan:
+        failures.extend(check_c32_5_sweep(bootstrap_plan, "bootstrap-plan"))
+
+    # C32.5: Secret sweep on main plan
+    if args.main_plan and main_plan:
+        failures.extend(check_c32_5_sweep(main_plan, "main-plan"))
+
+    # C32.5: Secret sweep on LocalStack state
+    if args.localstack:
+        checks_run.append("LocalStack state")
+        try:
+            import boto3
+        except ImportError:
+            failures.append("C32.5 state: boto3 not available")
+        else:
+            # Get bucket and key from localstack backend config
+            localstack_backends = parse_backends(str(localstack_dir))
+            if not localstack_backends:
+                failures.append("C32.5 state: no LocalStack backend found")
+            else:
+                ls_backend = localstack_backends[0]
+                bucket = ls_backend.get("bucket")
+                key = ls_backend.get("key")
+                region = ls_backend.get("region", "eu-west-1")
+
+                if not bucket or not key:
+                    failures.append("C32.5 state: bucket or key not found in LocalStack backend")
+                else:
+                    s3_client = boto3.client(
+                        "s3",
+                        endpoint_url=args.localstack,
+                        region_name=region,
+                        aws_access_key_id="test",
+                        aws_secret_access_key="test"
+                    )
+                    try:
+                        response = s3_client.get_object(Bucket=bucket, Key=key)
+                        state_content = response["Body"].read().decode("utf-8")
+                        localstack_state = json.loads(state_content)
+                        failures.extend(check_c32_5_sweep(localstack_state, f"state s3://{bucket}/{key}"))
+                    except s3_client.exceptions.NoSuchKey:
+                        failures.append(f"C32.5 state s3://{bucket}/{key}: object not found")
+                    except Exception as e:
+                        failures.append(f"C32.5 state s3://{bucket}/{key}: {type(e).__name__}: {e}")
+
+    # Print results
+    if failures:
+        print(f"infra-checks: {len(failures)} failures")
+        for failure in failures:
+            print(failure)
+        sys.exit(1)
+    else:
+        checks_str = ", ".join(checks_run) if checks_run else "backends"
+        print(f"infra-checks: ok ({checks_str})")
+
+
+if __name__ == "__main__":
+    main()
