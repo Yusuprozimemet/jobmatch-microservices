@@ -4,8 +4,8 @@ JobMatch runs two separate schemas in the same Postgres database, owned by two d
 
 | Schema | Owned by | Purpose |
 | --- | --- | --- |
-| `app` | Backend (Flyway migrations in [`db/migration/`](../src/main/resources/db/migration)) | Accounts, profiles, saved jobs — everything the backend writes |
-| `analytics` (aka `mart`) | Data pipeline ([`data/dbt/`](../../data/dbt)) | Job postings and derived facts, published daily. The backend only reads it |
+| `app` | Backend (Flyway migrations in [`db/migration/`](../app/src/main/resources/db/migration)) | Accounts, profiles, saved jobs — everything the backend writes |
+| `analytics` (aka `mart`) | Data pipeline ([`data/dbt/`](../../../data/dbt)) | Job postings and derived facts, published daily. The backend only reads it |
 
 The backend never writes to `analytics`, and the pipeline never writes to `app`. The two are joined
 in application code, not in SQL — e.g. a saved job's `posting_id` (text) is looked up against
@@ -33,7 +33,7 @@ in application code, not in SQL — e.g. a saved job's `posting_id` (text) is lo
 
 ![analytics schema](analytics-schema.png)
 
-Published by dbt from [`data/dbt/models/marts/`](../../data/dbt/models/marts). All tables share
+Published by dbt from [`data/dbt/models/marts/`](../../../data/dbt/models/marts). All tables share
 `posting_id` — an md5 hash the pipeline derives from source + source job id, stable across daily
 publishes.
 

@@ -20,6 +20,8 @@ on:
       # IdentityDbConnectTest reads both to compare the three role-setup copies (Day 42).
       - "scripts/db-init/**"
       - "scripts/db-setup.py"
+      # The docs' link check below (Day 42).
+      - "scripts/check-links.py"
       - ".github/workflows/identity-service-ci-cd.yaml"
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
@@ -51,7 +53,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|scripts/db-init/|scripts/db-setup\.py$|\.github/workflows/identity-service-ci-cd\.yaml$)'
+          PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|scripts/db-init/|scripts/db-setup\.py$|scripts/check-links\.py$|\.github/workflows/identity-service-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
             echo run=true >> "$GITHUB_OUTPUT"; exit 0
@@ -67,6 +69,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      # Every relative link in identity's README and docs points at a file that exists (Day 42).
+      - name: Check the docs' links
+        run: python3 scripts/check-links.py services/identity-service/README.md services/identity-service/docs/*.md
 
       - name: Set up JDK
         uses: actions/setup-java@v5

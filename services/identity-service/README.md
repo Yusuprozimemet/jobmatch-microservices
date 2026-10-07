@@ -17,11 +17,11 @@ With the default `admin` / `password` credentials. Do not use those credentials 
 docker run --name hyf-postgres -e POSTGRES_DB=identity_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18.4-alpine
 ```
 
-> For a production-like setup instead, [`db-setup.py`](../scripts/db-setup.py) creates `identity_db` with an `app` schema and one schema per backend module (`identity`, `applications`, `matching`; `applications` empty since Day 25), `jobs_db` with the analytics schemas the pipeline publishes into (Day 20), and `apps_db`, application-service's (Day 25), and one least-privilege role for each, plus a read-only `jobs_user`, which job-service connects to `jobs_db` as. Run the app with `DB_USER=app_user` for the migrations and each module's role for its own connection (`DB_IDENTITY_USER=identity_user`, and so on), with the passwords the script prints.
+> For a production-like setup instead, [`db-setup.py`](../../scripts/db-setup.py) creates `identity_db` with an `app` schema and one schema per backend module (`identity`, `applications`, `matching`; `applications` empty since Day 25), `jobs_db` with the analytics schemas the pipeline publishes into (Day 20), and `apps_db`, application-service's (Day 25), and one least-privilege role for each, plus a read-only `jobs_user`, which job-service connects to `jobs_db` as. Run the app with `DB_USER=app_user` for the migrations and each module's role for its own connection (`DB_IDENTITY_USER=identity_user`, and so on), with the passwords the script prints.
 
 ### 2. Set up configuration
 
-Nothing to do if you used the command above: every setting in [`application.yaml`](src/main/resources/application.yaml) reads an environment variable and falls back to a local-development default, and those defaults match that container.
+Nothing to do if you used the command above: every setting in [`application.yaml`](app/src/main/resources/application.yaml) reads an environment variable and falls back to a local-development default, and those defaults match that container.
 
 To point at a different database, set the [`DB_*` variables](#environment-variables) rather than editing the YAML — in your IDE's run configuration, in your shell, or by copying [`.env.example`](.env.example) to `.env` and loading it (`set -a; source .env`, an IDE plugin, or `--env-file`). Spring Boot does not read `.env` by itself.
 
@@ -48,7 +48,7 @@ Many tools read this format, and Scalar turns it into a nice HTML page with all 
 | **Scalar UI** — browse and try endpoints   | http://localhost:8080/api/docs |
 | **OpenAPI spec** — for tools like Postman  | http://localhost:8080/api/docs/openapi.yaml |
 
-Both are public (see [`SecurityConfig`](src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java)). Change a controller, restart, refresh — your endpoint is there.
+Both are public (see [`SecurityConfig`](app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java)). Change a controller, restart, refresh — your endpoint is there.
 
 ---
 
@@ -79,7 +79,7 @@ docker build -t jobmatch-job-service:harness ../services/job-service
 > has to be running and the `DB_*` variables are ignored here. See
 > [Integration tests](#integration-tests).
 
-Check code style with Checkstyle ([`checkstyle.xml`](../checkstyle.xml)):
+Check code style with Checkstyle ([`checkstyle.xml`](../../checkstyle.xml)):
 
 ```bash
 ../mvnw checkstyle:check
@@ -126,7 +126,7 @@ The image sets `SPRING_PROFILES_DEFAULT=prod`, so it runs with the `prod` profil
 
 ## Environment variables
 
-All configuration lives in [`application.yaml`](src/main/resources/application.yaml). Each value reads an environment variable and falls back to a local-development default, so you only set what you need to change.
+All configuration lives in [`application.yaml`](app/src/main/resources/application.yaml). Each value reads an environment variable and falls back to a local-development default, so you only set what you need to change.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -137,7 +137,7 @@ All configuration lives in [`application.yaml`](src/main/resources/application.y
 | `DB_PASSWORD` | `password` | Its password |
 | `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path. Jobs, matching and applications connect from their services (Days 17, 21 and 25) |
 | `DB_IDENTITY_PASSWORD` | `password` | Its password |
-| `JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the RSA private key (PEM, PKCS#8, 2048 bits or more) tokens are signed with. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../scripts/jwt-key.sh) writes one, and compose sets this itself |
+| `JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the RSA private key (PEM, PKCS#8, 2048 bits or more) tokens are signed with. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../../scripts/jwt-key.sh) writes one, and compose sets this itself |
 | `SPRING_PROFILES_ACTIVE` | — | Active profile: `dev` or `prod`. None is active unless you set it; the Docker image defaults to `prod` |
 
 [`.env.example`](.env.example) lists the same variables as a starting point — copy it to `.env` (gitignored) and load it as described in [Quick start](#quick-start) step 2.
@@ -195,11 +195,11 @@ HTTP request → Controller → Service → Repository → PostgreSQL
 
 ### The `config` folder
 
-**[`SecurityConfig`](src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java)** — the filter chain every request passes through *before* reaching a controller. `/api/users/**`, `/api/docs/**` and `/error` are open; everything else needs authentication. CSRF, HTTP Basic and form login are off because this is a stateless JSON API. Note that a 401/403 raised here never reaches `GlobalExceptionHandler`.
+**[`SecurityConfig`](app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java)** — the filter chain every request passes through *before* reaching a controller. `/api/users/**`, `/api/docs/**` and `/error` are open; everything else needs authentication. CSRF, HTTP Basic and form login are off because this is a stateless JSON API. Note that a 401/403 raised here never reaches `GlobalExceptionHandler`.
 
-**[`GlobalExceptionHandler`](src/main/java/nl/hackyourfuture/project/backend/config/GlobalExceptionHandler.java)** — a `@RestControllerAdvice` catching exceptions from any controller, so you don't write try/catch everywhere. A failed `@Valid` check becomes a 400 with an RFC 9457 `ProblemDetail` listing the invalid fields. For a new error case add another `@ExceptionHandler(YourException.class)` method; Spring picks the closest matching type.
+**[`GlobalExceptionHandler`](shared/src/main/java/nl/hackyourfuture/project/backend/shared/web/GlobalExceptionHandler.java)** — a `@RestControllerAdvice` catching exceptions from any controller, so you don't write try/catch everywhere. A failed `@Valid` check becomes a 400 with an RFC 9457 `ProblemDetail` listing the invalid fields. For a new error case add another `@ExceptionHandler(YourException.class)` method; Spring picks the closest matching type.
 
-**[`OpenApiConfig`](src/main/java/nl/hackyourfuture/project/backend/config/OpenApiConfig.java)** — the title, version and server list shown in the docs, plus a customizer that sorts endpoints so the spec doesn't reshuffle between builds.
+**[`OpenApiConfig`](app/src/main/java/nl/hackyourfuture/project/backend/config/OpenApiConfig.java)** — the title, version and server list shown in the docs, plus a customizer that sorts endpoints so the spec doesn't reshuffle between builds.
 
 ---
 
@@ -214,7 +214,7 @@ So **your code is the source of truth** — no generation step, no file that can
 - **Free:** paths, methods, parameter names and types, DTO schemas, `required` from `@NotBlank`, lengths from `@Size`, format from `@Email`.
 - **You write:** `@Operation`, `@ApiResponse`, `@Parameter`, and `@Schema` descriptions and examples.
 
-Copy the pattern from [`UserController`](src/main/java/nl/hackyourfuture/project/backend/user/UserController.java). Document every status code your endpoint can return, not just the happy path.
+Copy the pattern from [`UserController`](identity/src/main/java/nl/hackyourfuture/project/backend/identity/user/UserController.java). Document every status code your endpoint can return, not just the happy path.
 
 To hand the spec to the frontend team, grab it while the app runs:
 
@@ -226,7 +226,7 @@ curl http://localhost:8080/api/docs/openapi.yaml -o openapi.yaml
 
 ## DB Migrations
 
-The schema is managed by **Flyway** in [`db/migration`](src/main/resources/db/migration). On startup it applies any migration that hasn't run yet, tracking them in a `flyway_schema_history` table — so everyone's schema matches, including production.
+The schema is managed by **Flyway** in [`db/migration`](app/src/main/resources/db/migration). On startup it applies any migration that hasn't run yet, tracking them in a `flyway_schema_history` table — so everyone's schema matches, including production.
 
 Name files `V<number>__<description>.sql` (**two** underscores): after `V1__init_schema.sql` comes `V2__add_orders_table.sql`.
 
@@ -236,7 +236,7 @@ Name files `V<number>__<description>.sql` (**two** underscores): after `V1__init
 
 ## Integration tests
 
-Every test extends [`IntegrationTest`](src/test/java/nl/hackyourfuture/project/backend/support/IntegrationTest.java) and gets the application on a random port, a migrated `app` schema, a seeded mart and a clean slate — with no setup of its own:
+Every test extends [`IntegrationTest`](app/src/test/java/nl/hackyourfuture/project/backend/support/IntegrationTest.java) and gets the application on a random port, a migrated `app` schema, a seeded mart and a clean slate — with no setup of its own:
 
 ```java
 class JobSearchTest extends IntegrationTest {
@@ -263,26 +263,26 @@ What the harness gives you:
 | `jdbc()` | The test's own `JdbcClient`, for state a builder does not cover and for asserting on stored rows. |
 | `ApiResponse` | `status()`, `body()`, `headers()`, and `at("/json/pointer")`. |
 
-Two rules keep these tests usable as the safety net for the [microservices split](../plan.md):
+Two rules keep these tests usable as the safety net for the [microservices split](../../plan.md):
 
 - **Assert on the HTTP contract, not on internals.** No application beans, no application DTOs — a test that deserialises with the same record the controller returned cannot notice a renamed field, and will not survive the endpoint moving to another service.
 - **Set up through the builders or `jdbc()`, never through a service.**
 
 ### The mart fixture
 
-`analytics.fct_postings`, `fct_postings_cities` and `fct_postings_skills` are built by the data pipeline and copied in by [`sync.py`](../data/src/publishing/sync.py) into `jobs_db`, job-service's own database. **Flyway does not create them**, so the tests do: [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) creates `jobs_db` in the same container and runs [`fixtures/analytics-schema.sql`](src/test/resources/fixtures/analytics-schema.sql) there as `analytics_user` — column for column from [`data/sql/job_schema.sql`](../data/sql/job_schema.sql), including `skills` and `cities` being `text` holding a JSON array rather than a nicer type.
+`analytics.fct_postings`, `fct_postings_cities` and `fct_postings_skills` are built by the data pipeline and copied in by [`sync.py`](../../data/src/publishing/sync.py) into `jobs_db`, job-service's own database. **Flyway does not create them**, so the tests do: [`PostgresContainer`](app/src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) creates `jobs_db` in the same container and runs [`fixtures/analytics-schema.sql`](app/src/test/resources/fixtures/analytics-schema.sql) there as `analytics_user` — column for column from [`data/sql/job_schema.sql`](../../data/sql/job_schema.sql), including `skills` and `cities` being `text` holding a JSON array rather than a nicer type.
 
-[`fixtures/analytics-seed.sql`](src/test/resources/fixtures/analytics-seed.sql) loads 24 postings before each test, with the edge cases mart queries trip over: a repost, a posting in two cities, a country in the city bridge, an empty skills array, and a closed posting. Add to the seed when a case is generally useful; use `aPosting()` when it belongs to one test, and `jobsJdbc()` to read the mart back.
+[`fixtures/analytics-seed.sql`](app/src/test/resources/fixtures/analytics-seed.sql) loads 24 postings before each test, with the edge cases mart queries trip over: a repost, a posting in two cities, a country in the city bridge, an empty skills array, and a closed posting. Add to the seed when a case is generally useful; use `aPosting()` when it belongs to one test, and `jobsJdbc()` to read the mart back.
 
 ### The database
 
-One container per run, started by [`PostgresContainer`](src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) and never restarted. Between tests, [`TestDatabase`](src/test/java/nl/hackyourfuture/project/backend/support/TestDatabase.java) truncates every `app` table in `identity_db` — read from the catalogue, so a table a future migration adds is cleaned up without anyone editing that class — and reseeds the mart in `jobs_db`.
+One container per run, started by [`PostgresContainer`](app/src/test/java/nl/hackyourfuture/project/backend/support/PostgresContainer.java) and never restarted. Between tests, [`TestDatabase`](app/src/test/java/nl/hackyourfuture/project/backend/support/TestDatabase.java) truncates every `app` table in `identity_db` — read from the catalogue, so a table a future migration adds is cleaned up without anyone editing that class — and reseeds the mart in `jobs_db`.
 
 Do not add a second `@TestConfiguration` with its own container, and do not put `@MockitoBean` on a test that extends `IntegrationTest`: either one makes Spring build a second context, which boots the application again and costs more than the whole suite.
 
 ## CI/CD
 
-Every pull request touching `backend/**` runs [`backend-ci-cd.yaml`](../.github/workflows/backend-ci-cd.yaml), and so does every push to `main` that touches it:
+Every pull request runs [`identity-service-ci-cd.yaml`](../../.github/workflows/identity-service-ci-cd.yaml), and so does every push to `main` that touches `services/identity-service/**`:
 
 1. **`lint-and-test`** — `../mvnw checkstyle:check`, builds job-service's harness image, then `../mvnw verify`. Both must pass.
 2. **`build`** — builds the Docker image; only pushes to GHCR when the change lands on `main`.

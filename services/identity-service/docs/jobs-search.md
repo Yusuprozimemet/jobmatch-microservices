@@ -6,9 +6,9 @@ pipeline's output directly, so most of its complexity is really the shape of the
 through.
 
 Backend: job-service since Day 17,
-[`services/job-service/.../jobs/`](../../services/job-service/src/main/java/nl/hackyourfuture/project/backend/jobs).
-Frontend: [`app/jobs/`](../../frontend/src/app/jobs) and
-[`components/jobs/`](../../frontend/src/components/jobs). Endpoint contracts are in
+[`services/job-service/.../jobs/`](../../../services/job-service/src/main/java/nl/hackyourfuture/project/backend/jobs).
+Frontend: [`app/jobs/`](../../../frontend/src/app/jobs) and
+[`components/jobs/`](../../../frontend/src/components/jobs). Endpoint contracts are in
 [`api.md`](api.md).
 
 ---
@@ -131,7 +131,7 @@ commas, and an empty string when every value was excluded — which the UI rende
 specified"*. The saved-jobs list is the exception: it shows the mart's **raw** location text, so the
 same posting can read differently in two places.
 
-One leftover: [`JobFilters`](../../frontend/src/components/jobs/JobFilters.tsx) still splits each
+One leftover: [`JobFilters`](../../../frontend/src/components/jobs/JobFilters.tsx) still splits each
 option on `;` and takes the part before the first comma before showing it. The API has returned
 single city names since the switch to `fct_postings_cities`, so that split does nothing today. It is
 harmless but misleading — it implies the values are still composite.
@@ -168,7 +168,7 @@ Worth understanding before touching either half:
 
 1. **The backend** orders by `posted_date DESC` and cuts to 200.
 2. **The page** then re-sorts what it received by `ageDays` ascending
-   ([`sortJobsByFreshness`](../../frontend/src/lib/jobs.ts)), nulls last, original order as the
+   ([`sortJobsByFreshness`](../../../frontend/src/lib/jobs.ts)), nulls last, original order as the
    tie-break so the sort is stable.
 
 These usually agree, and they are not the same key: `posted_date` is when the posting says it was
@@ -183,8 +183,8 @@ There are two `formatPostedDate` implementations with different precedence:
 
 | Where | Prefers |
 | --- | --- |
-| [`lib/jobs.ts`](../../frontend/src/lib/jobs.ts), used by the search list | `ageDays` first, then the date |
-| [`lib/formatters.ts`](../../frontend/src/lib/formatters.ts), used by the detail page | the date first — recomputing the day count in the **browser's** calendar — and `ageDays` only as a fallback |
+| [`lib/jobs.ts`](../../../frontend/src/lib/jobs.ts), used by the search list | `ageDays` first, then the date |
+| [`lib/formatters.ts`](../../../frontend/src/lib/formatters.ts), used by the detail page | the date first — recomputing the day count in the **browser's** calendar — and `ageDays` only as a fallback |
 
 So the same posting can read "Posted 3 days ago" in the list and "Posted 5 days ago" on its own
 page, because one number is the source's and the other is arithmetic on the posted date. They should
@@ -201,7 +201,7 @@ be one function.
 reader what happened rather than the page 404ing on them.
 
 The page is a server component. A 404 from the backend is turned into Next's `notFound()` —
-rendering [`not-found.tsx`](../../frontend/src/app/jobs/[jobId]/not-found.tsx) — and anything else is
+rendering [`not-found.tsx`](../../../frontend/src/app/jobs/[jobId]/not-found.tsx) — and anything else is
 re-thrown to the error boundary, so "this job does not exist" and "the backend is down" do not look
 the same to the user.
 
@@ -215,7 +215,7 @@ string — becomes *"Application link unavailable"*. This is the one place the a
 came from an external source through the pipeline, and it is treated as untrusted. The link also
 carries `rel="noreferrer noopener"`.
 
-Below the description sits [`JobDetailsMatchSection`](../../frontend/src/components/jobs/JobDetailsMatchSection.tsx),
+Below the description sits [`JobDetailsMatchSection`](../../../frontend/src/components/jobs/JobDetailsMatchSection.tsx),
 which shows the user's match for this posting — but only if it is in their top 25, because it works
 by fetching `top-matches` and searching the result by id. See
 [`matching-profile.md`](matching-profile.md).
@@ -229,7 +229,7 @@ the server; anything that depends on who you are is client-side.**
 
 | Piece | Where it runs |
 | --- | --- |
-| Search results, filters, job details | Server components, fetched in [`jobs-server.ts`](../../frontend/src/lib/jobs-server.ts) with `cache: "no-store"` |
+| Search results, filters, job details | Server components, fetched in [`jobs-server.ts`](../../../frontend/src/lib/jobs-server.ts) with `cache: "no-store"` |
 | Bookmark buttons, match section | Client components, fetched with the session cookie |
 
 `jobs-server.ts` is marked `server-only` and talks to `BACKEND_API_URL` directly, bypassing the
@@ -239,12 +239,12 @@ user-specific can leak into a server-rendered page by accident.
 The jobs page fetches filters and results **in parallel** with `Promise.all`, so the slower of the
 two sets the page's latency rather than their sum.
 
-Each route has its boundaries: [`loading.tsx`](../../frontend/src/app/jobs/loading.tsx) renders a
+Each route has its boundaries: [`loading.tsx`](../../../frontend/src/app/jobs/loading.tsx) renders a
 skeleton in the real page layout rather than a spinner, so nothing jumps when the data lands, and
-[`error.tsx`](../../frontend/src/app/jobs/error.tsx) offers a `reset()` retry instead of a dead end.
+[`error.tsx`](../../../frontend/src/app/jobs/error.tsx) offers a `reset()` retry instead of a dead end.
 
 Saved state for a whole page of results is fetched **once**:
-[`JobResultsWithBookmarks`](../../frontend/src/components/jobs/JobResultsWithBookmarks.tsx) calls
+[`JobResultsWithBookmarks`](../../../frontend/src/components/jobs/JobResultsWithBookmarks.tsx) calls
 `GET /api/saved-jobs`, builds a `postingId → state` map, and hands each button its initial state. A
 list of twenty results costs one request, not twenty.
 

@@ -1,8 +1,8 @@
 # API reference
 
 Every route lives under `/api`. Requests and responses are JSON. The browser reaches the backend
-through the Next.js proxy ([`frontend/src/proxy.ts`](../../frontend/src/proxy.ts)) and then the API
-gateway ([`services/api-gateway`](../../services/api-gateway), Day 15), so the frontend and the API
+through the Next.js proxy ([`frontend/src/proxy.ts`](../../../frontend/src/proxy.ts)) and then the API
+gateway ([`services/api-gateway`](../../../services/api-gateway), Day 15), so the frontend and the API
 share one origin. The backend has no published port; the gateway, on 8080, is the only way in
 ([`architecture.md`](architecture.md)).
 
@@ -638,8 +638,8 @@ role that would have had to be built first. Everything user-facing is self-servi
 go.)
 
 **No `/api/terms` or `/api/privacy`.** The documents are static pages in the frontend
-([`/terms`](../../frontend/src/app/terms/page.tsx),
-[`/privacy`](../../frontend/src/app/privacy/page.tsx)). Serving prose from the API would buy nothing:
+([`/terms`](../../../frontend/src/app/terms/page.tsx),
+[`/privacy`](../../../frontend/src/app/privacy/page.tsx)). Serving prose from the API would buy nothing:
 it changes with a deploy, not with a request. What the backend contributes is the *record* of the
 agreement — `terms_accepted_at`, written at registration or by `accept-terms`.
 

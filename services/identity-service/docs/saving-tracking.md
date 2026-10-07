@@ -4,8 +4,8 @@ The feature that turns a job board into a job *tracker*: keep a posting, then mo
 stages of an application. It is also the smallest feature in the backend — one table with three
 columns — and most of what is worth writing down is about what that smallness costs.
 
-Code: application-service ([`services/application-service`](../../services/application-service), since Day 25) and, on the
-frontend, [`SavedJobsContent`](../../frontend/src/components/jobs/SavedJobsContent.tsx) plus the two
+Code: application-service ([`services/application-service`](../../../services/application-service), since Day 25) and, on the
+frontend, [`SavedJobsContent`](../../../frontend/src/components/jobs/SavedJobsContent.tsx) plus the two
 bookmark buttons. Endpoint contracts are in [`api.md`](api.md).
 
 ---
@@ -72,7 +72,7 @@ A Postgres enum, `job_state`, created in `V1`:
 `REJECTED` and `DECLINED` are deliberately separate: who ended it is the whole difference, and a
 tracker that collapses them cannot tell you anything useful about your own search.
 
-The labels live in [`saved-job-status.ts`](../../frontend/src/lib/saved-job-status.ts), not in the
+The labels live in [`saved-job-status.ts`](../../../frontend/src/lib/saved-job-status.ts), not in the
 backend. The API speaks the enum values; the UI decides that `SAVED` reads better as
 "Not Applied Yet".
 
@@ -187,9 +187,9 @@ Three surfaces, one API.
 
 | Surface | Component | What it does |
 | --- | --- | --- |
-| Search results | [`JobResultsWithBookmarks`](../../frontend/src/components/jobs/JobResultsWithBookmarks.tsx) → `SavedJobBookmarkButton` | One bookmark icon per result |
-| Job detail | [`SaveJobButton`](../../frontend/src/components/jobs/SaveJobButton.tsx) | A labelled save / remove control |
-| The tracker | [`SavedJobsContent`](../../frontend/src/components/jobs/SavedJobsContent.tsx) + `JobStatusSummary` | The list, the status dropdown per row, and the counts |
+| Search results | [`JobResultsWithBookmarks`](../../../frontend/src/components/jobs/JobResultsWithBookmarks.tsx) → `SavedJobBookmarkButton` | One bookmark icon per result |
+| Job detail | [`SaveJobButton`](../../../frontend/src/components/jobs/SaveJobButton.tsx) | A labelled save / remove control |
+| The tracker | [`SavedJobsContent`](../../../frontend/src/components/jobs/SavedJobsContent.tsx) + `JobStatusSummary` | The list, the status dropdown per row, and the counts |
 
 **Saved state is discovered by fetching the whole list.** There is no "is this one saved" endpoint,
 so a button that needs to know calls `getSavedJobs()` and searches it by id. In the results list that
@@ -259,5 +259,5 @@ break it down, never expose who.
 - **`updateSavedJobStatus` and `deleteSavedJob` interpolate the posting id into the URL** without
   `encodeURIComponent`, unlike every link in the UI. Harmless while ids are md5 hex; brittle if the
   pipeline ever changes what a `posting_id` looks like.
-- **[`frontend/src/lib/mocks/savedJobs.ts`](../../frontend/src/lib/mocks/savedJobs.ts) is dead
+- **[`frontend/src/lib/mocks/savedJobs.ts`](../../../frontend/src/lib/mocks/savedJobs.ts) is dead
   code** — nothing imports it. It dates from before the endpoints existed and should go.
