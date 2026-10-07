@@ -1,6 +1,5 @@
 package nl.hackyourfuture.project.backend.internal;
 
-import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.ShortlistFixture;
@@ -23,7 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code POST /internal/postings/shortlist} (Day 18): {@link PostingShortlist#shortlist} over HTTP,
+ * {@code POST /internal/postings/shortlist} (Day 18): job-service's shortlist query over HTTP,
  * to service tokens only, held to the order {@code ShortlistOrderIT} pins in process on the same
  * {@link ShortlistFixture}. No skills, or a limit outside 1-100, is a 400 rather than a failed or
  * unbounded query.
@@ -32,9 +31,6 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Autowired
     private AccessTokens accessTokens;
-
-    @Autowired
-    private ServiceToken serviceToken;
 
     private static final ObjectMapper JSON = JsonMapper.builder().build();
 
@@ -47,8 +43,8 @@ class PostingShortlistIT extends IntegrationTest {
     }
 
     @Test
-    void ranksTheFixtureAsTrackZeroPinnedItWithTheMonolithsOwnToken() {
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+    void ranksTheFixtureAsTrackZeroPinnedIt() {
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
@@ -66,7 +62,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void theWholeJsonBodyIsTheFixturesShortlist() {
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/shortlist",
                 REQUEST);
@@ -92,7 +88,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void skillsEmptyListIs400() {
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "skills", List.of(), "limit", ShortlistFixture.LIMIT));
@@ -102,7 +98,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void skillsMissingIs400() {
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "limit", ShortlistFixture.LIMIT));
@@ -112,7 +108,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void limit0Is400() {
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "skills", ShortlistFixture.SKILLS, "limit", 0));
@@ -122,7 +118,7 @@ class PostingShortlistIT extends IntegrationTest {
 
     @Test
     void limit101Is400() {
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/shortlist",
                 Map.of("city", ShortlistFixture.CITY, "skills", ShortlistFixture.SKILLS, "limit", 101));

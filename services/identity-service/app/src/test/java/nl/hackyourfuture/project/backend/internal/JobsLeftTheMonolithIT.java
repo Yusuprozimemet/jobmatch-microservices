@@ -1,14 +1,13 @@
 package nl.hackyourfuture.project.backend.internal;
 
-import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
+import nl.hackyourfuture.project.backend.support.TestServiceCaller;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Map;
 
@@ -19,9 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Uses {@code direct()} throughout, so it always talks to the monolith itself, gateway run or not.
  */
 class JobsLeftTheMonolithIT extends IntegrationTest {
-
-    @Autowired
-    private ServiceToken serviceToken;
 
     @ParameterizedTest
     @ValueSource(strings = {"/api/jobs", "/api/jobs/filters", "/api/jobs/seed-0001"})
@@ -51,8 +47,8 @@ class JobsLeftTheMonolithIT extends IntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"/internal/postings/batch", "/internal/postings/shortlist"})
-    void monolithServiceTokenPostingsPathsAnswer404(String path) {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
+    void aServiceTokenOnThePostingsPathsAnswers404(String path) {
+        ApiClient client = direct().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         ApiResponse response = client.post(path, Map.of());
 

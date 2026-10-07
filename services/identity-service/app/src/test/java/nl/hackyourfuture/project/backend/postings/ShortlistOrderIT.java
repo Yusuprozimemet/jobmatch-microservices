@@ -1,10 +1,9 @@
 package nl.hackyourfuture.project.backend.postings;
 
-import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.ShortlistFixture;
+import nl.hackyourfuture.project.backend.support.TestServiceCaller;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
@@ -20,15 +19,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ShortlistOrderIT extends IntegrationTest {
 
-    @Autowired
-    private ServiceToken serviceToken;
-
     @Test
     void ranksByMatchesThenDateThenIdOnePerRepostInTheCityUpToTheLimit() {
         ShortlistFixture.create(jobsJdbc());
 
         var response = inNetwork()
-                .withHeader("Authorization", "Bearer " + serviceToken.mint())
+                .withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token())
                 .post("/internal/postings/shortlist",
                         Map.of("city", ShortlistFixture.CITY, "skills", ShortlistFixture.SKILLS, "limit", ShortlistFixture.LIMIT));
 
