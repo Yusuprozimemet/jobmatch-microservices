@@ -34,10 +34,5 @@
 			<groupId>org.springframework</groupId>
 			<artifactId>spring-tx</artifactId>
 		</dependency>
-		<!-- The @Schema annotations on PageResponse. -->
-		<dependency>
-			<groupId>org.springdoc</groupId>
-			<artifactId>springdoc-openapi-starter-webmvc-scalar</artifactId>
-		</dependency>
 	</dependencies>
 </project>
