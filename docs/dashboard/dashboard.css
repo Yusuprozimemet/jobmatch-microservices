@@ -106,6 +106,7 @@ td.t { white-space: normal; min-width: 150px; }
 .tile.done { background: color-mix(in oklab, var(--close) 32%, var(--surface)); border-color: color-mix(in oklab, var(--close) 60%, var(--surface)); color: var(--ink); }
 .tile.active { background: color-mix(in oklab, var(--spec) 16%, var(--surface)); border: 2px solid var(--spec); color: var(--ink); font-weight: 600; }
 .tile.provisional { border-style: dashed; color: var(--muted); }
+.tile.unwritten { border: 2px dashed var(--spec); color: var(--ink); background: transparent; }
 .tile.closed { background: color-mix(in oklab, var(--close) 12%, var(--surface)); border: 1px dashed color-mix(in oklab, var(--close) 70%, var(--surface)); color: var(--ink); }
 .tile.ooo::before { content: ""; position: absolute; left: 0; top: 0; border-style: solid; border-width: 8px 8px 0 0; border-color: var(--ooo) transparent transparent transparent; border-top-left-radius: 5px; }
 .tile.stop::after { content: ""; position: absolute; right: 3px; top: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-2); }

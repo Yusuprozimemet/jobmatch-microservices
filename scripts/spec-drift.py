@@ -918,6 +918,17 @@ def build(data):
     return fill(page, data, "index.html")
 
 
+def unwritten(days, order):
+    """The cleanup day before its spec exists: its number, and the phase of the day it follows in
+    the run order, so the roadmap shows it where it runs."""
+    if CLEANUP not in order:
+        return None
+    phase = {d["day"]: d.get("phase") for d in days}
+    before = [d for d in order[:order.index(CLEANUP)] if d not in PLACEHOLDERS]
+    return dict(day=max(d for d in order if d not in PLACEHOLDERS) + 1,
+                phase=phase.get(before[-1]) if before else None, title="The cleanup day")
+
+
 def next_step(days, open_prs, order, stop):
     if open_prs:
         return "Waiting on " + ", ".join(f"#{p['number']} {p['title']}" for p in open_prs)
@@ -928,8 +939,7 @@ def next_step(days, open_prs, order, stop):
     if left[0] == PLATFORM:
         return "The platform step: write its day spec, numbered from 38 (plan.md, Course correction after Phase 2)"
     if left[0] == CLEANUP:
-        n = max(d for d in order if d not in PLACEHOLDERS) + 1
-        return f"The cleanup day: write its day spec, Day {n:02d} (plan.md, Course correction after Phase 5)"
+        return f"The cleanup day: write its day spec, Day {unwritten(days, order)['day']:02d} (plan.md, Course correction after Phase 5)"
     if stop is not None and order.index(left[0]) > order.index(stop):
         return f"Day {stop:02d} is done: stop and evaluate before going on (plan.md)"
     day = by_day[left[0]]
@@ -978,6 +988,7 @@ def main():
                    head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
                    current_day=next((d["day"] for d in days if d["status"] == "active"), None),
                    next_step=next_step(days, open_prs, order, stop), stop_after=stop,
+                   unwritten=unwritten(days, order),
                    open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
         data = json.dumps(dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
                                order=[d for d in order if d not in PLACEHOLDERS],

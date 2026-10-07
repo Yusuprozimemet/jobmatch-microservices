@@ -545,6 +545,10 @@ Days keep their numbers; they run in this order:
         self.assertEqual(order[order.index(28) + 1], sd.CLEANUP)
         days = sd.settle([a_day(28, kinds=["close"]), a_day(29)], [28, sd.CLEANUP, 29])
         self.assertIn("cleanup day: write its day spec, Day 30", sd.next_step(days, [], [28, sd.CLEANUP, 29], None))
+        days[0]["phase"], days[1]["phase"] = 5, 6
+        self.assertEqual(sd.unwritten(days, [28, sd.CLEANUP, 29]),
+                         dict(day=30, phase=5, title="The cleanup day"))  # the roadmap shows it after Day 28
+        self.assertIsNone(sd.unwritten(days, [28, 29]))
         order, _ = sd.run_order(plan, list(range(1, 40)))
         self.assertEqual(order[order.index(28) + 1], 39)  # written: the day takes the placeholder's place
         self.assertEqual(sd.run_order(plan.split("\n## Course correction")[0], list(range(1, 42)))[1], 28)
