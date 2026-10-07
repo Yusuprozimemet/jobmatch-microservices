@@ -10,7 +10,8 @@
 # from jobs_db. 20-jobs-db.sh creates that schema and jobs_db after this runs. No module reads
 # another's schema (Day 38), the rule db-setup.py applies; a volume created before Day 38 had
 # the grants, and each module's own migration revokes them. applications_user connects only to
-# apps_db (30-apps-db.sh) since Day 25.
+# apps_db (30-apps-db.sh) since Day 25. Only identity_user is granted CONNECT on identity_db
+# (Day 42): job-service reads jobs_db, and matching-service has no Postgres login.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
@@ -29,5 +30,5 @@ CREATE SCHEMA applications AUTHORIZATION applications_user;
 CREATE SCHEMA matching AUTHORIZATION matching_user;
 
 REVOKE CONNECT ON DATABASE :"identity_db" FROM PUBLIC;
-GRANT CONNECT ON DATABASE :"identity_db" TO identity_user, matching_user, jobs_user;
+GRANT CONNECT ON DATABASE :"identity_db" TO identity_user;
 SQL

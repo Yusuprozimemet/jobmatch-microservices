@@ -59,25 +59,6 @@ def read_mart(
     return columns, rows
 
 
-def read_backend_table(dsn: str, table: str, schema: str = "app") -> list[dict]:
-    """Read one of the backend's own tables.
-
-    The `app` schema is in `identity_db`, a different database from the one
-    publish writes to (`jobs_db`, Day 20), so `dsn` must name `identity_db`:
-    dsn_from_env() points at the mart's database and will not find `app`.
-
-    `analytics_user` has read and nothing else on the `app` schema, so the
-    worst a mistake here can do is return the wrong rows.
-    """
-    statement = SQL("select * from {}").format(Identifier(schema, table))
-    with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
-        cursor.execute(statement)
-        names = [column.name for column in cursor.description or []]
-        rows = [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
-    logger.info("read %d rows from %s.%s", len(rows), schema, table)
-    return rows
-
-
 def publish(
     dsn: str,
     schema: str,

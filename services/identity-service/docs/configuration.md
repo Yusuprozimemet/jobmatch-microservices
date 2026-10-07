@@ -286,8 +286,8 @@ databases, seven schemas, and one login role per owner.
 
 | Database | Schema | Owner role | Written by | Read by |
 | --- | --- | --- | --- | --- |
-| `project_db` | `app` | `app_user` | the backend's migrations, V1–V14 | everyone, read-only |
-| `project_db` | `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11). `applications` is empty since V16, and `applications_user` cannot connect here (Day 25) | its owner only (Day 38) |
+| `identity_db` | `app` | `app_user` | the backend's migrations, V1–V14; since V12–V14 it holds only Flyway's history | nobody else |
+| `identity_db` | `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11). `applications` is empty since V16, and only `identity_user` may connect here (Day 42) | its owner only (Day 38) |
 | `apps_db` | `applications` | `applications_user` | application-service (Day 25) | nobody else: no other role may connect |
 | `jobs_db` | `analytics` | `analytics_user` | the scheduled pipeline | `jobs_user` (job-service) and `analytics_dev_user`, read-only |
 | `jobs_db` | `analytics_dev` | `analytics_dev_user` | trainees, by hand | `jobs_user` and `analytics_user`, read-only |
@@ -295,7 +295,9 @@ databases, seven schemas, and one login role per owner.
 Each role has full access to what it owns and read-only access to the others in the same database,
 for existing and future objects, except the module schemas: no other login reads them, so a module
 that leaves the process takes a login that reads only its own data. A database set up before Day 38
-had those grants; each module's own migration revokes them. Only `jobs_user` and the two analytics
+had those grants; each module's own migration revokes them. Only `identity_user` may connect to
+`identity_db` (Day 42); `app_user`, which runs the migrations, connects as its member, and
+`db-setup.py` revokes what earlier runs granted the others. Only `jobs_user` and the two analytics
 roles may connect to `jobs_db` (Day 20); a `project_db` set up before then keeps its analytics
 schemas until [the runbook](../../docs/runbooks/jobs-db.md) drops them. **The separation is
 enforced by grants, not by agreement** — that is the whole point, and it is what makes "the backend

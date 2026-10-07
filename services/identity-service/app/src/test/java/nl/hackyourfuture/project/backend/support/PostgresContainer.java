@@ -39,6 +39,9 @@ public final class PostgresContainer {
     /** What the monolith connects as; matching-service connects as matching_user since Day 21. */
     public static final List<String> CONNECTED_SCHEMAS = List.of("identity");
 
+    /** The roles granted CONNECT on identity_db, as in scripts/db-init and db-setup.py; IdentityDbConnectTest compares them (Day 42). */
+    public static final List<String> IDENTITY_DB_CONNECT = List.of("identity_user");
+
     /** Every schema a module's tables can be in, in the order unqualified names resolve. */
     public static final List<String> TABLE_SCHEMAS = List.of("identity", "applications", "matching", "app");
 
@@ -193,7 +196,7 @@ public final class PostgresContainer {
             }
         }
         statements.add("REVOKE CONNECT ON DATABASE identity_db FROM PUBLIC");
-        statements.add("GRANT CONNECT ON DATABASE identity_db TO identity_user, matching_user, jobs_user, analytics_user");
+        statements.add("GRANT CONNECT ON DATABASE identity_db TO " + String.join(", ", IDENTITY_DB_CONNECT));
         execute(String.join(";\n", statements));
     }
 
