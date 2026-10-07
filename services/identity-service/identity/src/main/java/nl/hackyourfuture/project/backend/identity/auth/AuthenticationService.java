@@ -61,7 +61,7 @@ public class AuthenticationService {
             userRepository.createUser(newUser);
         } catch (DuplicateKeyException e) {
             // Catches duplicate emails if two users register at the exact same time
-            log.info("Concurrent registration race condition caught for email: {}", normalizedEmail);
+            log.info("Concurrent registration race condition caught; the email is already registered");
             throw new DuplicateKeyException("Email already registered", e);
         }
 
@@ -196,7 +196,7 @@ public class AuthenticationService {
         refreshTokens.revokeAll(userId);
         authCookies.issue(httpResponse, userId, email);
 
-        log.info("Password successfully updated for user email: {}", email);
+        log.info("Password successfully updated for user ID: {}", userId);
     }
 
     // A Google sign-in that found this email waits, parked, until a password login proves the

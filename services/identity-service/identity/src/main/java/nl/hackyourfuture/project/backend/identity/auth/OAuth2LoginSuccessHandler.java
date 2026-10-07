@@ -55,7 +55,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             // Park it for the email's account - not signed in, since nothing here proves it is theirs.
             userRepository.getUserByEmail(email)
                     .ifPresent(owner -> pendingGoogleLinks.park(response, owner.getId(), providerId));
-            log.info("Google sign-in for {} needs the account password before linking", email);
+            log.info("Google sign-in needs the account password before linking");
             response.sendRedirect(linkRequiredRedirect);
             return;
         }
@@ -64,7 +64,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         // Google skips our terms screen, so send them there first.
         if (user.get().getTermsAcceptedAt() == null) {
-            log.info("Google sign-in for {} still needs the terms and privacy agreement", email);
+            log.info("Google sign-in for {} still needs the terms and privacy agreement", user.get().getId());
             response.sendRedirect(termsRequiredRedirect);
             return;
         }
@@ -91,7 +91,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             userRepository.createProviderUser(created, PROVIDER_GOOGLE, providerId);
         } catch (DuplicateKeyException ex) {
             // Lost a race with a concurrent sign-up - that account must prove itself too.
-            log.info("Concurrent sign-up for {}, deferring the link", email);
+            log.info("Concurrent Google sign-up, deferring the link");
             return Optional.empty();
         }
         log.info("Created new account {} from Google sign-in", created.getId());
