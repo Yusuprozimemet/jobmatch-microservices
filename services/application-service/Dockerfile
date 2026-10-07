@@ -24,4 +24,7 @@ ENV OTEL_SERVICE_NAME=jobmatch-application-service
 # Framework 7 and Tomcat 11 (see backend/Dockerfile for the full rationale).
 # The service does not start without INTERNAL_IDENTITY_URL and INTERNAL_JOBS_URL
 # (see application.yaml); compose and the harness pass them.
+# One JSON object per line in the image (Day 42), as identity's prod profile does; tests and a
+# local spring-boot:run keep the readable format. Micrometer Tracing puts traceId and spanId in MDC.
+ENV LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash
 CMD ["java", "-jar", "app.jar"]

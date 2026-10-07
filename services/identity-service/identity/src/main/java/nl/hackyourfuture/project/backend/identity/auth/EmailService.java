@@ -42,9 +42,9 @@ public class EmailService {
             message.setText("To reset your password, click the link below:\n" + resetUrl);
 
             mailSender.send(message);
-            log.info("Password reset email successfully sent asynchronously to: {}", toEmail);
+            log.info("Password reset email sent");
         } catch (Exception e) {
-            log.error("Failed to send password reset email to {}: {}", toEmail, e.getMessage());
+            log.error("Password reset email could not be sent: {}", e.getClass().getSimpleName());
         }
     }
 }
