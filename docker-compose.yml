@@ -23,15 +23,15 @@ services:
       timeout: 5s
       retries: 10
 
-  # Writes identity's user key, the monolith's service key, job-service's key, matching-service's
-  # and application-service's (Day 39, Day 17, Day 21, Day 25).
+  # Writes identity's user key, job-service's key, matching-service's and application-service's
+  # (Day 17, Day 21, Day 25).
   # Runs and exits: it writes keys into the jwt-keys volume on the first start and keeps them after
   # that, until `docker compose down -v`. Never in git, and never made by the services, which do not
   # start without them. The backend's own runtime image, because it already has openssl and is already
   # pulled.
   jwt-key:
     image: eclipse-temurin:25-jre
-    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/service.pem && sh /jwt-key.sh /keys/job-service.pem && sh /jwt-key.sh /keys/matching-service.pem && sh /jwt-key.sh /keys/application-service.pem"]
+    command: ["sh", "-c", "sh /jwt-key.sh /keys/private.pem && sh /jwt-key.sh /keys/job-service.pem && sh /jwt-key.sh /keys/matching-service.pem && sh /jwt-key.sh /keys/application-service.pem"]
     volumes:
       - jwt-keys:/keys
       - ./scripts/jwt-key.sh:/jwt-key.sh:ro
@@ -67,7 +67,6 @@ services:
       OTEL_TRACES_ENDPOINT: ${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
       # Written by jwt-key above, read-only here.
       JWT_PRIVATE_KEY_FILE: /run/keys/private.pem
-      SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/service.pem
       # Google sign-in (Day 28), off while the id is empty: set both in .env to turn it on. The
       # redirect URI is APP_BASE_URL (localhost:3000) + /api/login/oauth2/code/google, through the
       # frontend and the gateway, so the Google console entry is the one it always was.

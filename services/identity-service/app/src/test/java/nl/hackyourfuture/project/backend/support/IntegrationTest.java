@@ -55,8 +55,6 @@ public abstract class IntegrationTest {
         }
         // The application does not start without a signing key (Day 12), and none is committed.
         registry.add("app.jwt.private-key-file", () -> TestSigningKey.path().toString());
-        // The service key (Day 39) is separate and required like the user key.
-        registry.add("app.service-jwt.private-key-file", () -> TestSigningKey.servicePath().toString());
         // Register the test caller as a trusted issuer for /internal tests (Day 39, Day 17 list form).
         registry.add("app.internal.trusted-issuers[0].name", () -> TestServiceCaller.ISSUER);
         registry.add("app.internal.trusted-issuers[0].key-set-url", () -> TestServiceCaller.instance().jwksUrl());

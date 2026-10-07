@@ -303,18 +303,15 @@ on its key, `iss` and `aud`. Either gets `401`.
 A service token is RS256, `aud` = `jobmatch-internal`, and lives at most 5 minutes. Its `iss` picks
 the key set it is verified with from the trusted issuers
 ([`InternalCallers`](../app/src/main/java/nl/hackyourfuture/project/backend/config/InternalCallers.java)):
-the monolith's own, `jobmatch-backend`, trusted in process, and whatever
-`app.internal.trusted-issuers` lists as `{name, key-set-url}` entries, empty by default. Set via
-environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and `APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`;
-compose lists `jobmatch-matching-service` (Day 21) and `jobmatch-application-service` (Day 25),
-each at its service's `/.well-known/service-jwks.json`,
-and job-service's list names matching-service and application-service.
-An issuer not on the list gets `401`. job-service keeps the same rules in its own copy: it trusts
-only the callers on its list (since Day 42 not identity, which calls no service), and signs with a key of its own
-([`configuration.md`](configuration.md#2-the-local-stack)). The monolith signs its own tokens with
-`SERVICE_JWT_PRIVATE_KEY_FILE`
-([`ServiceTokens`](../app/src/main/java/nl/hackyourfuture/project/backend/config/ServiceTokens.java)),
-never the user key. Since Day 42 it publishes no service key set: no service verifies its tokens.
+whatever `app.internal.trusted-issuers` lists as `{name, key-set-url}` entries, empty by default.
+Set via environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and
+`APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`; compose lists `jobmatch-matching-service` (Day 21) and
+`jobmatch-application-service` (Day 25), each at its service's `/.well-known/service-jwks.json`,
+and job-service's list names the same two. An issuer not on the list gets `401`. job-service keeps
+the same rules in its own copy, and signs with a key of its own
+([`configuration.md`](configuration.md#2-the-local-stack)). identity calls no service, so since
+Day 42 it signs no service tokens, holds no service key, and trusts only its list; job-service no
+longer trusts it either.
 
 The gateway does not route `/internal/**`, and the public OpenAPI does not list it
 (`springdoc.paths-to-exclude`).
@@ -430,7 +427,6 @@ All of it reads an environment variable with a local-development fallback; see
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address of the environment. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** — the redirect URIs append to it, and `//` will not match what Google has registered. Production is `https://c55c.hyf.dev`. |
 | `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with. **No key, no start.** Replacing it invalidates every access token; browsers refresh silently, since refresh tokens are not signed |
-| `SERVICE_JWT_PRIVATE_KEY_FILE` | none | The monolith's key for service tokens (Day 39). **No key, no start.** Never the user key; they have different jobs and rotate apart |
 | `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the two token cookies and the Google flow's two, `google_auth_request` and `pending_google_link`. Must be `true` on any HTTPS deployment |
 | `GOOGLE_CLIENT_ID` | empty | Set it and Google sign-in exists; leave it and the routes do not |
 | `GOOGLE_CLIENT_SECRET` | empty | |
@@ -504,7 +500,6 @@ changing it.
 | Every browser call answers 401 even though login succeeded | The `fetch` is missing `credentials: "include"`, or a proxy strips `Set-Cookie` |
 | Signed out about 15 minutes after signing in | The refresh failed: `refresh_token` is not reaching `/api/auth/refresh` (its path is `/api/auth`), or it was revoked by a password change or reset elsewhere |
 | The backend will not start, naming `JWT_PRIVATE_KEY_FILE` | No signing key for user tokens. Compose writes one on first start; elsewhere run `scripts/jwt-key.sh backend/.jwt/private.pem` and point the variable at it |
-| The backend will not start, naming `SERVICE_JWT_PRIVATE_KEY_FILE` | No key for service tokens. Compose writes one on first start; elsewhere run `scripts/jwt-key.sh backend/.jwt/service.pem` and point the variable at it |
 | Login answers 401 for an account the user is sure exists | It may be a Google-only account: no credentials row, so the password path cannot find it |
 | Reset email never arrives | `MAIL_USERNAME` / `MAIL_PASSWORD` unset — the startup log warns, and `forgot-password` still answers 200 by design |
 | `Invalid or expired password reset token` on a fresh link | Older than 15 minutes, already used, or a newer link was requested — requesting one deletes the previous token |

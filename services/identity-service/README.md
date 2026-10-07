@@ -112,7 +112,6 @@ docker run -p 8080:8080 -e DB_HOST=my-db-host -e DB_PORT=5432 -e DB_NAME=identit
   -e DB_USER=app_user -e DB_PASSWORD=<password> \
   -e DB_IDENTITY_USER=identity_user -e DB_IDENTITY_PASSWORD=<password> \
   -v /path/to/keys:/run/keys:ro -e JWT_PRIVATE_KEY_FILE=/run/keys/private.pem \
-  -e SERVICE_JWT_PRIVATE_KEY_FILE=/run/keys/service.pem \
   ghcr.io/<org>/<repo>/identity-service:latest
 ```
 
@@ -139,7 +138,6 @@ All configuration lives in [`application.yaml`](src/main/resources/application.y
 | `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path. Jobs, matching and applications connect from their services (Days 17, 21 and 25) |
 | `DB_IDENTITY_PASSWORD` | `password` | Its password |
 | `JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the RSA private key (PEM, PKCS#8, 2048 bits or more) tokens are signed with. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../scripts/jwt-key.sh) writes one, and compose sets this itself |
-| `SERVICE_JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the monolith's own key (PEM, PKCS#8, 2048 bits or more) for service tokens (Day 39), separate from the user key. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../scripts/jwt-key.sh) writes one, and compose sets this itself |
 | `SPRING_PROFILES_ACTIVE` | — | Active profile: `dev` or `prod`. None is active unless you set it; the Docker image defaults to `prod` |
 
 [`.env.example`](.env.example) lists the same variables as a starting point — copy it to `.env` (gitignored) and load it as described in [Quick start](#quick-start) step 2.
