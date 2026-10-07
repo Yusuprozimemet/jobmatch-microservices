@@ -130,7 +130,7 @@ stays until the account parks another or is deleted ([section 7](#7-retention)).
 Two real weaknesses:
 
 - **Nothing detects a new table.** The export is a hand-written object literal in
-  [`profile/page.tsx`](../../frontend/src/app/profile/page.tsx). Whoever adds a table that holds
+  [`profile/page.tsx`](../../../frontend/src/app/profile/page.tsx). Whoever adds a table that holds
   personal data has to remember to extend it, and no test will fail if they do not. Moving the
   export behind one backend endpoint — where it could be assembled from the schema, or at least
   reviewed in one place — is on the roadmap for exactly this reason.
@@ -245,8 +245,8 @@ Nothing logs a password, a token, or a `reason` from the model.
 
 # 9. The notices themselves
 
-Two static pages in the frontend — [`/terms`](../../frontend/src/app/terms/page.tsx) and
-[`/privacy`](../../frontend/src/app/privacy/page.tsx) — linked from the registration checkbox and the
+Two static pages in the frontend — [`/terms`](../../../frontend/src/app/terms/page.tsx) and
+[`/privacy`](../../../frontend/src/app/privacy/page.tsx) — linked from the registration checkbox and the
 footer. They are served by Next, not by the API: the text changes with a deploy, not with a request,
 so an endpoint would buy nothing.
 

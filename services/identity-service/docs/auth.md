@@ -247,7 +247,7 @@ login, from the job list and from the refresh itself.
 **Refresh.** `POST /api/auth/refresh` needs no access token. It spends the refresh cookie — revoked
 in the same statement that finds it, so two requests cannot both use one — and sets both cookies
 anew. A spent, expired or unknown refresh token gets `401` and both cookies deleted. The frontend
-([`frontend/src/lib/api.ts`](../../frontend/src/lib/api.ts)) calls it once when an API call outside
+([`frontend/src/lib/api.ts`](../../../frontend/src/lib/api.ts)) calls it once when an API call outside
 `/api/auth/` answers `401`, sharing one refresh between calls made at the same time, and retries the
 call once; if the refresh fails, the user is signed out.
 
@@ -278,7 +278,7 @@ above the broader `permitAll()` lines they carve out of.
 CSRF, HTTP Basic and form login are disabled: this is a JSON API behind a same-origin proxy.
 
 **The gateway applies the same table first** (Day 15,
-[`Security.java`](../../services/api-gateway/src/main/java/nl/hackyourfuture/project/gateway/Security.java)).
+[`Security.java`](../../../services/api-gateway/src/main/java/nl/hackyourfuture/project/gateway/Security.java)).
 It verifies the `access_token` against the key set at `/.well-known/jwks.json`, with the same issuer
 and audience, and answers a private route without a valid token with 401 before the backend sees
 it. A stale cookie reads as none there too, so login, refresh and the public routes still work. The
@@ -316,9 +316,9 @@ longer trusts it either.
 The gateway does not route `/internal/**`, and the public OpenAPI does not list it
 (`springdoc.paths-to-exclude`).
 
-**The deleted-user rule.** An access token outlives its user by up to 15 minutes (section 8). The
-monolith refuses that user because `applications` reads it through
-[`CurrentUserIdResolver`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/CurrentUserIdResolver.java),
+**The deleted-user rule.** An access token outlives its user by up to 15 minutes (section 8).
+application-service refuses that user through its own
+[`CurrentUserIdResolver`](../../application-service/src/main/java/nl/hackyourfuture/project/applicationservice/CurrentUserIdResolver.java),
 which looks the user up by the token's email on every request (404 on saved jobs), and `matching`,
 since Day 41, through the existence call `GET /internal/users/{id}` (422 on matches). A service
 that trusts `sub` has no `users` table to look in, so before it acts for a user it asks identity,

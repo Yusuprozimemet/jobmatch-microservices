@@ -6,7 +6,7 @@ only input `GET /api/jobs/top-matches` has, and every design decision in it — 
 matching.
 
 Code: [`profile/`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/profile), in
-the monolith, and [`matching/`](../../services/matching-service/src/main/java/nl/hackyourfuture/project/backend/matching), in matching-service since Day 21, which asks identity for
+the monolith, and [`matching/`](../../../services/matching-service/src/main/java/nl/hackyourfuture/project/backend/matching), in matching-service since Day 21, which asks identity for
 the profile and job-service for the shortlist over HTTP. Request and response shapes are in
 [`api.md`](api.md).
 
@@ -85,10 +85,10 @@ flowchart LR
 
 | Where | Normalisation | Result |
 | --- | --- | --- |
-| The picker ([`profile-skills.ts`](../../frontend/src/lib/profile-skills.ts)) | A hard-coded vocabulary: ~530 values in 12 categories, lowercase and hyphen-joined | `ci-cd`, `machine-learning`, `spring` |
+| The picker ([`profile-skills.ts`](../../../frontend/src/lib/profile-skills.ts)) | A hard-coded vocabulary: ~530 values in 12 categories, lowercase and hyphen-joined | `ci-cd`, `machine-learning`, `spring` |
 | `ProfileService` on save | Lowercases and collapses hyphens **and** whitespace runs to a single space — but only to build a **deduplication key**. The spelling that arrived is what is stored | key `ci cd`, stored `ci-cd` |
 | `JobMatchService` before matching | Lowercase and trim, nothing else | `ci-cd` |
-| dbt ([`int_postings_skills.sql`](../../data/dbt/models/intermediate/int_postings_skills.sql)) | Lowercase, trim, Unicode dashes to `-`, spaces around `-` removed, whitespace collapsed, plus a short alias list (`machine learning` → `machine-learning`, `data science` → `data-science`) | `ci-cd`, `machine-learning` |
+| dbt ([`int_postings_skills.sql`](../../../data/dbt/models/intermediate/int_postings_skills.sql)) | Lowercase, trim, Unicode dashes to `-`, spaces around `-` removed, whitespace collapsed, plus a short alias list (`machine learning` → `machine-learning`, `data science` → `data-science`) | `ci-cd`, `machine-learning` |
 
 The two ends agree because both are hyphen-joined and lowercase, which is why the matcher
 deliberately does **not** collapse hyphens the way `ProfileService` does. Collapsing them would turn
@@ -177,7 +177,7 @@ flowchart TD
 
 ## Step 1 — the SQL shortlist
 
-[`JobsDirectory.shortlist`](../../services/job-service/src/main/java/nl/hackyourfuture/project/backend/jobs/JobsDirectory.java),
+[`JobsDirectory.shortlist`](../../../services/job-service/src/main/java/nl/hackyourfuture/project/backend/jobs/JobsDirectory.java),
 in job-service behind `/internal/postings/shortlist`, is deliberately dumb. Exact skill-string overlap, nothing else. Synonyms and seniority are the
 model's job, and encoding them here is how this query grows unreadable.
 
@@ -197,7 +197,7 @@ array it can intersect; the API wants a list to render.
 
 ## Step 2 — the model rescores
 
-[`MatchScorer`](../../services/matching-service/src/main/java/nl/hackyourfuture/project/backend/matching/MatchScorer.java) sends
+[`MatchScorer`](../../../services/matching-service/src/main/java/nl/hackyourfuture/project/backend/matching/MatchScorer.java) sends
 one request for the whole unscored shortlist: the candidate's skills, then one line per job with a
 truncated id, the title, and the job's skills. It asks for `0–100` and a reason under twelve words
 per job, as a bare JSON array.
@@ -255,7 +255,7 @@ job you cover eight of. Thin postings are common in the mart, so the floor is th
 seniority that exact overlap cannot, so a 100% row can legitimately sit below an 80% one. That is
 not a bug to fix in the UI by re-sorting; it is the whole reason the model is there.
 
-The frontend renders `matchPercent`, `matchedCount` and `jobSkillCount` in [`MatchSummary`](../../frontend/src/components/jobs/MatchSummary.tsx),
+The frontend renders `matchPercent`, `matchedCount` and `jobSkillCount` in [`MatchSummary`](../../../frontend/src/components/jobs/MatchSummary.tsx),
 and shows `reason` only when `aiScored` is true.
 
 ---
@@ -329,7 +329,7 @@ strong-match threshold 60%.
 
 - **Five of the seven profile fields do not affect matching.** See [section 1](#1-what-the-profile-holds-and-what-actually-matters).
 - **The job detail page can only explain a job that is in the top 25.**
-  [`JobDetailsMatchSection`](../../frontend/src/components/jobs/JobDetailsMatchSection.tsx) calls
+  [`JobDetailsMatchSection`](../../../frontend/src/components/jobs/JobDetailsMatchSection.tsx) calls
   `top-matches` and looks for the posting by id, so every other job shows no match information at
   all. A per-posting endpoint would fix it; today it is one shortlist or nothing.
 - **The picker vocabulary can drift from the mart** — hard-coded list versus published data, with no

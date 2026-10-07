@@ -27,10 +27,10 @@ past that one is a list of overrides rather than an edited file.
 
 | File | Read by | Committed? |
 | --- | --- | --- |
-| [`.env`](../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
+| [`.env`](../../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
 | [`backend/.env`](../.env.example) | Loaded by hand for `../mvnw spring-boot:run`. **Not** read by compose: the backend service has no `env_file` | No |
-| [`frontend/.env.local`](../../frontend/.env.example) | Next, in local development | No |
-| [`data/.env`](../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
+| [`frontend/.env.local`](../../../frontend/.env.example) | Next, in local development | No |
+| [`data/.env`](../../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
 
 **Spring Boot does not read `.env` by itself.** Running the backend outside Docker means loading it
 yourself — `set -a; source .env; set +a`, an IDE plugin, or `--env-file` — or setting the variables
@@ -86,7 +86,7 @@ scripts/dev-up.sh          # docker compose up -d db backend api-gateway fronten
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
 
 The browser only ever talks to port 3000. Next rewrites `/api/*` to `BACKEND_API_URL`
-([`proxy.ts`](../../frontend/src/proxy.ts)), the gateway, which is what keeps the auth cookies on one
+([`proxy.ts`](../../../frontend/src/proxy.ts)), the gateway, which is what keeps the auth cookies on one
 origin; the gateway refuses every cross-origin preflight. [`architecture.md`](architecture.md) draws
 the path before and after the gateway.
 
@@ -116,7 +116,7 @@ job-service's settings (Day 17), as compose sets them:
 | `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |
 
 matching-service's settings (Day 21), in its
-[`application.yaml`](../../services/matching-service/src/main/resources/application.yaml):
+[`application.yaml`](../../../services/matching-service/src/main/resources/application.yaml):
 
 | Variable | Default | |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ At most ten scoring calls run at once (a bulkhead, Day 21); an eleventh request 
 skill overlap at once rather than waiting.
 
 application-service's settings (Day 25), in its
-[`application.yaml`](../../services/application-service/src/main/resources/application.yaml):
+[`application.yaml`](../../../services/application-service/src/main/resources/application.yaml):
 
 | Variable | Default | |
 | --- | --- | --- |
@@ -169,7 +169,7 @@ straight to the published 8080 before the gateway is ready.
 
 # 3. Backend
 
-All of it in [`application.yaml`](../src/main/resources/application.yaml).
+All of it in [`application.yaml`](../app/src/main/resources/application.yaml).
 
 ## Database
 
@@ -243,7 +243,7 @@ One variable.
 | --- | --- | --- |
 | `BACKEND_API_URL` | `http://localhost:8080` — `http://api-gateway:8081` in the image | Where the proxy and the server components send `/api` traffic: the gateway |
 
-It is read at **runtime**, not baked in at build: [`config.ts`](../../frontend/src/lib/config.ts) is
+It is read at **runtime**, not baked in at build: [`config.ts`](../../../frontend/src/lib/config.ts) is
 a plain `process.env` read, and the Dockerfile sets a default that compose overrides. So the same
 image works in any environment.
 
@@ -260,7 +260,7 @@ container name and listen on the wrong interface. Node 24 is required (`engines`
 # 5. Data pipeline
 
 The pipeline has its own, much longer configuration, documented where it belongs:
-[`data/.env.example`](../../data/.env.example) and [`data/README.md`](../../data/README.md). The
+[`data/.env.example`](../../../data/.env.example) and [`data/README.md`](../../../data/README.md). The
 groups, so you know what you are looking at:
 
 | Group | Examples | |
@@ -281,7 +281,7 @@ The one that matters to the backend team is **`BACKEND_PG_PUBLISH_SCHEMA`** — 
 
 # 6. The database: schemas and roles
 
-[`scripts/db-setup.py`](../../scripts/db-setup.py) creates the production-like arrangement: three
+[`scripts/db-setup.py`](../../../scripts/db-setup.py) creates the production-like arrangement: three
 databases, seven schemas, and one login role per owner.
 
 | Database | Schema | Owner role | Written by | Read by |
@@ -299,7 +299,7 @@ had those grants; each module's own migration revokes them. Only `identity_user`
 `identity_db` (Day 42); `app_user`, which runs the migrations, connects as its member, and
 `db-setup.py` revokes what earlier runs granted the others. Only `jobs_user` and the two analytics
 roles may connect to `jobs_db` (Day 20); a `project_db` set up before then keeps its analytics
-schemas until [the runbook](../../docs/runbooks/jobs-db.md) drops them. **The separation is
+schemas until [the runbook](../../../docs/runbooks/jobs-db.md) drops them. **The separation is
 enforced by grants, not by agreement** — that is the whole point, and it is what makes "the backend
 cannot corrupt the marts" a fact rather than a promise.
 

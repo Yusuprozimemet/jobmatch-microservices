@@ -54,4 +54,4 @@ flowchart LR
   and a trace crosses both ways (`JobServiceObservedIT`).
 
 Settings for each box are in [`configuration.md`](configuration.md). The rest of Phase 3 is in
-[`plan.md`](../../plan.md).
+[`plan.md`](../../../plan.md).
