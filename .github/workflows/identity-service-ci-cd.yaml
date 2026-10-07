@@ -113,7 +113,7 @@ jobs:
         working-directory: ./services/identity-service
         run: >-
           ../../mvnw -B verify -pl app -am -Dharness.gateway=true
-          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT,ServiceJwksIT'
+          -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
   build:

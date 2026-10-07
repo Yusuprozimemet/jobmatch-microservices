@@ -60,15 +60,12 @@ public abstract class IntegrationTest {
         // Register the test caller as a trusted issuer for /internal tests (Day 39, Day 17 list form).
         registry.add("app.internal.trusted-issuers[0].name", () -> TestServiceCaller.ISSUER);
         registry.add("app.internal.trusted-issuers[0].key-set-url", () -> TestServiceCaller.instance().jwksUrl());
-        // job-service (Day 17). A supplier: its container is up before a context needs its key set.
-        registry.add("app.internal.trusted-issuers[1].name", () -> "jobmatch-job-service");
-        registry.add("app.internal.trusted-issuers[1].key-set-url", () -> JobService.baseUrl() + "/.well-known/service-jwks.json");
         // matching-service (Day 21). A supplier: its key server is up before a context needs it.
-        registry.add("app.internal.trusted-issuers[2].name", () -> ServiceKey.MATCHING.issuer());
-        registry.add("app.internal.trusted-issuers[2].key-set-url", () -> ServiceKey.MATCHING.jwksUrl());
+        registry.add("app.internal.trusted-issuers[1].name", () -> ServiceKey.MATCHING.issuer());
+        registry.add("app.internal.trusted-issuers[1].key-set-url", () -> ServiceKey.MATCHING.jwksUrl());
         // application-service (Day 25). A supplier: its key server is up before a context needs it.
-        registry.add("app.internal.trusted-issuers[3].name", () -> ServiceKey.APPLICATION.issuer());
-        registry.add("app.internal.trusted-issuers[3].key-set-url", () -> ServiceKey.APPLICATION.jwksUrl());
+        registry.add("app.internal.trusted-issuers[2].name", () -> ServiceKey.APPLICATION.issuer());
+        registry.add("app.internal.trusted-issuers[2].key-set-url", () -> ServiceKey.APPLICATION.jwksUrl());
         // The event bus (Day 26): every context's relay publishes to the shared topic.
         registry.add("app.events.sns.endpoint", () -> EventBus.endpoint().toString());
         registry.add("app.events.user-deleted-topic-arn", EventBus::topicArn);

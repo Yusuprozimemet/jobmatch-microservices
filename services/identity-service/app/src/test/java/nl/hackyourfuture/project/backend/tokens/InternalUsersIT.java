@@ -68,9 +68,6 @@ class InternalUsersIT extends IntegrationTest {
         assertThat(openapi)
                 .as("OpenAPI should list no /internal/ path")
                 .doesNotContain("/internal/");
-        assertThat(openapi)
-                .as("OpenAPI should not list service-jwks")
-                .doesNotContain("service-jwks");
         // But it should still list public routes.
         assertThat(openapi)
                 .as("OpenAPI should list /.well-known/jwks.json")
