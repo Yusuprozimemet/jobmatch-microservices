@@ -164,8 +164,8 @@ anything that requires a network.
 | **3 — Extract job-service** | 17–20 | First independent service: read-only, no user data, own database and image. | done |
 | **4 — Extract matching-service** | 21–24 | Isolates the 20-second LLM timeout from job search; match scores move to NoSQL with a native TTL. | done (tag `phase-4`) |
 | **5 — Extract application-service** | 25–28 | Message bus with a transactional outbox and the `user.deleted` cascade first, then saved jobs to its own store; identity-service is what remains of the monolith. Ended at Day 28, where the work stopped to be evaluated. | done (tag `phase-5`) |
-| **Cleanup day** | 42 | What Phases 3–5 left behind and no day owns: identity's unused service issuer and seam code, the role-setup copies, logging, application-service's metrics. Added by the course correction after Phase 5. | next |
-| **7 — ECS on Fargate** | 32–35 | Terraform for the data stores, the services behind an ALB with task roles and secrets, observability, then one deployment and `terraform destroy`. Rewritten from the Kubernetes drafts after Day 28; Days 36–37 dropped. | to be written |
+| **Cleanup day** | 42 | What Phases 3–5 left behind and no day owns: identity's unused service issuer and seam code, the role-setup copies, logging, application-service's metrics. Added by the course correction after Phase 5. | done |
+| **7 — ECS on Fargate** | 32–35 | Terraform for the data stores, the services behind an ALB with task roles and secrets, observability, then one deployment and `terraform destroy`. Rewritten from the Kubernetes drafts after Day 28; Days 36–37 dropped. | next; to be written |
 | **6 — Functions + uploads** | 29–31 | CV parsing and mail off the request path; direct uploads. Deferred until after Phase 7, and cut if it still adds only features. | deferred |
 
 Two phases stand on their own as stopping points. **Day 16** leaves a working monolith with a
@@ -220,8 +220,8 @@ each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
   extractions, the contract suite in `contract/` needed two edits, both approved in advance: a
   test of the monolith's own actuator moved out (Day 40), and the account-deletion test taught to
   wait for an event (Day 25, +13 −13). The harness around it (`support/`) grew instead.
-- **The agent's errors far outnumber the system's.** Of 328 defects recorded on Days 1–41, 19
-  were in the system being migrated; 309 were in the agent's own specs, drafts and tooling,
+- **The agent's errors far outnumber the system's.** Of 348 defects recorded on Days 1–42, 19
+  were in the system being migrated; 329 were in the agent's own specs, drafts and tooling,
   caught by an auditor, a review, a break on purpose or the close. Most were wrong premises in
   specs, and checks that could not fail.
 - **Specs need revising once work starts, nearly always.** Almost every day worked needed at least
