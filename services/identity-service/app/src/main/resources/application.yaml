@@ -116,10 +116,10 @@ management:
     mail:
       # Off on purpose. The mail indicator opens an SMTP connection on every health check
       # and reports DOWN when the relay is unreachable, which drags the whole endpoint
-      # DOWN with it. Phase 7 wires /actuator/health up as the Kubernetes readiness probe,
-      # so leaving this on would pull the application out of the load balancer - nobody
-      # could browse jobs - because password-reset email is undeliverable. Sending mail is
-      # not a condition for serving traffic, and Day 31 moves it onto a queue regardless.
+      # DOWN with it. Compose's healthcheck reads health, and Phase 7's load balancer will
+      # too, so leaving this on would take the application out of service - nobody could
+      # browse jobs - because password-reset email is undeliverable. Sending mail is not a
+      # condition for serving traffic, and EmailService already sends it asynchronously.
       enabled: false
   tracing:
     sampling:
