@@ -1,0 +1,42 @@
+# Day 32: the Terraform under infra/ is checked without an AWS account. This
+# run formats and validates the three roots; Day 32's later tracks add the
+# plans, the LocalStack applies, the lock test and scripts/infra-checks.py,
+# with the code-side paths those read. No AWS credentials, no apply to AWS.
+
+name: Infra checks
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra-ci.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra-ci.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform checks without an AWS account
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.3
+          terraform_wrapper: false
+
+      - name: fmt
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: validate
+        run: |
+          for root in infra/terraform/bootstrap infra/terraform infra/terraform/localstack; do
+            terraform -chdir="$root" init -backend=false -input=false
+            terraform -chdir="$root" validate
+          done
