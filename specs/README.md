@@ -72,6 +72,7 @@ specs/
 | 17–20 | 3 — extract job-service | First independent service, own database | ready |
 | 41, 21–24 | 4 — extract matching-service | LLM isolated; scores in NoSQL | ready |
 | 25–28 | 5 — extract application-service | Events, GDPR cascade, monolith gone | provisional |
+| 42 | cleanup day | What Phases 3–5 left behind, before Phase 7 | ready |
 | 29–31 | 6 — functions + uploads bucket | CV parsing, email off the request path | provisional |
 | 32–37 | 7 — Kubernetes + IaC | Terraform, Pulumi, Helm, GitOps, production | provisional |
 
