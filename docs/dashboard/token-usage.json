@@ -95,7 +95,11 @@
 {"date":"2026-10-05","day":null,"model":"claude-opus-5-5","input":252,"cache_write":309119,"cache_read":9511431,"output":22934,"replies":125},
 {"date":"2026-10-05","day":28,"model":"claude-haiku-4-5","input":742,"cache_write":167504,"cache_read":4392037,"output":182,"replies":92},
 {"date":"2026-10-05","day":28,"model":"claude-opus-5-5","input":246,"cache_write":322385,"cache_read":11160020,"output":72046,"replies":117},
-{"date":"2026-10-06","day":null,"model":"claude-opus-5-5","input":120,"cache_write":291261,"cache_read":4232161,"output":29558,"replies":60},
+{"date":"2026-10-06","day":null,"model":"claude-opus-5-5","input":278,"cache_write":481422,"cache_read":12284886,"output":48617,"replies":135},
 {"date":"2026-10-06","day":28,"model":"claude-haiku-4-5","input":186,"cache_write":30253,"cache_read":566025,"output":40,"replies":23},
-{"date":"2026-10-06","day":28,"model":"claude-opus-5-5","input":96,"cache_write":53600,"cache_read":4878992,"output":34351,"replies":48}
+{"date":"2026-10-06","day":28,"model":"claude-opus-5-5","input":116,"cache_write":69721,"cache_read":6365543,"output":42044,"replies":58},
+{"date":"2026-10-07","day":null,"model":"claude-haiku-4-5","input":306,"cache_write":49202,"cache_read":1316688,"output":66,"replies":38},
+{"date":"2026-10-07","day":null,"model":"claude-opus-5-5","input":620,"cache_write":998118,"cache_read":25352522,"output":169272,"replies":308},
+{"date":"2026-10-07","day":42,"model":"claude-haiku-4-5","input":3488,"cache_write":700520,"cache_read":24842333,"output":815,"replies":432},
+{"date":"2026-10-07","day":42,"model":"claude-opus-5-5","input":1026,"cache_write":969707,"cache_read":53257401,"output":237376,"replies":495}
 ]

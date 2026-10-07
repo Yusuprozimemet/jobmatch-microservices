@@ -1,6 +1,6 @@
 # Defects found during the migration
 
-Every defect the migration has filed, Days 1–41, grouped by kind. Until Day 27 these were kept as one
+Every defect the migration has filed, Days 1–42, grouped by kind. Until Day 27 these were kept as one
 running list in the README's measurement table; this page holds it in full and the README keeps the
 counts. The kinds were assigned by reading each entry's wording, so a borderline entry could sit in a
 neighbouring kind; the totals per side (system versus the agent's own work) are firmer than the
@@ -41,9 +41,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 38: 1 setup script that crashes on Windows output
 - Day 20: 1 container path Git Bash rewrote
 
-## In the agent's own work (309)
+## In the agent's own work (329)
 
-### Spec and plan premises wrong about the code, or work they missed (118)
+### Spec and plan premises wrong about the code, or work they missed (124)
 
 - Days 1-13: 8 specs that could not be met
 - Days 1-13: 1 plan that missed a cross-module read
@@ -143,8 +143,14 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 28: 1 cleanup day numbered so the dashboard would name the wrong next step
 - Day 28: 1 review that named hand-offs outside `Hand-off` lines, about twenty phantoms
 - Day 28: 1 flagged set of broken links no track took
+- Day 42: 1 set of counts and line numbers written before they were run
+- Day 42: 1 permit no item removed, under a criterion that needed it gone
+- Day 42: 1 estimate of 7 PRs, then 9, for a day that took 11
+- Day 42: 1 scope that left out six things the removals needed
+- Day 42: 1 red count of three lines where there were two, and a list entry that was never there
+- Day 42: 1 split of A2 that still left a half over the gate
 
-### Spec checks that could not fail, could not pass, or proved the wrong thing (82)
+### Spec checks that could not fail, could not pass, or proved the wrong thing (90)
 
 - Days 1-13: 1 spec check that could not fail
 - Days 1-13: 1 gate that does not pin what its spec says
@@ -212,8 +218,16 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 25: 1 row count that cannot see an overwrite
 - Day 28: 1 grep criterion that could never pass, Tempo's `backend: local`
 - Day 28: 1 "through the gateway" hold CI's gateway run does not include
+- Day 42: 1 grep that matched the lines that give other services their keys
+- Day 42: 1 criterion red count that named the wrong line
+- Day 42: 1 hold that named a test reading the wrong logs, and a Verify that would have kept text logs
+- Day 42: 1 exception in two criteria that could not be told from its absence
+- Day 42: 1 set of expected reports wrong, and greps that counted build output
+- Day 42: 1 pathspec that matched no file, so two greps could not fail
+- Day 42: 1 grep that still could not print nothing after the audit, met by a narrower one
+- Day 42: 1 hold on JSON logs whose second test reads another service
 
-### Code drafts that review or a break changed, and lost work (51)
+### Code drafts that review or a break changed, and lost work (55)
 
 - Day 38: 1 metric tag unlike the backend's
 - Day 40: 1 default interval that made a wait slow
@@ -260,8 +274,12 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 25: 2 breaks run together that hid each other
 - Day 28: 1 healthcheck start period shorter than the service's start
 - Day 28: 1 draft that left three stale database-name comments
+- Day 42: 1 startup test that read an environment variable null in every run
+- Day 42: 1 grant test that checked the table and not the schema
+- Day 42: 1 log test whose wait could pass without checking, and a dropped `Locale.ROOT`
+- Day 42: 1 draft that repointed two working links to the wrong file
 
-### Tests a spec would break without naming, or behaviour it left untested (30)
+### Tests a spec would break without naming, or behaviour it left untested (31)
 
 - Days 1-13: 2 protected behaviours with no test behind them
 - Days 1-13: 1 missing claim that would have made a test flaky
@@ -280,6 +298,7 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 23: 2 test assertions a migration broke that the spec did not name
 - Day 26: 2 harness tests a migration broke that the spec did not name
 - Day 25: 1 grants test a revoke broke that no spec named
+- Day 42: 1 track that would have copied four tests that already had twins
 
 ### Spec Verify commands that ran nothing, the wrong thing, or something unsafe (18)
 
@@ -300,7 +319,7 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 28: 1 Verify that could not pass on a fresh clone without the mart step
 - Day 28: 1 close run that reused a three-hour-old test volume as fresh
 
-### Bugs in the migration's own tooling (dashboard, commit keys) (10)
+### Bugs in the migration's own tooling (dashboard, commit keys) (11)
 
 - Day 39: 1 dashboard that could not read a split track
 - Day 17: 1 dashboard that could not read a three-way split
@@ -312,3 +331,4 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 27: 1 dashboard measure that credited the spec with gap it did not close, #107
 - Day 25: 1 track announced and never opened, which the dashboard read as done
 - Day 28: 1 track branch the dashboard could not read, so it named a merged track as next
+- Day 42: 1 track with no Jira sub-task and no key in its branches

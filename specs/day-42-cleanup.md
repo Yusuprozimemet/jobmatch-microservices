@@ -160,35 +160,65 @@ gate (`pr-checks.yml:78-87`): A2 is split for that reason (about 650 lines of de
 E1 carries the 280-line SVG, and if A1 passes 400 its docs go in a PR of their own.
 
 ## Acceptance criteria
-- [ ] C42.1 **new** — `git grep -nE "ServiceTokens|ServiceSigningKey|ServiceJwks|service-jwks|ServiceToken\b|service-jwt|SERVICE_JWT_PRIVATE_KEY_FILE|jobmatch-backend" -- services/identity-service ':!*Dockerfile' ':!services/identity-service/app/src/test/java/nl/hackyourfuture/project/backend/tokens/RetiredServiceIssuerIT.java' | grep -v '\.withEnv("SERVICE_JWT_PRIVATE_KEY_FILE"'`
+- [x] C42.1 **new** — `git grep -nE "ServiceTokens|ServiceSigningKey|ServiceJwks|service-jwks|ServiceToken\b|service-jwt|SERVICE_JWT_PRIVATE_KEY_FILE|jobmatch-backend" -- services/identity-service ':!*Dockerfile' ':!services/identity-service/app/src/test/java/nl/hackyourfuture/project/backend/tokens/RetiredServiceIssuerIT.java' | grep -v '\.withEnv("SERVICE_JWT_PRIVATE_KEY_FILE"'`
       finds nothing, and `grep -nE "/keys/service\.pem" docker-compose.yml` finds nothing. The
       excluded lines give the harness's job-, matching- and application-service containers their
       own keys (`support/JobService.java:177`, `MatchingService.java:74`, `ApplicationService.java:88`);
       `RetiredServiceIssuerIT` is C42.4's test. Red today: the first finds lines in 30 files,
       including `.md`, `.env.example` and the permit in `SecurityConfig`; the second finds compose
       `:34` and `:74`.
-- [ ] C42.2 **new** — `git grep -nE "InternalClients|StubUpstream|shared\.jobs|PageResponse|jobs-url|job-service-url|INTERNAL_JOBS_URL|CurrentUserId|TokenSubject" -- 'services/identity-service/*/src/*' | grep -v '\.withEnv("INTERNAL_JOBS_URL"'`
+      Met with a departure: as written its first grep prints 17 lines on 9f7a22f, every one of
+      which has to stay: the harness's key-set URLs for job-, matching- and application-service
+      and the test caller, the three harness ITs that GET those services' key sets, `auth.md:309`
+      and `configuration.md:112,123,154`. `service-jwks` and `SERVICE_JWT_PRIVATE_KEY_FILE` name
+      every service's key, not only identity's (#334, #335). The grep that matches only identity's
+      issuer prints nothing on 9f7a22f and found 14 files before #334:
+      `git grep -nE 'ServiceTokens|ServiceSigningKey|ServiceJwks|ServiceToken\b|service-jwt|jobmatch-backend|/run/keys/service\.pem|backend/\.jwt/service\.pem' -- services/identity-service ':!*Dockerfile' ':!*/RetiredServiceIssuerIT.java'`;
+      `git grep -n SERVICE_JWT_PRIVATE_KEY_FILE -- services/identity-service/app/src/main services/identity-service/.env.example services/identity-service/README.md`
+      prints nothing, and so does compose's `/keys/service\.pem` grep. #334 (the key set and its
+      permit), #335 (the issuer, the minter and the key).
+- [x] C42.2 **new** — `git grep -nE "InternalClients|StubUpstream|shared\.jobs|PageResponse|jobs-url|job-service-url|INTERNAL_JOBS_URL|CurrentUserId|TokenSubject" -- 'services/identity-service/*/src/*' | grep -v '\.withEnv("INTERNAL_JOBS_URL"'`
       finds nothing, and `services/identity-service/shared/src/main/java/nl/hackyourfuture/project/backend/shared/jobs`
       does not exist. The excluded lines are `MatchingService.java:77` and
       `ApplicationService.java:96`, which point *those* containers at job-service. Red today: lines
       in 22 files, the comments named in In scope among them.
-- [ ] C42.3 **new** — `git grep -n "BACKEND_KEY_SET_URL\|backend-key-set-url" -- services/job-service docker-compose.yml services/identity-service`
+      Nothing on 9f7a22f, and `shared/jobs` does not exist. #332 (A2a1), #333 (A2b), #336 (A2a2).
+      broken: `PostingLookup.java` and `StubUpstream.java` put back → the grep printed
+      `StubUpstream.java:28,30,47,58,62` and `PostingLookup.java:1`, and `shared/jobs` existed
+      (#336). The last supplier of the harness's job-service container, `trusted-issuers[1]`'s
+      key-set URL, went in #334; `JobServiceHarnessIT`, `PostingBatchIT` and `PostingShortlistIT`
+      start the container themselves and pass.
+- [x] C42.3 **new** — `git grep -n "BACKEND_KEY_SET_URL\|backend-key-set-url" -- services/job-service docker-compose.yml services/identity-service`
       finds nothing, `git grep -n "jobmatch-backend" -- services/job-service/src/main services/identity-service/app/src/test/java/nl/hackyourfuture/project/backend/support`
       finds nothing, and job-service's `InternalAccessTest.anyoneElseIs401` sends a
       `jobmatch-backend` token signed by a key it served before and gets 401. A test in job-service
       starts its context with no `BACKEND_KEY_SET_URL`. Red today: the first grep finds 8 files
       (identity's `auth.md` and `configuration.md` among them, which B updates), the second 3 lines; the context fails, "BACKEND_KEY_SET_URL is not set".
-- [ ] C42.4 **new** — `tokens/RetiredServiceIssuerIT`: identity starts with
+      Both greps print nothing on 9f7a22f. `InternalAccessTest.anyoneElseIs401[7]` ("the retired
+      backend") gets 401, and every job-service context starts with no `BACKEND_KEY_SET_URL`
+      (`JobServiceTest` no longer sets it). #331.
+      broken: `jobmatch-backend` added back to job-service's trusted list → `anyoneElseIs401[7]`
+      expected 401 but was 404 (#331).
+- [x] C42.4 **new** — `tokens/RetiredServiceIssuerIT`: identity starts with
       `SERVICE_JWT_PRIVATE_KEY_FILE` unset; `GET /.well-known/service-jwks.json` answers 401 (the
       permit gone, `anyRequest().authenticated()`); and `/internal/users/{id}` answers 401 to a
       token with issuer `jobmatch-backend`, audience `jobmatch-internal`, signed with the key
       `TestSigningKey.servicePath()` holds. Red today: 200 with one RSA key; 204 to the token
       (identity trusts its own tokens in process, `InternalUsersIT:36`); without the variable the
       context does not start (`ServiceSigningKeyStartupTest`).
-- [ ] C42.5 **new** — `docker compose --env-file .env.example config identity-service | grep -E "INTERNAL_JOBS_URL|TRUSTEDISSUERS_[0-9]+_NAME"`
+      `RetiredServiceIssuerIT`, 3 tests, 0 failures: `theServiceKeySetIsGone` (#334),
+      `startsWithNoServiceKey` and `itsOldIssuersTokenIs401` (#335).
+      broken: the permit restored → `theServiceKeySetIsGone` expected 401 but was 404 (#334);
+      main's issuer, key and self-trusting `InternalCallers` restored → `startsWithNoServiceKey`
+      "expected: null", `itsOldIssuersTokenIs401` expected 401 but was 204 (#335).
+- [x] C42.5 **new** — `docker compose --env-file .env.example config identity-service | grep -E "INTERNAL_JOBS_URL|TRUSTEDISSUERS_[0-9]+_NAME"`
       prints `jobmatch-matching-service` and `jobmatch-application-service` and nothing else. Red
       today: `INTERNAL_JOBS_URL` and three names.
-- [ ] C42.6 **hold** — identity's `/internal/**` answers its trusted callers and refuses the rest:
+      On 9f7a22f it prints `TRUSTEDISSUERS_0_NAME: jobmatch-matching-service` and
+      `TRUSTEDISSUERS_1_NAME: jobmatch-application-service`, nothing else. #332
+      (`INTERNAL_JOBS_URL`), #334 (the job-service entry).
+      broken: `INTERNAL_JOBS_URL` put back in compose → it printed `http://job-service:8080` (#332).
+- [x] C42.6 **hold** — identity's `/internal/**` answers its trusted callers and refuses the rest:
       `InternalRoutesIT`, `InternalUsersIT`, `InternalProfilesIT`, `MatchingServiceTrustIT` and
       `ApplicationServiceTrustIT` pass, as do job-service's `InternalAccessTest` and identity's
       `JobServiceHarnessIT`, `PostingBatchIT` and `PostingShortlistIT`. After Track 0,
@@ -198,34 +228,60 @@ E1 carries the 280-line SVG, and if A1 passes 400 its docs go in a PR of their o
       the five identity classes, e.g. `ApplicationServiceTrustIT.applicationServicesTokenReachesIdentitysUserRoute`
       expected 204 but was 401; reverted, 32 of 32 (spec-change PR, on 3481dea). The job-service
       side of the hold is broken by Track B, which edits `InternalAccessTest`.
-- [ ] C42.7 **new** — the three role-setup copies grant CONNECT on `identity_db` to `identity_user`
+      The eight classes pass in every track's run and at the close (identity 425 tests in 81 classes, 0 failures, 1 skipped); job-service's
+      `InternalAccessTest` passes in #331 and at the close. The `ServiceToken` grep found only
+      `ServiceJwksIT` after #330 and nothing after #335.
+      broken (job-service's side, #331): `InternalCallers` trusting no list entry →
+      `aTrustedCallerGetsPastTheChain` expected 404 but was 401.
+- [x] C42.7 **new** — the three role-setup copies grant CONNECT on `identity_db` to `identity_user`
       alone. A test in identity's suite reads the list from `scripts/db-init/10-module-roles.sh`,
       `scripts/db-setup.py` and `PostgresContainer`, fails if any differs from `identity_user`, and
       runs when a PR changes either script (`identity-service-ci-cd.yaml`'s path filter). Red
       today: the lists are 3, 4 and 6 roles; no test reads them; the filter names neither script.
-- [ ] C42.8 **new** — in the harness, `jobs_user` and `matching_user` cannot connect to
+      `IdentityDbConnectTest` reads `10-module-roles.sh`, `db-setup.py`'s `IDENTITY_DB_ROLES` and
+      `PostgresContainer.IDENTITY_DB_CONNECT`; the workflow's push filter and `changes` regex name
+      `scripts/db-init/**` and `scripts/db-setup.py`. #337.
+      broken: `10-module-roles.sh` granting `identity_user, jobs_user` → `expected:
+      ["identity_user"] but was: ["identity_user", "jobs_user"]` (#337).
+- [x] C42.8 **new** — in the harness, `jobs_user` and `matching_user` cannot connect to
       `identity_db`: `ModuleConnectionsIT` and `RefreshTokenGrantsIT` assert it, as
       `applicationsCannotConnectToIdentityDb` does for `applications_user`. Red today: both log in
       (`ModuleConnectionsIT.java:35,38`).
-- [ ] C42.9 **new** — the grants on the database itself name only `identity_user`:
+      `ModuleConnectionsIT.noOtherModuleCanConnectToIdentityDb` covers applications, matching and
+      jobs; `RefreshTokenGrantsIT` reads the privileges from the harness's connection. #337.
+      broken: `IDENTITY_DB_CONNECT` with `jobs_user` added →
+      `noOtherModuleCanConnectToIdentityDb[3]` "Expecting code to raise a throwable"; `GRANT USAGE
+      ON SCHEMA identity TO matching_user` → `RefreshTokenGrantsIT` 2 of 7 failed (#337).
+- [x] C42.9 **new** — the grants on the database itself name only `identity_user`:
       `SELECT string_agg(a.grantee::regrole::text, ',' ORDER BY 1) FROM pg_database d, aclexplode(d.datacl) a WHERE d.datname = 'identity_db' AND a.privilege_type = 'CONNECT' AND a.grantee <> d.datdba`
       prints `identity_user` on a fresh compose volume (`-p day42`, as the admin), and on a scratch
       Postgres after `db-setup.py` has run from `main` and then from Track C
       (`PYTHONIOENCODING=utf-8` on Windows). Red today: `identity_user,jobs_user,matching_user` in
       compose; six roles after db-setup.
-- [ ] C42.10 **new** — `git grep -n "read_backend_table\|Reading the app's data" -- data/` finds
+      On a scratch `postgres:16`, `db-setup.py` from `main` left six roles; rerun from Track C it
+      revoked each by name and the query printed `identity_user`. A fresh `-p day42c` volume
+      printed `identity_user` (#337). At the close, on a fresh `-p day42` volume on 9f7a22f:
+      `identity_user`, as `admin`.
+- [x] C42.10 **new** — `git grep -n "read_backend_table\|Reading the app's data" -- data/` finds
       nothing. Red today: 3 lines (`sync.py:62`, `README.md:632,636`).
-- [ ] C42.11 **hold** — `saveScores` with 26 scores, one with a `null` reason, stores all 26 items,
+      Nothing on 9f7a22f. #337.
+- [x] C42.11 **hold** — `saveScores` with 26 scores, one with a `null` reason, stores all 26 items,
       the null one without a `reason` attribute (a matching-service test on `DynamoDbContainer`).
       Broken by the spec-auditor on a scratch test: the guard removed
       (`JobMatchScoreRepository.java:120`), DynamoDB rejected the batch and nothing was stored,
       "Expected size: 26 but was: 0". broken: to be recorded in Track 0 on the committed test.
-- [ ] C42.12 **new** — each of the five services writes JSON in its image: in a compose project
+      `ScoresStoredTest.aNullReasonDoesNotDropTheBatch` (matching-service), #330.
+      broken: the guard replaced with `if (true)` (`JobMatchScoreRepository.java:120`) →
+      "Expected size: 26 but was: 0" (#330).
+- [x] C42.12 **new** — each of the five services writes JSON in its image: in a compose project
       started with `up --wait`, for each of `identity-service`, `api-gateway`, `job-service`,
       `matching-service`, `application-service`,
       `docker compose -p day42 logs --no-log-prefix <service> | grep -m1 "Started "` is one JSON
       object with `@timestamp`, `level` and `message`. Red today: 1 of 5, identity's.
-- [ ] C42.13 **hold** — the harness's tests that read container logs pass unedited with the
+      5 of 5 in #338: `ENV LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash` in the four Dockerfiles,
+      the same line in each. At the close, on a fresh `-p day42` project on 9f7a22f: 5 of 5, each "Started ..." line one JSON object with
+      `@timestamp`, `level` and `message`.
+- [x] C42.13 **hold** — the harness's tests that read container logs pass unedited with the
       rebuilt images: `TopMatchesTracedIT`, `JobServiceObservedIT`, `MatchingServiceHarnessIT` and
       `ApplicationServiceHarnessIT`, in process and through the gateway. They match a line by the
       trace id and the path it contains (`TopMatchesTracedIT.java:105-115`), which a JSON line also
@@ -233,37 +289,65 @@ E1 carries the 280-line SVG, and if A1 passes 400 its docs go in a PR of their o
       a stale image passes on text logs.
       broken: to be recorded in Track D — job-service's JSON leaving out the trace id
       (`logging.structured.json.exclude`).
-- [ ] C42.14 **new** — `git grep -nE 'log\.\w+\(.*,\s*(email|toEmail|normalizedEmail)\b' -- 'services/identity-service/*/src/main/*'`
+      All four pass in process and through the gateway with the four images rebuilt from #338
+      (207 tests in 29 classes through the gateway), and at the close (identity 425 tests in 81 classes, 0 failures, 1 skipped).
+      broken: job-service's JSON without the trace id (`LOGGING_STRUCTURED_JSON_EXCLUDE=traceId`,
+      image rebuilt) → `TopMatchesTracedIT` 2 of 2 failed, "its lines for that route: [...]
+      Expecting actual not to be empty" (#338). `JobServiceObservedIT` stayed green under that
+      break: it reads application-service's lines, so only `TopMatchesTracedIT` guards
+      job-service's trace id (a defect in the hold, below).
+- [x] C42.14 **new** — `git grep -nE 'log\.\w+\(.*,\s*(email|toEmail|normalizedEmail)\b' -- 'services/identity-service/*/src/main/*'`
       finds nothing, and a test with captured output requests a password reset for a password
       account, waits for the asynchronous send, and changes the password with
       `PATCH /api/auth/password`, and finds the account's email in no line logged. Red today: the
       grep finds 7; the test finds the email at `EmailService.java:47` (the test profile's SMTP at
       `localhost:1025` refuses) and `AuthenticationService.java:199`.
-- [ ] C42.15 **new** — with `docker compose -p day42 --env-file .env.example --profile obs up -d --build --wait`,
+      The grep prints nothing on 9f7a22f; `NoEmailInLogsIT` passes. #338.
+      broken: `EmailService` logging the recipient again → `NoEmailInLogsIT` "Expecting empty but
+      was: [... could not be sent to user-1@example.test: MailSendException]" (#338).
+- [x] C42.15 **new** — with `docker compose -p day42 --env-file .env.example --profile obs up -d --build --wait`,
       `curl -s localhost:9091/api/v1/targets` lists `jobmatch-application-service` with
       `"health":"up"`, and five targets in all; `grep -c job_name observability/prometheus.yml`
       gives 5. Red today: 4, and no application-service target. (Prometheus is published on 9091,
       compose `:355`.)
-- [ ] C42.16 **new** — `git grep -n "V1–V14" -- CLAUDE.md .claude/agents` finds nothing,
+      5 targets, `jobmatch-application-service` up, and `grep -c job_name` 5, in #338. At the
+      close, on 9f7a22f: 5 active targets, all `up`, `jobmatch-application-service` among them;
+      `grep -c job_name` gives 5.
+- [x] C42.16 **new** — `git grep -n "V1–V14" -- CLAUDE.md .claude/agents` finds nothing,
       `.claude/agents/spec-auditor.md:43`'s grep names no `backend` directory, and
       `git grep -ni "monolith" -- docker-compose.yml` finds nothing. Red today: 3, 1 and 3 lines.
-- [ ] C42.17 **new** — a script reports 0 broken relative links in
+      All three print nothing on 9f7a22f. #339. Compose had 2 such lines on the day, not 3. Each
+      half was seen red before #339; a grep of text has no break to run.
+- [x] C42.17 **new** — a script reports 0 broken relative links in
       `services/identity-service/README.md` and `services/identity-service/docs/*.md`, exits
       non-zero on one, and runs in identity's workflow. Red today: 74 of 129 broken (each `](path)`
       that is not a URL or an anchor, resolved against its file's directory).
-- [ ] C42.18 **new** — `identity-service-ci-cd.yaml`'s gateway run names `GoogleLinkClaimIT` and
+      `scripts/check-links.py` reports "0 of 127 relative links broken", exit 0, on 9f7a22f;
+      identity's workflow runs it, and its path filter names it. #340.
+      broken: `auth.md`'s `CurrentUserIdResolver` link pointed back under `../identity/src` →
+      "1 of 127 relative links broken", exit 1 (#340).
+- [x] C42.18 **new** — `identity-service-ci-cd.yaml`'s gateway run names `GoogleLinkClaimIT` and
       `PendingGoogleLinksIT`, and both pass with `-Dharness.gateway=true`. Red today: the workflow
       names neither.
-- [ ] C42.19 **new** — `git ls-files docs/target-architecture.*` prints nothing. Red today: two
+      The workflow names both (#339): through the gateway 1 and 6 tests, 0 failures, and at the
+      close (the Verify's gateway run, 193 tests in 26 classes, 0 failures). `ServiceJwksIT` was never on the list, so there was nothing to drop.
+      broken: the gateway's login route stripping `Set-Cookie` → through the gateway
+      `PendingGoogleLinksIT.travelsInACookieThatTheClaimingLoginDeletes` "No Set-Cookie for
+      'pending_google_link' in []" (#339).
+- [x] C42.19 **new** — `git ls-files docs/target-architecture.*` prints nothing. Red today: two
       files.
-- [ ] C42.20 **hold** — the Day 1–4 `contract/` suite passes unedited:
+      Prints nothing on 9f7a22f. #339.
+- [x] C42.20 **hold** — the Day 1–4 `contract/` suite passes unedited:
       `git diff <spec-change merge> <close> -- services/identity-service/app/src/test/java/nl/hackyourfuture/project/backend/contract/`
       is empty, in process and through the gateway. `ObservabilityLoggingIT` is in it and keeps
       setting the JSON format itself (`:34`).
       broken: `ObservabilityLoggingIT`'s format `logstash` → `ecs` → `writesEachLogLineAsJson`
       NPE at `:46` on `get("level")` (ECS writes `log.level`; it writes `@timestamp` too). Run by
       the spec-auditor on 3481dea, reverted.
-- [ ] C42.21 **hold** — every suite and checkstyle pass, counted from fresh surefire reports:
+      `git diff e028de4 9f7a22f -- services/identity-service/app/src/test/java/nl/hackyourfuture/project/backend/contract/`
+      is empty (e028de4 is #329's merge). The suite passes in process (identity 425 tests in 81 classes, 0 failures, 1 skipped) and through the
+      gateway (the Verify's gateway run, 193 tests in 26 classes, 0 failures).
+- [x] C42.21 **hold** — every suite and checkstyle pass, counted from fresh surefire reports:
       identity's `clean verify` and `checkstyle:check`, and `verify` in job-, matching-,
       application-service and the gateway. Baseline on 3481dea, identity: 435 tests in 82 classes,
       0 failures, 1 skipped; checkstyle 0. The close states the count and what moved it: retired
@@ -271,6 +355,14 @@ E1 carries the 280-line SVG, and if A1 passes 400 its docs go in a PR of their o
       `InternalCallersTest`'s self-trust cases and the four self-trust methods; added C42.4's,
       C42.7's, C42.11's and C42.14's tests.
 
+      At the close on 9f7a22f: identity 425 tests in 81 classes, 0 failures, 0 errors, 1 skipped,
+      checkstyle 0; job-service 53 in 11, matching-service 84 in 27, application-service 96 in 22,
+      the gateway 45 in 15, 0 failures each, all from fresh surefire reports. Identity went from
+      435 to 425: −4 the self-trust methods
+      (#330), −5 `InternalClientsIT` (#332), −5 `ServiceJwksIT` and +1 `RetiredServiceIssuerIT`
+      (#334), −3 `ServiceSigningKeyStartupTest` and +2 (#335, `InternalCallersTest`'s self-trust
+      cases rewritten in place), −3 `StubUpstreamTest` (#336), +2 `IdentityDbConnectTest` and
+      +4 `RefreshTokenGrantsIT` rows (#337), +1 `NoEmailInLogsIT` (#338).
 ## Verify
 ```bash
 for s in job-service matching-service application-service api-gateway; do docker build -t jobmatch-$s:harness services/$s; done
@@ -332,3 +424,54 @@ docker compose -p day42 down -v                                                 
 - **Hand-off** H42.2 → Day 34: identity's trace service name is still `jobmatch-backend`
   (`Dockerfile:48`), and so is the Grafana dashboard's `uid`; Phase 7's observability names them
   after the service. Day 34's file is still a Helm draft; its rewrite carries this.
+
+### The close
+
+- **Track order: 0 (#330), B (#331), A2a1 (#332), A2b (#333), A1a (#334), A1b (#335), A2a2
+  (#336), C (#337), D (#338), E1 (#339), E2 (#340).** The spec's order held where it mattered:
+  0 first, B before A1, A2a1 before A1, E2 after A1. A2b went before A2a2, and A1 between the
+  two halves of A2a, since #332 had already removed the `InternalClients` bean that needed
+  `ServiceToken`; each PR said so. Estimated 9 PRs; took 11, in 2,395 track lines, none
+  `Oversized:`. One spec change (#329).
+- **Departures, each recorded in its PR:**
+  - **C42.1's first grep is met by a narrower one.** `service-jwks` and
+    `SERVICE_JWT_PRIVATE_KEY_FILE` also name job-, matching- and application-service's own keys
+    in the harness and the docs: 17 lines that have to stay. The grep in the tick matches only
+    identity's issuer and prints nothing (#334, #335).
+  - **A2a and A1 split in two by the gate.** A2a came to 557 lines alone (#332, #336); A1 to 552,
+    split by what publishes the key (#334) and what signs with it (#335) rather than code and
+    docs, since each half's docs went with its code.
+  - **Track D turned JSON on with an environment variable** in each Dockerfile, not a `prod`
+    profile: none of the four had a profile file. The spec left the choice to the track.
+- **Defect** — found: Track A1a · cause: spec · C42.1 could not pass as written even after the
+  audit's exclusions: they covered the `.withEnv` lines, not the key-set URLs, ITs and doc rows
+  that name the other services' keys with the same words.
+- **Defect** — found: Track D (break) · cause: spec · C42.13 named `JobServiceObservedIT` as one of
+  the holds on job-service's JSON; it reads application-service's lines and stayed green when
+  job-service's JSON lost the trace id. Only `TopMatchesTracedIT` guards it.
+- **Defect** — found: Track A2a · cause: spec · the estimate: the spec split A2 at about 650 lines
+  and expected A2a to fit, but A2a alone was 557, and A1 was 552. 9 PRs became 11.
+- **Defect** — found: Track E1 · cause: spec · C42.16 counted 3 compose lines naming the monolith
+  (2 on the day), and C42.18 asked to drop `ServiceJwksIT` from a list it was never on.
+- **Defect** — found: review (Track A1b) · cause: implementation · the draft's
+  `startsWithNoServiceKey` read `System.getenv`, null in every run, so it could not fail. It
+  reads the property now.
+- **Defect** — found: review (Track C) · cause: implementation · the draft's `RefreshTokenGrantsIT`
+  checked table SELECT only; Day 38's refusal is the schema's USAGE, which it would not have seen
+  come back.
+- **Defect** — found: review (Track D) · cause: implementation · the draft's `NoEmailInLogsIT`
+  waited in a way that could pass without checking, its report gave a wrong reason for the
+  `EmailService` change, and it dropped `Locale.ROOT` from a `toLowerCase`.
+- **Defect** — found: review (Track E2) · cause: implementation · the draft repointed the README's
+  two working `.env.example` links from identity's file to the root's.
+- **Defect** — found: close · cause: process · Track A1 had no Jira sub-task, and #334's and
+  #335's branches no key, so Jira showed A1's work nowhere under KAN-86. The close added it
+  after the fact as KAN-98, linked to both PRs.
+- **The close's Verify, on 9f7a22f:** the four harness images rebuilt; the suites as C42.21 says;
+  the gateway run as C42.20 says; the greps as each tick says; compose as C42.9, C42.12 and
+  C42.15 say.
+- **Hand-off** H42.3 → the Phase 7 rewrite (Day 32): docs no criterion covered, seen by the
+  tracks: the gateway's `application.yaml:57-68` still says "the monolith's remainder" and "until
+  Track E1"; identity's README says `../mvnw` (the wrapper is at `../../mvnw`); and identity's
+  `docs/configuration.md` still calls the database `project_db` outside the two rows #337
+  rewrote.
