@@ -4,7 +4,7 @@ import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.PostgresContainer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -30,12 +30,6 @@ class ModuleConnectionsIT extends IntegrationTest {
     @Autowired @Qualifier("identityDataSource") private DataSource identity;
     private final DataSource jobs = new DriverManagerDataSource(
             PostgresContainer.jobsJdbcUrl("analytics"), "jobs_user", PostgresContainer.rolePassword());
-    // jobs_user keeps CONNECT on identity_db, so what it must not read there is checked from there.
-    private final DataSource jobsOnIdentityDb = new DriverManagerDataSource(
-            PostgresContainer.jdbcUrl("public"), "jobs_user", PostgresContainer.rolePassword());
-    // matching_user's login left with matching-service (Day 21); checked as jobs_user's is.
-    private final DataSource matching = new DriverManagerDataSource(
-            PostgresContainer.jdbcUrl("matching"), "matching_user", PostgresContainer.rolePassword());
 
     @Test
     void eachModuleLogsInAsItsOwnRoleWithItsOwnSchema() {
@@ -43,30 +37,19 @@ class ModuleConnectionsIT extends IntegrationTest {
         assertThat(whoAndWhere(jobs)).isEqualTo("jobs_user analytics");
     }
 
-    @Test
-    void applicationsCannotConnectToIdentityDb() {
-        // Since Day 25 it connects only to apps_db; Postgres refuses at login.
-        DataSource applicationsOnIdentityDb = new DriverManagerDataSource(
-                PostgresContainer.jdbcUrl("applications"), "applications_user", PostgresContainer.rolePassword());
-        assertThatThrownBy(() -> JdbcClient.create(applicationsOnIdentityDb)
+    @ParameterizedTest
+    @ValueSource(strings = {"applications", "matching", "jobs"})
+    void noOtherModuleCanConnectToIdentityDb(String module) {
+        // applications_user since Day 25, matching_user and jobs_user since Day 42: Postgres refuses
+        // at login, so what they could read there is moot.
+        DataSource moduleOnIdentityDb = new DriverManagerDataSource(
+                PostgresContainer.jdbcUrl("public"), module + "_user", PostgresContainer.rolePassword());
+        assertThatThrownBy(() -> JdbcClient.create(moduleOnIdentityDb)
                 .sql("SELECT 1")
                 .query(Integer.class)
                 .single())
                 .rootCause()
                 .hasMessageContaining("permission denied for database \"identity_db\"");
-    }
-
-    // Days 08-10 removed the reads; Day 38 revoked what allowed them, before the modules leave
-    // the process with these logins.
-    @ParameterizedTest
-    @CsvSource({"jobs, identity.user_credentials", "matching, identity.users"})
-    void noModuleCanReadAnothersSchema(String module, String table) {
-        assertThatThrownBy(() -> JdbcClient.create(pool(module))
-                .sql("SELECT count(*) FROM " + table)
-                .query(Long.class)
-                .single())
-                .rootCause()
-                .hasMessageContaining("permission denied for schema " + table.substring(0, table.indexOf('.')));
     }
 
     // Created through identity's own pool, so identity_user is its creator, as for a migration:
@@ -131,15 +114,6 @@ class ModuleConnectionsIT extends IntegrationTest {
                 .query(String.class)
                 .list();
         assertThat(users).containsExactly("jobs_user");
-    }
-
-    private DataSource pool(String module) {
-        return switch (module) {
-            case "identity" -> identity;
-            case "matching" -> matching;
-            case "jobs" -> jobsOnIdentityDb;
-            default -> throw new IllegalArgumentException(module);
-        };
     }
 
     private static String whoAndWhere(DataSource dataSource) {

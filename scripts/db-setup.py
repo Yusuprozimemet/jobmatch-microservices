@@ -86,6 +86,9 @@ JOBS_ROLES = (ANALYTICS_ROLE, ANALYTICS_DEV_ROLE, JOBS_ROLE)
 APPLICATIONS_ROLE = "applications_user"
 APPS_ROLES = (APPLICATIONS_ROLE,)
 
+# The only roles granted CONNECT on identity_db (Day 42).
+IDENTITY_DB_ROLES = ("identity_user",)
+
 # Schemas in identity_db, and the role that owns each: app and the module schemas.
 # A role gets full access to schemas it owns and read-only access to the others,
 # so adding a schema here is the only edit needed.
@@ -392,16 +395,17 @@ def main() -> None:
                     role=sql.Identifier(role), member=sql.Identifier(APP_ROLE))
         done("'%s' is a member of %s", APP_ROLE, ", ".join(MODULE_ROLES))
 
-        # Database-level grants. identity_db: every role but applications_user (Day 25), which
-        # connects only to apps_db. jobs_db: only analytics roles and jobs_user.
-        # apps_db: only applications_user.
+        # Database-level grants. identity_db: only identity_user (Day 42); app_user, which runs
+        # the migrations, connects as a member of identity_user, granted above.
+        # jobs_db: only analytics roles and jobs_user. apps_db: only applications_user.
         revoke_connect(conn, NEW_DATABASE)
         # Earlier runs granted it by name, so revoking PUBLIC alone would leave it connecting.
-        for role in APPS_ROLES:
-            execute(conn, "REVOKE CONNECT ON DATABASE {database} FROM {role}",
-                    database=sql.Identifier(NEW_DATABASE), role=sql.Identifier(role))
-            done("Revoked CONNECT on database '%s' from %s", NEW_DATABASE, role)
-        grant_connect(conn, NEW_DATABASE, [r for r in roles if r not in APPS_ROLES])
+        for role in roles:
+            if role not in IDENTITY_DB_ROLES:
+                execute(conn, "REVOKE CONNECT ON DATABASE {database} FROM {role}",
+                        database=sql.Identifier(NEW_DATABASE), role=sql.Identifier(role))
+                done("Revoked CONNECT on database '%s' from %s", NEW_DATABASE, role)
+        grant_connect(conn, NEW_DATABASE, list(IDENTITY_DB_ROLES))
         revoke_connect(conn, JOBS_DATABASE)
         grant_connect(conn, JOBS_DATABASE, list(JOBS_ROLES))
         revoke_connect(conn, APPS_DATABASE)

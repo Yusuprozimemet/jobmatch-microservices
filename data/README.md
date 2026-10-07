@@ -139,10 +139,10 @@ the file the container writes as
 at `/Volumes/team_c/landing/prod/postings/`. One copy of the
 bytes, two ways to reach it: Azure tooling on one side, SQL on the other.
 
-The two tracks meet in the backend's database, which has one schema per side.
-You write marts into `analytics`, which the backend reads. The backend writes
-`app`, which you can read. Neither side can write to the other's, and that is
-two Postgres roles rather than an agreement.
+The two tracks meet in `jobs_db`. You write marts into `analytics`, which
+job-service reads and cannot write. The application's own data is in other
+databases your roles cannot even connect to, and that is Postgres roles rather
+than an agreement.
 
 ## What is where
 
@@ -210,7 +210,7 @@ It is yours, not your team's. Paste it only into your local `.env`, never into
 Slack, a pull request or an LLM prompt.
 
 **3. Create your local database.** The backend's own script makes
-`identity_db` with the `app` schema and `jobs_db` with the `analytics` and
+`identity_db` for identity-service and `jobs_db` with the `analytics` and
 `analytics_dev` schemas, with a login role for each. Start the database first,
 from the repository root:
 
@@ -629,32 +629,19 @@ If you find yourself copying `setting()` and `secret()` into your second DAG,
 move them somewhere shared instead. That is the moment they stop belonging to
 one pipeline.
 
-### Reading the app's data
-
-The other direction: your credential can read the backend's own tables, so a
-model can join against how the application is actually being used.
-`src/publishing/sync.py` has `read_backend_table` ready for it; note that it
-reads the `app` schema in `identity_db`, a different database from the one where
-you publish the mart (`jobs_db`). Add a task once you have agreed with the
-backend which table you are reading, and keep it before `dbt_build` so the
-models can use what it lands.
-
-Agreeing it matters more than it sounds. Their tables are theirs to change, and
-nothing warns you when they do: a column you depend on can disappear in a
-migration you never saw. Read as little as you need, and tell them what you
-read.
-
 ## The two schemas
 
-The two tracks meet in the backend's database, which has one schema per side:
+Both are in `jobs_db`:
 
-- **`analytics`** — you write, the backend reads. Your published marts.
-- **`app`** — the backend writes, you read. Their operational tables.
+- **`analytics`** — you write, job-service reads. Your published marts.
+- **`analytics_dev`** — your own runs publish here, as `analytics_dev_user`.
 
-There is a login role per schema, `analytics_user` and `app_user`, each owning
-its own and holding read on the other. You connect as `analytics_user`. That is
-what stops a stray publish from corrupting the application, and stops a backend
-deploy from overwriting your marts.
+There is a login role per schema, `analytics_user` and `analytics_dev_user`.
+job-service reads as `jobs_user`, which can write neither. That is what stops a
+job-service deploy from overwriting your marts. None of these roles can connect
+to `identity_db`, where the application keeps its users: if a model ever needs
+something from the application, ask identity-service for an internal route
+rather than for its tables.
 
 `scripts/db-setup.py` at the repository root creates all of it, and prints your
 password once. Run it against your local Postgres and you have the same shape

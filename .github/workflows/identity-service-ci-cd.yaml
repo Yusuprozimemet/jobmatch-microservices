@@ -17,6 +17,9 @@ on:
       - "services/matching-service/**"
       # The harness starts application-service from its image (Day 25), so a change to it runs the suite.
       - "services/application-service/**"
+      # IdentityDbConnectTest reads both to compare the three role-setup copies (Day 42).
+      - "scripts/db-init/**"
+      - "scripts/db-setup.py"
       - ".github/workflows/identity-service-ci-cd.yaml"
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
@@ -48,7 +51,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|\.github/workflows/identity-service-ci-cd\.yaml$)'
+          PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|scripts/db-init/|scripts/db-setup\.py$|\.github/workflows/identity-service-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
             echo run=true >> "$GITHUB_OUTPUT"; exit 0
