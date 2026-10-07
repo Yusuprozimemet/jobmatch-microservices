@@ -605,19 +605,30 @@ function drawNow() {
     </dl>
     ${nextBox}`;
   }
+  // The next day plan.md names before its spec is written (the cleanup day), after the day it follows.
+  const u = now.unwritten;
   const rows = PHASES.map((name, p) => {
     const ds = days.filter(d => d.phase === p);
     if (!ds.length) return "";
-    return `<div class="phase-row"><div class="phase-name"><b>${p}. ${name}</b>Days ${ds[0].day}–${ds[ds.length - 1].day}</div><div class="tiles">${ds.map(d => {
+    const later = u && u.phase === p ? `<div class="tile unwritten" tabindex="0" aria-label="Day ${u.day}, spec not written">${dd(u.day)}</div>` : "";
+    return `<div class="phase-row"><div class="phase-name"><b>${p}. ${name}</b>Days ${ds[0].day}–${later ? u.day : ds[ds.length - 1].day}</div><div class="tiles">${ds.map(d => {
       const share = d.tracks.length ? Math.min(1, d.tracks_merged.length / d.tracks.length) : 0;
       const bar = d.status === "active" ? `<span class="bar"><i style="width:${Math.round(share * 100)}%"></i></span>` : "";
       return `<div class="tile ${d.status}${STOPS.includes(d.day) ? " stop" : ""}${OOO.has(d.day) ? " ooo" : ""}" data-day="${d.day}" tabindex="0" aria-label="Day ${d.day}, ${STATUS[d.status]}">${dd(d.day)}${bar}</div>`;
-    }).join("")}</div></div>`;
+    }).join("")}${later}</div></div>`;
   }).join("");
   document.getElementById("roadmap").innerHTML = rows + `<div class="tile-legend">
     <span><i class="tile done"></i>Done</span><span><i class="tile closed"></i>Closed, boxes open</span><span><i class="tile active"></i>In progress (bar: tracks merged)</span>
-    <span><i class="tile"></i>Ready</span><span><i class="tile provisional"></i>Provisional</span>
+    <span><i class="tile"></i>Ready</span><span><i class="tile provisional"></i>Provisional</span>${u ? `<span><i class="tile unwritten"></i>Spec not written</span>` : ""}
     <span><i class="tile stop"></i>Ends a phase</span><span><i class="tile ooo"></i>Run out of numeric order</span></div>`;
+  document.querySelectorAll("#roadmap .tile.unwritten[tabindex]").forEach(tile => {
+    const show = ev => showTip(ev, `<b>Day ${dd(u.day)} · Spec not written</b><div style="margin:3px 0 6px">${md(u.title)}</div>
+      <div>${md(now.next_step)}</div>`);
+    tile.addEventListener("mousemove", show);
+    tile.addEventListener("focus", () => { const r = tile.getBoundingClientRect(); show({ clientX: r.right, clientY: r.bottom }); });
+    tile.addEventListener("mouseleave", hideTip);
+    tile.addEventListener("blur", hideTip);
+  });
   document.querySelectorAll("#roadmap .tile[data-day]").forEach(tile => {
     const d = days.find(x => x.day === +tile.dataset.day);
     const show = ev => showTip(ev, `<b>Day ${dd(d.day)} · ${STATUS[d.status]}</b><div style="margin:3px 0 6px">${md(d.title)}</div>
