@@ -70,6 +70,14 @@ RENAMED = {296: ("ApplicationsUserDeletedConsumerIT", "UserDeletedConsumerTest")
 # or a Verify line that echoes when it does (`grep ... || echo "clean"`).
 GREP_SAYS_NOTHING = re.compile(r"`(grep [^`]+)`[^.]{0,40}?\b(?:returns|prints|finds|gives) (?:nothing|0)\b")
 GREP_OR_ECHO = re.compile(r"^(grep\s.+?)\s*\|\|\s*echo\b", re.M)
+# Directories that moved, by the merge that moved them, in order. A removal check's paths follow
+# them: Day 08's grep of backend/jobs/src/ reads job-service's code once #174 has moved it there.
+MOVED = [(174, "backend/jobs", "services/job-service"),  # Day 17 D1
+         (224, "backend/matching", "services/matching-service"),  # Day 21 E1a
+         (296, "backend/applications", "services/application-service"),  # Day 25 E1a
+         (315, "backend", "services/identity-service")]  # Day 28 A1
+# The most lines of one check's finds on main that the page lists.
+FOUND_SHOWN = 10
 # "Day 17", "Days 18-19", "Days 19, 21 and 24": the days a sentence names.
 DAY_REF = re.compile(r"\bDays? (\d+)((?:\s*(?:[–-]|,|and|or)\s*\d+)*)")
 # IDs, from Day 28's spec change on (specs/README.md): criterion 3 of Day 28 is C28.3, and the
@@ -795,36 +803,67 @@ def in_scope(path, scope):
     return len(have) >= len(want) and all(fnmatch.fnmatchcase(h, w) for h, w in zip(have, want))
 
 
-def removal_history(days, snaps, blobs):
-    """Each finished day's removal checks, run at every merge from the day's end: the lines each
-    finds. Paths are read from backend/, where most Verify blocks cd, or from the root when more of
-    them exist there (Day 16 names backend/docs/). Blobs are counted once, by id."""
-    checks = [dict(day=d["day"], cmd=cmd, since=d["ended_at"], rule=grep_rule(cmd), hits=[])
+def follow(scope, moves):
+    """The paths a shell path names after these moves, (old, new) in order. A path inside a moved
+    directory goes with it; one that names a parent of it (backend, backend/*/src) keeps reading
+    where it was and also reads where the directory went."""
+    out = [scope]
+    for old, new in moves:
+        o, nxt = old.split("/"), []
+        for sc in out:
+            s = [p for p in sc.split("/") if p not in ("", ".")]
+            if s[:len(o)] == o:
+                nxt.append("/".join([new] + s[len(o):]))
+                continue
+            if all(fnmatch.fnmatchcase(a, b) for a, b in zip(o, s)):
+                nxt.append("/".join([new] + s[len(o):]))
+            nxt.append(sc)
+        out = nxt
+    return out
+
+
+def removal_history(days, snaps, blobs, moved=MOVED):
+    """Each finished day's removal checks, run at every merge from the day's end: the files each
+    reads, the lines it finds, and on the last merge which lines. Paths are read from backend/,
+    where most Verify blocks cd, or from the root when more of them exist there (Day 16 names
+    backend/docs/), and follow the directories that moved. A check that reads no files prints
+    nothing too, so the files are counted. Blobs are counted once, by id."""
+    checks = [dict(day=d["day"], cmd=cmd, since=d["ended_at"], rule=grep_rule(cmd), hits=[], files=[], found=[])
               for d in days if "ended_at" in d for cmd in d["removal_checks"]]
     checks = [c for c in checks if c["rule"]]
+    pr_at = {s["pr"]: i for i, s in enumerate(snaps) if s.get("pr")}
     seen = {}
     for i, s in enumerate(snaps):
         live = [c for c in checks if c["since"] <= i]
         if not live:
             continue
+        moves = [(old, new) for n, old, new in moved if pr_at.get(n, len(snaps)) <= i]
+        scopes_from = lambda b, paths: [f for p in paths for f in follow(posixpath.normpath(posixpath.join(b, p)), moves)]
         tree = [(meta.split()[2], path) for meta, path in (line.split("\t", 1) for line in
                 at_commits("ls-tree", "-r", s["sha"]).splitlines()) if meta.split()[1] == "blob"]
         for c in live:
             rx, paths, include = c["rule"]
             if "base" not in c:
                 c["base"] = max(("backend", ""), key=lambda b: sum(
-                    any(in_scope(f, posixpath.normpath(posixpath.join(b, p))) for _, f in tree) for p in paths))
-            scopes = [posixpath.normpath(posixpath.join(c["base"], p)) for p in paths]
-            n = 0
+                    any(in_scope(f, sc) for _, f in tree) for sc in scopes_from(b, paths)))
+            scopes = scopes_from(c["base"], paths)
+            n = files = 0
             for oid, path in tree:
                 if (any(in_scope(path, sc) for sc in scopes)
                         and (include is None or fnmatch.fnmatchcase(posixpath.basename(path), include))):
+                    files += 1
                     if (c["cmd"], oid) not in seen:
                         text = blobs.read(s["sha"], path)
                         seen[c["cmd"], oid] = 0 if "\0" in text else sum(bool(rx.search(x)) for x in text.splitlines())
                     n += seen[c["cmd"], oid]
+                    if i == len(snaps) - 1 and seen[c["cmd"], oid]:
+                        c["found"] += [dict(path=path, line=k, text=x.strip()[:160]) for k, x in
+                                       enumerate(blobs.read(s["sha"], path).splitlines(), 1) if rx.search(x)]
             c["hits"].append(n)
-    return [dict(day=c["day"], cmd=c["cmd"], base=c["base"] or ".", since=c["since"], hits=c["hits"]) for c in checks]
+            c["files"].append(files)
+            c["found"] = c["found"][:FOUND_SHOWN]
+    return [dict(day=c["day"], cmd=c["cmd"], base=c["base"] or ".", since=c["since"], hits=c["hits"],
+                 files=c["files"], found=c["found"]) for c in checks]
 
 
 def days_named(text):
