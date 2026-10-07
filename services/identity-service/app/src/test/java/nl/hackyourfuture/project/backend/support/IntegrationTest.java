@@ -69,9 +69,6 @@ public abstract class IntegrationTest {
         // application-service (Day 25). A supplier: its key server is up before a context needs it.
         registry.add("app.internal.trusted-issuers[3].name", () -> ServiceKey.APPLICATION.issuer());
         registry.add("app.internal.trusted-issuers[3].key-set-url", () -> ServiceKey.APPLICATION.jwksUrl());
-        // The monolith's postings clients call the container; application-test.yaml maps
-        // app.internal.jobs-url to it, so a failure test's own app.internal.jobs-url still wins.
-        registry.add("harness.job-service-url", JobService::baseUrl);
         // The event bus (Day 26): every context's relay publishes to the shared topic.
         registry.add("app.events.sns.endpoint", () -> EventBus.endpoint().toString());
         registry.add("app.events.user-deleted-topic-arn", EventBus::topicArn);

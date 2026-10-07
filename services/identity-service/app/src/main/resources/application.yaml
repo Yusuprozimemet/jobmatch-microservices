@@ -68,12 +68,6 @@ app:
     # First Google sign-in lands here instead of home, since Google skips our terms screen.
     terms-required-redirect: ${OAUTH2_TERMS_REDIRECT:${app.base-url}/accept-terms}
 
-  # Where the internal clients send their calls (Day 19): empty is this process; compose points
-  # jobs-url at job-service (Day 17). Top matches, the only caller of identity's routes, left with
-  # matching-service on Day 21.
-  internal:
-    jobs-url: ${INTERNAL_JOBS_URL:}
-
   # The outbox relay (Day 26) publishes identity's user.deleted to SNS; its consumers are
   # application-service and matching-service (Days 25, 27). With the relay on, the topic is
   # required; compose points it and the endpoint at the emulator. Empty keys mean the SDK's

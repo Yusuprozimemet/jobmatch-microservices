@@ -29,12 +29,6 @@ app:
       # Empty means GoogleOAuth2Config does not register, so tests never redirect to Google.
       client-id: ""
       client-secret: ""
-  internal:
-    # The harness points job-service's URL here (Day 17), never at app.internal.jobs-url
-    # itself: a base class's @DynamicPropertySource wins over a subclass's, so a registration
-    # in IntegrationTest would override the failure tests' stub. Since Day 17 Track D,
-    # IntegrationTest sets it to the container.
-    jobs-url: ${harness.job-service-url:}
   events:
     relay:
       # On: a deleted account's user.deleted reaches the bus as in production. Every cached

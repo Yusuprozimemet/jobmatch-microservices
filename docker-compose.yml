@@ -51,8 +51,7 @@ services:
       # One login per module, created by scripts/db-init/ on an empty volume.
       DB_IDENTITY_USER: identity_user
       DB_IDENTITY_PASSWORD: ${IDENTITY_DB_PASSWORD:-password}
-      # Day 17: job search and the postings routes are job-service's; it calls back for saved counts.
-      INTERNAL_JOBS_URL: http://job-service:8080
+      # Day 17: job-service's service tokens.
       APP_INTERNAL_TRUSTEDISSUERS_0_NAME: jobmatch-job-service
       APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL: http://job-service:8080/.well-known/service-jwks.json
       # Day 21: matching-service calls identity's /internal/users and /internal/profiles.
