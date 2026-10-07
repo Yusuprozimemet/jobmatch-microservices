@@ -1,7 +1,5 @@
-# Day 32: the Terraform under infra/ is checked without an AWS account. This
-# run formats and validates the three roots; Day 32's later tracks add the
-# plans, the LocalStack applies, the lock test and scripts/infra-checks.py,
-# with the code-side paths those read. No AWS credentials, no apply to AWS.
+# Infra checks: format, validate, plan with fake credentials, LocalStack lock test and apply,
+# and secret sweep. No AWS credentials, no job that applies to AWS.
 
 name: Infra checks
 
@@ -9,12 +7,24 @@ on:
   pull_request:
     paths:
       - "infra/**"
+      - "scripts/bus-init/**"
+      - "scripts/infra-checks.py"
+      - "docker-compose.yml"
+      - "services/matching-service/**/ScoreStoreConfig.java"
+      - "services/matching-service/src/main/resources/application.yaml"
+      - "services/identity-service/**/support/EventBus.java"
       - ".github/workflows/infra-ci.yaml"
   push:
     branches:
       - main
     paths:
       - "infra/**"
+      - "scripts/bus-init/**"
+      - "scripts/infra-checks.py"
+      - "docker-compose.yml"
+      - "services/matching-service/**/ScoreStoreConfig.java"
+      - "services/matching-service/src/main/resources/application.yaml"
+      - "services/identity-service/**/support/EventBus.java"
       - ".github/workflows/infra-ci.yaml"
 
 permissions:
@@ -24,12 +34,42 @@ jobs:
   terraform:
     name: Terraform checks without an AWS account
     runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: eu-west-1
+
+    services:
+      localstack:
+        image: localstack/localstack:4.14.0
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3,sns,sqs,dynamodb,cloudwatch,sts,iam
+          AWS_DEFAULT_REGION: eu-west-1
+        options: >-
+          --health-cmd "curl -sf localhost:4566/_localstack/health"
+          --health-interval 2s
+          --health-retries 30
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.16.3
           terraform_wrapper: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install boto3 awscli-local
 
       - name: fmt
         run: terraform fmt -check -recursive infra/terraform
@@ -40,3 +80,121 @@ jobs:
             terraform -chdir="$root" init -backend=false -input=false
             terraform -chdir="$root" validate
           done
+
+      - name: plan without an account
+        run: |
+          # Bootstrap plan
+          cat > infra/terraform/bootstrap/ci_override.tf << 'EOF'
+          provider "aws" {
+            skip_credentials_validation = true
+            skip_requesting_account_id  = true
+            skip_metadata_api_check     = true
+          }
+          EOF
+
+          terraform -chdir=infra/terraform/bootstrap init -reconfigure -input=false
+          terraform -chdir=infra/terraform/bootstrap plan -input=false -out=tfplan \
+            -var alert_email=alerts@example.com
+          terraform -chdir=infra/terraform/bootstrap show -json tfplan > "$RUNNER_TEMP/bootstrap-plan.json"
+
+          # Main root plan
+          cat > infra/terraform/ci_override.tf << 'EOF'
+          terraform {
+            backend "local" {}
+          }
+          provider "aws" {
+            skip_credentials_validation = true
+            skip_requesting_account_id  = true
+            skip_metadata_api_check     = true
+          }
+          EOF
+
+          terraform -chdir=infra/terraform init -reconfigure -input=false
+          terraform -chdir=infra/terraform plan -input=false -out=tfplan
+          terraform -chdir=infra/terraform show -json tfplan > "$RUNNER_TEMP/main-plan.json"
+
+      - name: LocalStack state bucket
+        run: |
+          awslocal s3 mb s3://jobmatch-microservices-tfstate
+          terraform -chdir=infra/terraform/localstack init -input=false
+
+      - name: lock test
+        run: |
+          # C32.3: Verify state locking prevents concurrent plans while apply waits for input.
+          set +e
+          FIFO="${RUNNER_TEMP:-/tmp}/terraform_input_$$"
+          mkfifo "$FIFO"
+
+          # Start apply in background, reading input from fifo
+          terraform -chdir=infra/terraform/localstack apply -input=true < "$FIFO" > /tmp/apply.log 2>&1 &
+          APPLY_PID=$!
+
+          # Open fifo for writing and hold it open on fd 3
+          exec 3>"$FIFO"
+
+          # Wait up to 60 s for "Enter a value" prompt
+          i=0
+          while [ $i -lt 60 ]; do
+            if grep -q "Enter a value" /tmp/apply.log 2>/dev/null; then
+              break
+            fi
+            i=$((i + 1))
+            sleep 1
+          done
+
+          if ! grep -q "Enter a value" /tmp/apply.log 2>/dev/null; then
+            echo "ERROR: apply did not prompt for input within 60 s"
+            cat /tmp/apply.log
+            exec 3>&-
+            rm -f "$FIFO"
+            exit 1
+          fi
+
+          # Plan with lock timeout 0 must fail with lock error
+          if terraform -chdir=infra/terraform/localstack plan -lock-timeout=0s -input=false > /tmp/plan_fail.log 2>&1; then
+            echo "ERROR: the second plan got the state lock while apply held it"
+            cat /tmp/apply.log
+            cat /tmp/plan_fail.log
+            exec 3>&-
+            rm -f "$FIFO"
+            exit 1
+          fi
+
+          if ! grep -q "Error acquiring the state lock" /tmp/plan_fail.log; then
+            echo "ERROR: plan should have failed with 'Error acquiring the state lock'"
+            cat /tmp/apply.log
+            cat /tmp/plan_fail.log
+            exec 3>&-
+            rm -f "$FIFO"
+            exit 1
+          fi
+
+          # Answer no to the apply
+          echo "no" >&3
+          exec 3>&-
+
+          # Apply must exit with code 1
+          wait $APPLY_PID
+          APPLY_EXIT=$?
+          if [ $APPLY_EXIT -ne 1 ]; then
+            echo "ERROR: apply should have exited with code 1, got $APPLY_EXIT"
+            cat /tmp/apply.log
+            rm -f "$FIFO"
+            exit 1
+          fi
+
+          rm -f "$FIFO"
+
+          # Plan again must succeed
+          set -e
+          terraform -chdir=infra/terraform/localstack plan -lock-timeout=0s -input=false > /dev/null
+
+      - name: apply on LocalStack
+        run: terraform -chdir=infra/terraform/localstack apply -auto-approve -input=false
+
+      - name: infra-checks.py
+        run: |
+          python scripts/infra-checks.py \
+            --bootstrap-plan "$RUNNER_TEMP/bootstrap-plan.json" \
+            --main-plan "$RUNNER_TEMP/main-plan.json" \
+            --localstack http://localhost:4566
