@@ -29,33 +29,6 @@
     </div>
   </section>
 
-  <section class="panel">
-    <div class="panel-head">
-      <h2>Evidence behind the ticks</h2>
-      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property, like <code>GatewayHarnessIT</code>, runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Days marked <em>pre-format</em> were written before the evidence format (#55, from Day 9): nothing asked their ticks to record any of this, so a zero there is not measured, not missing. The <code>broken:</code> line was asked for from #310: “Seen red” is not measured for a day none of whose PRs reaches it.</p>
-    </div>
-    <div class="scroll-x"><table id="evidence"></table></div>
-    <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
-    <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">Merge by merge</h2>
-      <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
-    </div>
-    <div id="evidence-history"></div>
-    <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">Removal checks</h2>
-      <p>The greps a finished day's criteria or Verify say must print nothing, run over the tree at every merge from the day's end, from <code>backend/</code> or the root, wherever their paths are. Paths follow the directories that moved since (<code>backend/jobs/</code> to job-service, <code>backend/</code> to identity-service), because a grep of a path that is gone prints nothing too. CI runs none of them. A check is orange when it finds lines on <code>main</code>, listed under it; grey when it reads no files; green otherwise. Since is the merge where that state began.</p>
-    </div>
-    <div class="scroll-x"><table id="removals"></table></div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head">
-      <h2>Hand-offs to days not yet run</h2>
-      <p>What finished days leave for later: a Notes item that names a day not yet run, or a code comment that does ("Day 17 adds job-service"). Nothing else carries them forward. A Notes item with an ID (<code>H28.1</code>, from Day 28 on) counts as picked up only when the receiving spec cites the ID; one without, when it names the day the item came from; a comment, when the spec names its file. Days in run order; a spec written in full should leave none open. Last: ID'd items no later day picks up, and tracks a PR announced that no branch ever named (Day 25's E1c, #298).</p>
-    </div>
-    <div class="hand-offs" id="hand-offs"></div>
-  </section>
-
   <div class="stats" id="stats"></div>
   <div class="finding caveats"><h3>What these figures cannot see</h3><ul id="caveats"></ul></div>
 
@@ -159,6 +132,44 @@
     <div class="scroll-x" id="heat"></div>
   </section>
 
+  <section class="panel" id="tokens">
+    <div class="panel-head">
+      <h2>Tokens spent</h2>
+      <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the migration day whose branch they ran on. Under each bar, and in the table, is the context per reply: how much of the conversation each reply re-read. It falls when sessions are kept short, and it drives most of the cost.</p>
+    </div>
+    <div class="legend" id="token-legend"></div>
+    <p id="token-implementer"></p>
+    <div id="token-bars"></div>
+    <div class="scroll-x"><table id="token-days"></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Evidence behind the ticks</h2>
+      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property, like <code>GatewayHarnessIT</code>, runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Days marked <em>pre-format</em> were written before the evidence format (#55, from Day 9): nothing asked their ticks to record any of this, so a zero there is not measured, not missing. The <code>broken:</code> line was asked for from #310: “Seen red” is not measured for a day none of whose PRs reaches it.</p>
+    </div>
+    <div class="scroll-x"><table id="evidence"></table></div>
+    <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
+    <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Merge by merge</h2>
+      <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
+    </div>
+    <div id="evidence-history"></div>
+    <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Removal checks</h2>
+      <p>The greps a finished day's criteria or Verify say must print nothing, run over the tree at every merge from the day's end, from <code>backend/</code> or the root, wherever their paths are. Paths follow the directories that moved since (<code>backend/jobs/</code> to job-service, <code>backend/</code> to identity-service), because a grep of a path that is gone prints nothing too. CI runs none of them. A check is orange when it finds lines on <code>main</code>, listed under it; grey when it reads no files; green otherwise. Since is the merge where that state began.</p>
+    </div>
+    <div class="scroll-x"><table id="removals"></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Hand-offs to days not yet run</h2>
+      <p>What finished days leave for later: a Notes item that names a day not yet run, or a code comment that does ("Day 17 adds job-service"). Nothing else carries them forward. A Notes item with an ID (<code>H28.1</code>, from Day 28 on) counts as picked up only when the receiving spec cites the ID; one without, when it names the day the item came from; a comment, when the spec names its file. Days in run order; a spec written in full should leave none open. Last: ID'd items no later day picks up, and tracks a PR announced that no branch ever named (Day 25's E1c, #298).</p>
+    </div>
+    <div class="hand-offs" id="hand-offs"></div>
+  </section>
+
   <section class="panel">
     <h2>What the vectors say</h2>
     <div class="findings" id="findings"></div>
@@ -184,17 +195,6 @@
       <summary>Every merge as a table</summary>
       <div class="scroll-x"><table id="tbl"></table></div>
     </details>
-  </section>
-
-  <section class="panel" id="tokens">
-    <div class="panel-head">
-      <h2>Tokens spent</h2>
-      <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the migration day whose branch they ran on. Under each bar, and in the table, is the context per reply: how much of the conversation each reply re-read. It falls when sessions are kept short, and it drives most of the cost.</p>
-    </div>
-    <div class="legend" id="token-legend"></div>
-    <p id="token-implementer"></p>
-    <div id="token-bars"></div>
-    <div class="scroll-x"><table id="token-days"></table></div>
   </section>
 
   <section class="panel" id="conclusion">
