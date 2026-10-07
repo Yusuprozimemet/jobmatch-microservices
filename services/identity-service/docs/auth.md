@@ -271,7 +271,6 @@ above the broader `permitAll()` lines they carve out of.
 | `/error`, `/api/docs/**` | public |
 | `/api/oauth2/**`, `/api/login/oauth2/**` | public |
 | `GET /.well-known/jwks.json` | public: the key tokens verify with |
-| `GET /.well-known/service-jwks.json` | public: the key service tokens verify with (Day 39) |
 | `GET /api/jobs/top-matches` | authenticated |
 | `GET /api/jobs`, `/api/jobs/filters`, `/api/jobs/*` | public |
 | everything else | authenticated |
@@ -307,18 +306,18 @@ the key set it is verified with from the trusted issuers
 the monolith's own, `jobmatch-backend`, trusted in process, and whatever
 `app.internal.trusted-issuers` lists as `{name, key-set-url}` entries, empty by default. Set via
 environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and `APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`;
-compose lists `jobmatch-job-service` (Day 17), `jobmatch-matching-service` (Day 21) and
-`jobmatch-application-service` (Day 25), each at its service's `/.well-known/service-jwks.json`,
+compose lists `jobmatch-matching-service` (Day 21) and `jobmatch-application-service` (Day 25),
+each at its service's `/.well-known/service-jwks.json`,
 and job-service's list names matching-service and application-service.
 An issuer not on the list gets `401`. job-service keeps the same rules in its own copy: it trusts
 only the callers on its list (since Day 42 not identity, which calls no service), and signs with a key of its own
 ([`configuration.md`](configuration.md#2-the-local-stack)). The monolith signs its own tokens with
 `SERVICE_JWT_PRIVATE_KEY_FILE`
 ([`ServiceTokens`](../app/src/main/java/nl/hackyourfuture/project/backend/config/ServiceTokens.java)),
-never the user key, and publishes the public half at `GET /.well-known/service-jwks.json`.
+never the user key. Since Day 42 it publishes no service key set: no service verifies its tokens.
 
-The gateway routes neither `/internal/**` nor the service key set, and the public OpenAPI lists
-neither (`springdoc.paths-to-exclude`).
+The gateway does not route `/internal/**`, and the public OpenAPI does not list it
+(`springdoc.paths-to-exclude`).
 
 **The deleted-user rule.** An access token outlives its user by up to 15 minutes (section 8). The
 monolith refuses that user because `applications` reads it through
