@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * lookup.
  *
  * <p>The token's {@code sub} is user A, who has a profile; its email is user B's, who has none.
- * Before Day 41 this was 422: {@code CurrentUserIdResolver} found B by email.
+ * Before Day 41 this was 422: identity's resolver found B by email.
  */
 class TopMatchesTrustTheSubjectIT extends MatchingTest {
 
