@@ -11,8 +11,7 @@ import java.util.Optional;
  * helper this replaces, copied into four controllers, also accepted a {@code UserDetails}; nothing
  * creates one, and removing that branch left every test green.
  *
- * <p>Used by {@link CurrentUserIdResolver} for the other modules, and by identity's own
- * controllers, which still work by email.
+ * <p>Used by identity's controllers, which work by email.
  */
 public final class PrincipalEmail {
 
