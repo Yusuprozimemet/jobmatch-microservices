@@ -29,7 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class TestCallers {
 
-    static final String BACKEND = "jobmatch-backend";
     static final String CALLER = "jobmatch-test-caller";
     /** Never trusted. */
     static final String STRANGER = "jobmatch-stranger";

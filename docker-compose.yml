@@ -114,7 +114,6 @@ services:
       DB_JOBS_USER: jobs_user
       DB_JOBS_PASSWORD: ${JOBS_DB_PASSWORD:-password}
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/job-service.pem
-      BACKEND_KEY_SET_URL: http://identity-service:8080/.well-known/service-jwks.json
       # Day 25: saved counts are application-service's.
       INTERNAL_APPLICATIONS_URL: http://application-service:8080
       # Day 21: matching-service calls the shortlist route.
