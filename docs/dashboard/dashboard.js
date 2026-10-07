@@ -663,11 +663,21 @@ function drawEvidence() {
     .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> is ${s} · ${md(c.claim)}</li>`)));
   document.getElementById("evidence-gaps").innerHTML = `<h3>Named tests not running on main</h3>` +
     (gaps.length ? `<ul>${gaps.join("")}</ul>` : `<p>None: every test a finished day names is on <code>main</code>, and none can be skipped.</p>`);
-  const strip = c => `<svg class="strip" viewBox="0 0 ${N} 1" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="${c.hits.filter(n => n).length} of ${c.hits.length} merges found lines">` +
-    c.hits.map((n, k) => `<rect x="${c.since + k}" y="0" width="1" height="1" fill="var(--${n ? "code" : "close"})"><title>${prLabel(R[c.since + k])}: ${n} line${n === 1 ? "" : "s"}</title></rect>`).join("") + "</svg>";
-  document.getElementById("removals").innerHTML = `<thead><tr><th>Day</th><th>Check</th><th>From</th><th class="r">On main</th><th>Every merge since</th></tr></thead><tbody>` +
-    (DATA.removals || []).map(c => { const now = c.hits[c.hits.length - 1];
-      return `<tr><td class="num">${dd(c.day)}</td><td class="t"><code>${esc(c.cmd)}</code></td><td class="num">${esc(c.base)}</td><td class="r${now ? " none" : ""}">${now ? now + " lines" : "nothing"}</td><td style="width:32%">${strip(c)}</td></tr>`; }).join("") + "</tbody>";
+  // A check's state at one merge: found lines, read no files (so its nothing proves nothing), or clean.
+  // Since is the merge where the state on main began; problems sort first.
+  const REMOVAL = { found: [0, "var(--code)"], empty: [1, "var(--muted)"], clean: [2, "var(--close)"] };
+  const removals = (DATA.removals || []).map(c => {
+    const state = k => c.hits[k] ? "found" : c.files[k] ? "clean" : "empty", last = c.hits.length - 1, now = state(last);
+    let k = last;
+    while (k > 0 && state(k - 1) === now) k--;
+    return { ...c, now, from: c.since + k, n: c.hits[last], reads: c.files[last] };
+  }).sort((a, b) => REMOVAL[a.now][0] - REMOVAL[b.now][0] || a.day - b.day);
+  const chip = c => `<span class="chip" style="color:${REMOVAL[c.now][1]}">${c.now === "found" ? `${c.n} line${c.n === 1 ? "" : "s"}` : c.now === "empty" ? "reads no files" : "clean"}</span>`;
+  const found = c => c.found.length ? `<tr class="found"><td></td><td colspan="5"><ul>${c.found.map(f =>
+    `<li><code>${esc(f.path)}:${f.line}</code> ${esc(f.text)}</li>`).join("")}${c.n > c.found.length ? `<li>and ${c.n - c.found.length} more</li>` : ""}</ul></td></tr>` : "";
+  document.getElementById("removals").innerHTML = `<thead><tr><th>Day</th><th>Check</th><th>From</th><th>On main</th><th class="r">Files read</th><th>Since</th></tr></thead><tbody>` +
+    removals.map(c => `<tr><td class="num">${dd(c.day)}</td><td class="t"><code>${esc(c.cmd)}</code></td><td class="num">${esc(c.base)}</td><td>${chip(c)}</td><td class="r num">${c.reads}</td>` +
+      `<td class="num" title="${esc(R[c.from].title || "")}">${prLabel(R[c.from])}${c.from === c.since ? " · day end" : ""}</td></tr>${found(c)}`).join("") + "</tbody>";
 }
 
 /* ---------- hand-offs ---------- */

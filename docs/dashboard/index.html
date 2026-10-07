@@ -43,7 +43,7 @@
     <div id="evidence-history"></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Removal checks</h2>
-      <p>The greps a finished day's criteria or Verify say must print nothing, run over the tree at every merge from the day's end, from <code>backend/</code> or the root, wherever their paths are. CI runs none of them. Each cell is one merge: green printed nothing, orange found lines.</p>
+      <p>The greps a finished day's criteria or Verify say must print nothing, run over the tree at every merge from the day's end, from <code>backend/</code> or the root, wherever their paths are. Paths follow the directories that moved since (<code>backend/jobs/</code> to job-service, <code>backend/</code> to identity-service), because a grep of a path that is gone prints nothing too. CI runs none of them. A check is orange when it finds lines on <code>main</code>, listed under it; grey when it reads no files; green otherwise. Since is the merge where that state began.</p>
     </div>
     <div class="scroll-x"><table id="removals"></table></div>
   </section>
