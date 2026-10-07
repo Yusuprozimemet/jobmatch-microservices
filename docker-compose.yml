@@ -175,7 +175,7 @@ services:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/matching-service.pem
-      # identity is still the monolith's; user tokens are checked against its key set there.
+      # identity owns users: user tokens are checked against its key set there.
       INTERNAL_IDENTITY_URL: http://identity-service:8080
       INTERNAL_JOBS_URL: http://job-service:8080
       # The model call (Day 21): only this service has the key. With no key top-matches ranks by
@@ -220,7 +220,7 @@ services:
       DB_APPLICATIONS_USER: applications_user
       DB_APPLICATIONS_PASSWORD: ${APPLICATIONS_DB_PASSWORD:-password}
       SERVICE_JWT_PRIVATE_KEY_FILE: /run/keys/application-service.pem
-      # identity is still the monolith's; user tokens are checked against its key set there.
+      # identity owns users: user tokens are checked against its key set there.
       INTERNAL_IDENTITY_URL: http://identity-service:8080
       INTERNAL_JOBS_URL: http://job-service:8080
       # job-service calls /internal/saved-counts; its tokens are checked against this key set.

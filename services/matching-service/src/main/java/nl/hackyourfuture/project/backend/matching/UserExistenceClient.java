@@ -16,8 +16,7 @@ import java.util.function.Supplier;
 
 /**
  * Whether a user still exists, for matching (Day 41): identity's {@code /internal/users/{id}}
- * over HTTP ({@code app.internal.identity-url}), empty for this process until Day 21 points it
- * at identity's service.
+ * over HTTP ({@code app.internal.identity-url}, compose's {@code INTERNAL_IDENTITY_URL}).
  *
  * <p>A 404 is a user that was deleted: false, the same answer as a missing account would be. An
  * outage (a connection or timeout error, a 5xx, the breaker open) throws a

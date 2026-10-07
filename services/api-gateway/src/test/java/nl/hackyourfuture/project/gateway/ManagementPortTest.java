@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The gateway's own health and metrics, on a management port compose does not publish (Day 38),
- * for the probes Day 34 adds and the metrics Day 37 reads. Nothing here needs a token: the port
+ * for compose's healthcheck and the Prometheus job that scrapes it. Nothing here needs a token: the port
  * is reachable only from inside the network. {@code SecurityTest} checks that the public port
  * serves none of it.
  */
@@ -52,7 +52,7 @@ class ManagementPortTest {
         assertThat(health.body()).contains("\"status\":\"UP\"");
     }
 
-    // What the backend's gateway harness waits for, and Day 34's readiness probe.
+    // What identity's gateway harness waits for, and compose's healthcheck reads.
     @Test
     void readinessAnswersOnceStarted() throws Exception {
         assertThat(get(managementPort, "/actuator/health/readiness").statusCode()).isEqualTo(200);

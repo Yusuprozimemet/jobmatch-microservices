@@ -40,7 +40,7 @@ earlier days left for this one (check 7).
    Find every one that names this day or this phase, in the finished days' specs and in the code:
    ```bash
    grep -rnE "Day 0?NN\b|Phase P\b" specs/day-0*.md specs/day-1*.md ...   # the days before this one
-   grep -rniE "expires on Day|until Day|TODO day-" backend services frontend scripts --include=*.java --include=*.ts --include=*.py --include=*.yaml
+   grep -rniE "expires on Day|until Day|TODO day-" services frontend scripts --include=*.java --include=*.ts --include=*.py --include=*.yaml
    ```
    For each, say whether this spec covers it (the criterion or In scope line), or it is missing.
    A missing one is a finding: the spec takes it, or it is moved to a named later day, or it is
