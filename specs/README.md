@@ -71,23 +71,23 @@ specs/
 | 38–40 | platform step | Grants, tracing, service credential, harness and compose | ready |
 | 17–20 | 3 — extract job-service | First independent service, own database | ready |
 | 41, 21–24 | 4 — extract matching-service | LLM isolated; scores in NoSQL | ready |
-| 25–28 | 5 — extract application-service | Events, GDPR cascade, monolith gone | provisional |
+| 25–28 | 5 — extract application-service | Events, GDPR cascade, monolith gone | ready |
 | 42 | cleanup day | What Phases 3–5 left behind, before Phase 7 | ready |
-| 29–31 | 6 — functions + uploads bucket | CV parsing, email off the request path | provisional |
-| 32–37 | 7 — Kubernetes + IaC | Terraform, Pulumi, Helm, GitOps, production | provisional |
+| 32–35 | 7 — ECS on Fargate | Terraform, the services on ECS, observability, one deployment and its teardown | provisional |
+| 29–31 | 6 — functions + uploads bucket | CV parsing, email off the request path; after Phase 7, or cut | provisional |
 
 ## Provisional specs
 
-Days 25–37 are written from `plan.md`, not from experience. **Re-read and revise the
+Days 29–35 are written from `plan.md`, not from experience. **Re-read and revise the
 phase before starting it.** Each of them carries a `Status: provisional` line; delete that
 line when the day has been reviewed and is ready to work. Days 17–20 and 41, 21–24 were
-rewritten against the code when their phase reached them; Days 38–40 were written against it from the start.
+rewritten against the code when their phase reached them; Days 38–40 and 42 were written against it from the start. Days 36–37 were deleted before Phase 7 (`plan.md`, course correction before Phase 7).
 
 Expect them to change. Day 19 in particular (partial failure and fallbacks) is a design
 decision the team must agree on before anyone writes code.
 
 ## Stopping points
 
-Days 16, 20, 24, 28, 31 and 37 each end a phase and are tagged releases. Days 16 and 28
+Days 16, 20, 24, 28, 35 and 31 each end a phase and are tagged releases. Days 16 and 28
 are the two that stand on their own: **16** leaves a working monolith with real tests and
 stateless auth; **28** leaves a complete microservice system with no Kubernetes.

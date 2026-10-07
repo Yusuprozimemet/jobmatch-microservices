@@ -25,6 +25,40 @@ Phase 5, next, decides what follows.
 
 ---
 
+## Course correction before Phase 7
+
+Day 42 closed the cleanup day. The plan-auditor read Phase 5 with the cleanup day, then
+Phase 7, against the code (main at `15e13f9`, KAN-36), and the maintainer chose:
+
+- **The frontend is an ECS service behind the ALB** and proxies `/api` to the gateway, as it
+  does in compose. That needs a domain and an ACM certificate: Google sign-in's redirect
+  lands on `APP_BASE_URL`, and `SESSION_COOKIE_SECURE` is `true` on HTTPS.
+- **One gateway task.** Day 15's rate limit stays in memory, recorded as a known limit: a
+  shared store would be a new feature (scope rule).
+- **Images go to ECR.** The service workflows push there instead of GHCR, and a deploy job
+  runs only behind a switch, so merges after `terraform destroy` do not fail.
+- **The deployed `jobs_db` is seeded from the test mart.** The data platform stays on Azure
+  and keeps publishing to its own target; nothing crosses from Azure into the VPC.
+
+The audits also found what the course correction after Phase 5 did not name:
+
+- **Code before ECS.** The signing keys load only from a file, but Secrets Manager hands a
+  task environment variables; Flyway runs at startup in identity and application-service,
+  where this plan wants a one-off task; `db-setup.py` prompts and makes up its own
+  passwords. Each is a code change with its tests, before any task definition.
+- **No consolidated baseline.** `db-setup.py` runs before the first migration on a fresh RDS
+  too, and creates the `matching` and `applications` roles V12–V15 need. A second migration
+  path would edit what V1–V16 already say.
+- **What can fail without an AWS account.** Days 32–34 check `terraform fmt` and `validate`,
+  apply the bus and the score table against LocalStack, and compare Terraform's copies
+  with `bus-init` and the harness. ECS, the ALB, RDS and IAM are checked by `terraform
+  plan` alone until Day 35. Real SNS to SQS needs a queue policy the emulator does not
+  enforce.
+- **"Deploys once"** means one environment, applied on Day 35 (again, if a fix needs it)
+  under a budget alarm, then destroyed.
+- **Days 36–37 are deleted**, with their drafts. Day 38's per-route gateway metric, which
+  pointed at Day 37, goes to Day 34 or is dropped there on record.
+
 ## Course correction after Phase 5
 
 Day 28 was the stopping point. The plan-auditor read the whole plan against the code
@@ -147,15 +181,16 @@ is part of what the repository measures, not a silent drift.
 | `user.deleted` to two consumers | SNS topic → one SQS queue per consumer | emulator | 26–27 |
 | Uploads bucket, direct browser upload | S3, presigned PUT URLs | emulator | 29 |
 | `cv-parse`, `mailer` | Lambda (S3 event, SQS), SES | emulator | 30–31 |
-| Postgres | RDS for PostgreSQL | the compose Postgres | 37 |
-| Services | ECS on Fargate behind an ALB, images in ECR | compose | 34–37 |
-| Secrets | Secrets Manager, ECS task roles | environment variables | 36 |
-| Metrics, logs, traces | ADOT collector → CloudWatch, X-Ray | the Grafana stack | 37 |
-| Infrastructure | Terraform, one state in S3 | Terraform against the emulator | 32 |
+| Postgres | RDS for PostgreSQL | the compose Postgres | 32 |
+| Services | ECS on Fargate behind an ALB, images in ECR | compose | 33 |
+| Secrets | Secrets Manager, ECS task roles | environment variables | 33 |
+| Metrics, logs, traces | ADOT collector → CloudWatch, X-Ray | the Grafana stack | 34 |
+| Infrastructure | Terraform, one state in S3 | `validate`; the bus and table applied to the emulator | 32 |
+| One deployment, then `terraform destroy` | the real account | — | 35 |
 
 Observability needs no code change: Day 5 made the services export OTLP, and only the
-collector's destination differs. Day numbers are where the provisional specs sit today;
-Days 29–37 are rewritten after Day 28, as before, now for AWS.
+collector's destination differs. Phase 7 is Days 32–35 (course correction after Phase 5);
+Phase 6 keeps Days 29–31 and runs after it.
 
 ---
 
@@ -261,26 +296,34 @@ foreign key that deletes saved jobs with their user still exists; then the table
 - `mailer` Lambda: SQS-triggered, sends through SES. There is no notification service to
   replace, and reset mail is already sent after commit and asynchronously; shrink or cut
   this when the phase is reached.
+- The Lambdas re-enter through Phase 7's ALB with their own service key (Day 39's hand-off);
+  the services are not public otherwise. The uploads bucket joins Phase 7's Terraform.
 
 ### Phase 7 — ECS on Fargate
-After the cleanup day (Day 42); rewritten as Days 32–35 (course correction after Phase 5).
+After the cleanup day (Day 42); rewritten as Days 32–35 (course correction after Phase 5,
+and before Phase 7).
 - **Terraform** for everything long-lived: network, ECS cluster and services, RDS, DynamoDB,
-  S3, SNS/SQS, ECR, the ALB, Secrets Manager and CloudWatch.
-- One task definition per service, generated from one Terraform module.
-  Flyway runs as a one-off ECS task before the deploy, not at startup.
+  SNS/SQS with their queue policies, ECR, the ALB and its certificate, Secrets Manager and
+  CloudWatch. The only S3 bucket is the state's.
+- One task definition per service, generated from one Terraform module: the five services
+  and the frontend. Flyway runs as a one-off ECS task before the deploy, not at startup.
 - Secrets from Secrets Manager into the task definition, AWS access through task roles —
-  no connection strings or access keys in variables or images.
+  no connection strings or access keys in variables or images. The signing keys are read
+  from the secret's content, not from a file.
+- The ALB serves HTTPS to the frontend, which proxies `/api` to the gateway; the gateway's
+  trusted-proxy setting matches that path. The services reach one another's key sets and
+  internal endpoints by internal name, not through the ALB.
 - matching-service scales on CPU or ALB request count (ECS service auto scaling):
-  top-matches is a synchronous request, so there is no queue to scale on.
-- More than one gateway task needs a shared rate-limit store (Day 15's limit is in
-  memory); the ALB sets `X-Forwarded-For` and `GATEWAY_TRUSTED_PROXIES` names it.
+  top-matches is a synchronous request, so there is no queue to scale on. Its profile cache
+  is per task, so a `user.deleted` eviction reaches one task: record the window.
+- One gateway task: Day 15's rate limit is in memory, and a shared store is out of scope.
 - An ADOT collector sidecar sends the services' OTLP to CloudWatch and X-Ray.
 - Criteria are written for one maintainer and an agent: no contributor counts, on-call
   rotas or alert owners. The secret sweep checks for secrets, not for the word `password`.
-- The Lambdas re-enter through the ALB with a service token; the services are not public
-  otherwise.
-- **Done when:** one real deployment serves the five public API surfaces under a budget
-  alarm, and `terraform destroy` leaves nothing billable behind.
+- The existing-database runbooks are rehearsed against the deployment or retired (Day 35).
+- **Done when:** one real deployment serves the five public API surfaces, with `jobs_db`
+  seeded from the test mart, under a budget alarm, and `terraform destroy` leaves nothing
+  billable behind.
 
 ---
 
@@ -325,12 +368,12 @@ the README's Day entries record two estimates, the provisional spec's and the re
 
 ## Day-by-day specs
 
-All seven phases and the platform step are broken into 40 day specs in [`specs/`](specs/). Read
-[`specs/README.md`](specs/README.md) for the workflow.
+All seven phases, the platform step and the cleanup day are broken into 40 day specs in
+[`specs/`](specs/). Read [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-28 and 38-41 (Phases 0-5 and the platform step) are done. Days 29-37 are **provisional**:
-written from this plan before the course correction, so each is rewritten against the code,
-with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
+Days 1-28 and 38-42 (Phases 0-5, the platform step and the cleanup day) are done. Days 29-35
+are **provisional**: written from this plan before the course correction, so each is
+rewritten against the code, with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
 links hold; they run in this order, and the dashboard follows it:
 
 1. The record fix and the platform step (new day specs, numbered from 38).
@@ -338,7 +381,6 @@ links hold; they run in this order, and the dashboard follows it:
 3. Phase 4: Day 41 (the profile endpoint and user id, split out of Day 24) first, then Days 21,
    22 (no dual write), 23, 24.
 4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
-5. The cleanup day (course correction after Phase 5): its spec is written next, numbered
-   after the last.
-6. Phase 7 rewritten as Days 32–35 for ECS on Fargate; Days 36–37 dropped.
+5. The cleanup day (course correction after Phase 5), numbered after the last; done.
+6. Phase 7 rewritten as Days 32–35 for ECS on Fargate; the two days after them are deleted.
 7. Phase 6 (Days 29–31), after Phase 7, or cut.
