@@ -311,7 +311,7 @@ compose lists `jobmatch-job-service` (Day 17), `jobmatch-matching-service` (Day 
 `jobmatch-application-service` (Day 25), each at its service's `/.well-known/service-jwks.json`,
 and job-service's list names matching-service and application-service.
 An issuer not on the list gets `401`. job-service keeps the same rules in its own copy: it trusts
-`jobmatch-backend` at `BACKEND_KEY_SET_URL`, and signs with a key of its own
+only the callers on its list (since Day 42 not identity, which calls no service), and signs with a key of its own
 ([`configuration.md`](configuration.md#2-the-local-stack)). The monolith signs its own tokens with
 `SERVICE_JWT_PRIVATE_KEY_FILE`
 ([`ServiceTokens`](../app/src/main/java/nl/hackyourfuture/project/backend/config/ServiceTokens.java)),

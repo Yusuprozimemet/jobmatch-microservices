@@ -3,7 +3,6 @@ package nl.hackyourfuture.project.jobservice;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
@@ -28,35 +27,25 @@ import java.util.TreeMap;
  * verified against that caller's key set, with its {@code iss} and {@code aud=jobmatch-internal}.
  * Nothing is trusted that is not configured, job-service's own tokens included.
  *
- * <p>The monolith, {@code jobmatch-backend}, has a property of its own, and job-service does not
- * start without it: from Track D it is the main caller. The others are a list of
- * {@code {name, key-set-url}}, set from the environment as {@code APP_INTERNAL_TRUSTEDISSUERS_0_NAME}
- * and {@code APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL}. Not a map keyed by issuer: Boot binds
- * {@code APP_INTERNAL_TRUSTEDISSUERS_JOBMATCH_JOB_SERVICE} as the key {@code jobmatch.job.service}.
- * And the monolith is not a list entry: a list set in a higher-priority source replaces the whole
- * list, so an environment list would wipe it.
+ * <p>Callers are a list of {@code {name, key-set-url}}, set from the environment as
+ * {@code APP_INTERNAL_TRUSTEDISSUERS_0_NAME} and {@code APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL}.
+ * Not a map keyed by issuer: Boot binds {@code APP_INTERNAL_TRUSTEDISSUERS_JOBMATCH_JOB_SERVICE}
+ * as the key {@code jobmatch.job.service}.
  */
 @Component
 class InternalCallers {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InternalCallers.class);
-    private static final String BACKEND = "jobmatch-backend";
 
     private final Map<String, AuthenticationManager> managers = new TreeMap<>();
 
-    InternalCallers(@Value("${app.internal.backend-key-set-url:}") String backendKeySetUrl, Environment environment) {
-        if (backendKeySetUrl.isBlank()) {
-            throw new IllegalStateException("BACKEND_KEY_SET_URL is not set. Point it at the monolith's "
-                    + "/.well-known/service-jwks.json: job-service does not start without knowing its main caller.");
-        }
-        trust(BACKEND, backendKeySetUrl);
+    InternalCallers(Environment environment) {
         for (TrustedIssuer issuer : Binder.get(environment)
                 .bind("app.internal.trusted-issuers", Bindable.listOf(TrustedIssuer.class))
                 .orElse(List.of())) {
             if (issuer.name() == null || issuer.name().isBlank() || issuer.keySetUrl() == null
-                    || issuer.keySetUrl().isBlank() || issuer.name().equals(BACKEND)) {
-                throw new IllegalStateException("app.internal.trusted-issuers has " + issuer + ": each entry "
-                        + "needs a name and a key-set-url, and " + BACKEND + " is set by BACKEND_KEY_SET_URL");
+                    || issuer.keySetUrl().isBlank()) {
+                throw new IllegalStateException("app.internal.trusted-issuers has " + issuer + ": each entry needs a name and a key-set-url");
             }
             trust(issuer.name(), issuer.keySetUrl());
         }

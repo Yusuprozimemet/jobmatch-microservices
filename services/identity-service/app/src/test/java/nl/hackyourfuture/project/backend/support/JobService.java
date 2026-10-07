@@ -4,13 +4,11 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.sun.net.httpserver.HttpServer;
-import nl.hackyourfuture.project.backend.config.ServiceSigningKey;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -42,8 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * built beforehand, as {@link Gateway} starts the gateway's. Ryuk removes it.
  *
  * <p>Its key is generated here, so a test can mint job-service's tokens. It trusts
- * {@code jobmatch-backend} at a key set served here from {@link TestSigningKey#servicePath()},
- * which every context signs with, {@code jobmatch-test-caller} at {@link TestServiceCaller}'s,
+ * {@code jobmatch-test-caller} at {@link TestServiceCaller}'s key set,
  * {@code jobmatch-matching-service} at {@link ServiceKey#MATCHING}'s and
  * {@code jobmatch-application-service} at {@link ServiceKey#APPLICATION}'s.
  *
@@ -66,7 +63,6 @@ public final class JobService {
 
     private static volatile GenericContainer<?> container;
     private static RSAKey key;
-    private static HttpServer backendKeyServer;
     private static HttpServer relay;
     private static final AtomicInteger RELAY_TARGET_PORT = new AtomicInteger(-1);
     private static final HttpClient RELAY_CLIENT = HttpClient.newHttpClient();
@@ -160,13 +156,10 @@ public final class JobService {
             throw new IllegalStateException("Could not derive job-service's private key", e);
         }
 
-        // Every context signs with the same service key, so one key-set server serves them all.
-        RSAKey backendPublicKey = new ServiceSigningKey(TestSigningKey.servicePath().toString()).publicJwk();
-        backendKeyServer = serveKeySet(backendPublicKey);
         relay = startRelay();
 
         int postgresPort = PostgresContainer.instance().getMappedPort(5432);
-        Testcontainers.exposeHostPorts(postgresPort, backendKeyServer.getAddress().getPort(),
+        Testcontainers.exposeHostPorts(postgresPort,
                 relay.getAddress().getPort(), testCallerPort(), ServiceKey.MATCHING.port(),
                 ServiceKey.APPLICATION.port());
 
@@ -181,8 +174,6 @@ public final class JobService {
                 .withEnv("DB_NAME", PostgresContainer.JOBS_DATABASE)
                 .withEnv("DB_JOBS_USER", "jobs_user")
                 .withEnv("DB_JOBS_PASSWORD", PostgresContainer.rolePassword())
-                .withEnv("BACKEND_KEY_SET_URL",
-                        "http://host.testcontainers.internal:" + backendKeyServer.getAddress().getPort() + "/service-jwks.json")
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_0_NAME", TestServiceCaller.ISSUER)
                 .withEnv("APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL",
                         "http://host.testcontainers.internal:" + testCallerPort() + "/.well-known/service-jwks.json")
@@ -212,21 +203,6 @@ public final class JobService {
 
     private static int testCallerPort() {
         return URI.create(TestServiceCaller.instance().jwksUrl()).getPort();
-    }
-
-    /** Serves one RSA public key at {@code /service-jwks.json}, forever, for the whole JVM. */
-    private static HttpServer serveKeySet(RSAKey publicKey) {
-        byte[] body = new JWKSet(publicKey).toString().getBytes(StandardCharsets.UTF_8);
-        HttpServer server = newServer();
-        server.createContext("/service-jwks.json", exchange -> {
-            exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, body.length);
-            try (OutputStream out = exchange.getResponseBody()) {
-                out.write(body);
-            }
-        });
-        server.start();
-        return server;
     }
 
     /** Forwards identity's routes to the current test context; job-service's counts calls to application-service's container. */

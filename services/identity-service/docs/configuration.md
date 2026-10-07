@@ -110,8 +110,7 @@ job-service's settings (Day 17), as compose sets them:
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `jobs_db` | Its own database, holding the analytics mart (Day 20); compose passes `JOBS_DB_NAME` |
 | `DB_JOBS_USER` / `DB_JOBS_PASSWORD` | `jobs_user` / `password` | The read-only role ([§6](#6-the-database-schemas-and-roles)); compose passes `JOBS_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-job-service`. **Required**; compose's `jwt-key` service writes it |
-| `BACKEND_KEY_SET_URL` | empty | The monolith's service key set, so `jobmatch-backend` may call its `/internal/**` routes. Compose: `http://identity-service:8080/.well-known/service-jwks.json` |
-| `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` / `..._0_KEYSETURL` | none | Further trusted issuers, as the backend's ([auth.md](auth.md#service-tokens-and-internal)) |
+| `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` / `..._0_KEYSETURL` | none | The callers it trusts on `/internal/**`, none by default; compose lists matching-service and application-service, as the backend's ([auth.md](auth.md#service-tokens-and-internal)) |
 | `INTERNAL_APPLICATIONS_URL` | empty | Where it asks for saved counts (`/internal/saved-counts`): application-service, `http://application-service:8080` in compose (Day 25). Empty would mean itself, which has no such route |
 | `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
 | `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |

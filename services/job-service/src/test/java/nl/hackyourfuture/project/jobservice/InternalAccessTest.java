@@ -28,15 +28,14 @@ class InternalAccessTest extends JobServiceTest {
     @Autowired
     private ServiceTokens ownTokens;
 
-    @ParameterizedTest
-    @ValueSource(strings = {TestCallers.BACKEND, TestCallers.CALLER})
-    void aTrustedCallerGetsPastTheChain(String issuer) throws Exception {
-        assertThat(send("POST", "/internal/nothing", "Authorization", "Bearer " + TestCallers.instance().token(issuer)))
+    @Test
+    void aTrustedCallerGetsPastTheChain() throws Exception {
+        assertThat(send("POST", "/internal/nothing", "Authorization", "Bearer " + TestCallers.instance().token(TestCallers.CALLER)))
                 .isEqualTo(404);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"none", "expired", "another audience", "another key", "a stranger", "job-service itself"})
+    @ValueSource(strings = {"none", "expired", "another audience", "another key", "a stranger", "job-service itself", "the retired backend"})
     void anyoneElseIs401(String kind) throws Exception {
         TestCallers callers = TestCallers.instance();
         String token = switch (kind) {
@@ -45,6 +44,8 @@ class InternalAccessTest extends JobServiceTest {
             case "another audience" -> callers.forAudience(TestCallers.CALLER, "someone-else");
             case "another key" -> callers.signedByAnotherKey(TestCallers.CALLER);
             case "a stranger" -> callers.token(TestCallers.STRANGER);
+            // identity signed as jobmatch-backend until Day 42; it is now as unknown as any other issuer.
+            case "the retired backend" -> callers.token("jobmatch-backend");
             default -> ownTokens.mint();
         };
         assertThat(send("POST", "/internal/nothing", "Authorization", token == null ? null : "Bearer " + token))
@@ -53,14 +54,14 @@ class InternalAccessTest extends JobServiceTest {
 
     @Test
     void onlyTheHeaderIsRead() throws Exception {
-        String token = TestCallers.instance().token(TestCallers.BACKEND);
+        String token = TestCallers.instance().token(TestCallers.CALLER);
 
         assertThat(send("POST", "/internal/nothing", "Cookie", "access_token=" + token)).isEqualTo(401);
     }
 
     @Test
     void thePublicChainIgnoresAServiceToken() throws Exception {
-        String token = TestCallers.instance().token(TestCallers.BACKEND);
+        String token = TestCallers.instance().token(TestCallers.CALLER);
 
         assertThat(send("GET", "/api/jobs", "Authorization", "Bearer " + token)).isNotIn(401, 403);
     }

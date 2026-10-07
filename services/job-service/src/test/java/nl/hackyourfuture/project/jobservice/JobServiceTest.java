@@ -12,7 +12,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * health check so /actuator/health stays UP with no Postgres. Mocks the JdbcClient so no
  * test ever connects to a database: any jobs route that calls it fails fast with 500.
  *
- * <p>Without the key set and the backend key set URL, a context does not start.
+ * <p>Without the signing key, a context does not start.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 abstract class JobServiceTest {
@@ -24,7 +24,6 @@ abstract class JobServiceTest {
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("management.health.db.enabled", () -> false);
         registry.add("app.service-jwt.private-key-file", () -> TestKey.path().toString());
-        registry.add("app.internal.backend-key-set-url", () -> TestCallers.instance().jwksUrl(TestCallers.BACKEND));
         registry.add("app.internal.trusted-issuers[0].name", () -> TestCallers.CALLER);
         registry.add("app.internal.trusted-issuers[0].key-set-url", () -> TestCallers.instance().jwksUrl(TestCallers.CALLER));
     }
