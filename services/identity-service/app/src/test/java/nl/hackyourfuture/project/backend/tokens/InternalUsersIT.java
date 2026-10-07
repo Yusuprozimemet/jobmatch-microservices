@@ -1,12 +1,10 @@
 package nl.hackyourfuture.project.backend.tokens;
 
-import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.TestServiceCaller;
 import nl.hackyourfuture.project.backend.support.TestUser;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Map;
 import java.util.UUID;
@@ -21,21 +19,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class InternalUsersIT extends IntegrationTest {
 
-    @Autowired
-    private ServiceToken serviceToken;
-
     @Test
     void aUserWhoExistsIs204() {
         TestUser user = aUser().create();
         ApiClient client = direct().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
-
-        assertThat(client.get("/internal/users/" + user.id()).status()).isEqualTo(204);
-    }
-
-    @Test
-    void theMonolithsOwnTokenIsTrustedToo() {
-        TestUser user = aUser().create();
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
 
         assertThat(client.get("/internal/users/" + user.id()).status()).isEqualTo(204);
     }

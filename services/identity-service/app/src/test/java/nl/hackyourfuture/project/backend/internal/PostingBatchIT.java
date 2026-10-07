@@ -1,7 +1,5 @@
 package nl.hackyourfuture.project.backend.internal;
 
-import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
-import nl.hackyourfuture.project.backend.shared.jobs.PostingSummary;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.StatementCounter;
@@ -33,10 +31,10 @@ class PostingBatchIT extends IntegrationTest {
     @Autowired
     private AccessTokens accessTokens;
 
-    @Autowired
-    private ServiceToken serviceToken;
-
     private static final ObjectMapper JSON = JsonMapper.builder().build();
+
+    // The shape job-service's /internal/postings/batch answers with, per id.
+    private record PostingSummary(String title, String companyName, String location, String workMode, Boolean isRemote, List<String> skills, String employmentType, LocalDate postedDate, String source, String category, String freshnessClass, Integer ageDays) {}
 
     @Test
     void answersThePostingsWithTheMonolithsOwnToken() {
@@ -66,7 +64,7 @@ class PostingBatchIT extends IntegrationTest {
 
         String id3 = "batch-not-in-mart";
 
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of(id1, id2, id3, id1)));
@@ -104,7 +102,7 @@ class PostingBatchIT extends IntegrationTest {
     void anEmptyListIsAnEmptyObjectWithoutAQuery() {
         StatementCounter.reset();
 
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", List.of()));
 
@@ -122,7 +120,7 @@ class PostingBatchIT extends IntegrationTest {
             ids.add("batch-id-" + i);
         }
 
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", ids));
 
@@ -141,7 +139,7 @@ class PostingBatchIT extends IntegrationTest {
             ids.add("batch-dup-" + i);
         }
 
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
         var response = client.post("/internal/postings/batch",
                 Map.of("ids", ids));
 
@@ -150,7 +148,7 @@ class PostingBatchIT extends IntegrationTest {
 
     @Test
     void aBodyWithoutIdsIs400() {
-        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + serviceToken.mint());
+        ApiClient client = inNetwork().withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
 
         var response = client.post("/internal/postings/batch", Map.of());
 

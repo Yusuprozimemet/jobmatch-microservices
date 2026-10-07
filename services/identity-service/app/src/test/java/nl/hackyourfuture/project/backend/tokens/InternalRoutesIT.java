@@ -1,6 +1,5 @@
 package nl.hackyourfuture.project.backend.tokens;
 
-import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.TestServiceCaller;
@@ -24,17 +23,7 @@ class InternalRoutesIT extends IntegrationTest {
     private static final String INTERNAL_PATH = "/internal/no-route-yet";
 
     @Autowired
-    private ServiceToken serviceToken;
-
-    @Autowired
     private AccessTokens accessTokens;
-
-    @Test
-    void theMonolithsOwnTokenPassesSecurity() {
-        ApiClient client = direct().withHeader("Authorization", "Bearer " + serviceToken.mint());
-
-        assertThat(client.get(INTERNAL_PATH).status()).isEqualTo(404);
-    }
 
     @Test
     void aListedCallersTokenPassesSecurity() {
@@ -101,11 +90,11 @@ class InternalRoutesIT extends IntegrationTest {
     void aServiceTokenIsNotALoginOnTheApi() {
         // Service token in the header - should not work.
         ApiClient clientWithHeader = direct()
-                .withHeader("Authorization", "Bearer " + serviceToken.mint());
+                .withHeader("Authorization", "Bearer " + TestServiceCaller.instance().token());
         assertThat(clientWithHeader.get("/api/users/me").status()).isEqualTo(401);
 
         // Service token as a cookie - should not work either.
-        ApiClient clientWithCookie = direct().withCookie("access_token", serviceToken.mint());
+        ApiClient clientWithCookie = direct().withCookie("access_token", TestServiceCaller.instance().token());
         assertThat(clientWithCookie.get("/api/users/me").status()).isEqualTo(401);
     }
 

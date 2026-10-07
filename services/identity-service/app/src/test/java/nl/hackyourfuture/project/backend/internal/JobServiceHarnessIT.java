@@ -1,7 +1,6 @@
 package nl.hackyourfuture.project.backend.internal;
 
 import com.sun.net.httpserver.HttpServer;
-import nl.hackyourfuture.project.backend.shared.internal.ServiceToken;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.ApiResponse;
 import nl.hackyourfuture.project.backend.support.ApplicationService;
@@ -9,7 +8,6 @@ import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.JobService;
 import nl.hackyourfuture.project.backend.support.TestServiceCaller;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -20,34 +18,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * job-service and the monolith trust each other, and only whom they list (Day 17, Tracks C2 and D), with
- * job-service in its container ({@link JobService}). It has no {@code /internal/nothing}: a trusted
+ * job-service trusts only whom it lists (Day 17, Tracks C2 and D; since Day 42 identity is not among
+ * them), with job-service in its container ({@link JobService}). It has no {@code /internal/nothing}: a trusted
  * caller gets 404 there, which a chain that refuses everyone, as {@code denyAll()} would, cannot give.
  */
 class JobServiceHarnessIT extends IntegrationTest {
-
-    @Autowired
-    private ServiceToken serviceToken;
 
     @Test
     void aJobmatchJobServiceTokenReachesApplicationServicesSavedCounts() {
         ApiClient client = ApiClient.at(ApplicationService.baseUrl()).withHeader("Authorization", "Bearer " + JobService.mintToken());
 
         ApiResponse response = client.post("/internal/saved-counts", Map.of("ids", List.of()));
-
-        assertThat(response.status()).isEqualTo(200);
-    }
-
-    @Test
-    void theMonolithsOwnTokenGetsPastJobServicesChain() {
-        assertThat(postToJobServiceInternal("Bearer " + serviceToken.mint())).isEqualTo(404);
-    }
-
-    @Test
-    void theMonolithsOwnTokenGetsPostingsFromJobService() {
-        ApiClient client = ApiClient.at(JobService.baseUrl()).withHeader("Authorization", "Bearer " + serviceToken.mint());
-
-        ApiResponse response = client.post("/internal/postings/batch", Map.of("ids", List.of("seed-0001")));
 
         assertThat(response.status()).isEqualTo(200);
     }

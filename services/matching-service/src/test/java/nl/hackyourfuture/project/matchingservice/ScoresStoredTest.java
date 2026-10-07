@@ -1,5 +1,7 @@
 package nl.hackyourfuture.project.matchingservice;
 
+import nl.hackyourfuture.project.backend.matching.JobMatchScoreRepository;
+import nl.hackyourfuture.project.backend.matching.MatchScorer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +10,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +30,9 @@ class ScoresStoredTest extends MatchingServiceTest {
 
     @Autowired
     private DynamoDbClient dynamo;
+
+    @Autowired
+    private JobMatchScoreRepository scores;
 
     @BeforeEach
     void reset() {
@@ -76,6 +82,39 @@ class ScoresStoredTest extends MatchingServiceTest {
         for (Map<String, AttributeValue> item : items) {
             assertThat(item.keySet()).containsExactlyInAnyOrder("skills_hash", "posting_scorer", "score",
                     "scored_at", "ttl", "reason");
+        }
+    }
+
+    /**
+     * Day 42 (H28.7): DynamoDB rejects a whole batch that holds an attribute with a null value, so the
+     * repository leaves the reason out; 26 scores span two batches.
+     */
+    @Test
+    void aNullReasonDoesNotDropTheBatch() {
+        LinkedHashMap<String, MatchScorer.Score> map = new LinkedHashMap<>();
+        for (int i = 1; i <= 26; i++) {
+            String id = String.format("null-reason-%02d", i);
+            if (i == 13) {
+                map.put(id, new MatchScorer.Score(50, null));
+            } else {
+                map.put(id, new MatchScorer.Score(50, "reason " + id));
+            }
+        }
+
+        scores.saveScores("null-reason-hash", "v-test", map);
+
+        List<Map<String, AttributeValue>> items = dynamo.scan(scan -> scan.tableName(TABLE)).items().stream()
+                .filter(item -> item.get("skills_hash").s().equals("null-reason-hash"))
+                .toList();
+        assertThat(items).hasSize(26);
+        for (Map<String, AttributeValue> item : items) {
+            String postingScorer = item.get("posting_scorer").s();
+            if (postingScorer.startsWith("null-reason-13#")) {
+                assertThat(item).doesNotContainKey("reason");
+            } else {
+                String postingId = postingScorer.split("#", 2)[0];
+                assertThat(item.get("reason").s()).isEqualTo("reason " + postingId);
+            }
         }
     }
 }

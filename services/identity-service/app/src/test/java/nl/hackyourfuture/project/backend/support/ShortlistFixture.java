@@ -1,6 +1,5 @@
 package nl.hackyourfuture.project.backend.support;
 
-import nl.hackyourfuture.project.backend.shared.jobs.ShortlistedPosting;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.time.LocalDate;
@@ -24,6 +23,24 @@ public final class ShortlistFixture {
     public static final List<String> EXPECTED = List.of(
             "order-a", "order-b", "order-r1", "order-c", "order-d", "order-e1", "order-e2", "order-f"
     );
+
+    /** One row of job-service's shortlist answer, as {@code PostingShortlistIT} expects it. */
+    public record ShortlistedPosting(
+            String postingId,
+            String title,
+            String company,
+            String location,
+            String category,
+            LocalDate postedDate,
+            List<String> jobSkills,
+            List<String> matchedSkills,
+            int jobSkillCount
+    ) {
+
+        public int matchedCount() {
+            return matchedSkills.size();
+        }
+    }
 
     private ShortlistFixture() {
     }
