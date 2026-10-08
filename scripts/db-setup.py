@@ -30,6 +30,11 @@ analytics schemas; the runbook, docs/runbooks/jobs-db.md, drops them. One set up
 is still named 'project_db': rename it first (docs/runbooks/identity-db.md), or this script
 creates an empty 'identity_db' beside it.
 
+For an unattended run, such as an ECS task, --passwords-from-env takes each role's
+password from DB_PASSWORD_<ROLE> (DB_PASSWORD_APP_USER, etc.) and the admin's from
+POSTGRES_PASSWORD. It generates none, prints none, sets roles that already exist to the
+given password, and exits before connecting when one is missing.
+
 Connection details come from CLI arguments or environment variables:
 
     POSTGRES_HOST  POSTGRES_PORT  POSTGRES_USER  POSTGRES_PASSWORD
@@ -168,6 +173,11 @@ def failed(message: str, *args) -> None:
 
 # --- Helpers ---------------------------------------------------------------
 
+def password_variable(role: str) -> str:
+    """Return the environment variable name for a role's password."""
+    return f"DB_PASSWORD_{role.upper()}"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -179,12 +189,28 @@ def parse_args() -> argparse.Namespace:
                         help="Postgres admin/superuser account")
     parser.add_argument("--admin-password", default=os.getenv("POSTGRES_PASSWORD"),
                         help="prompted for if omitted")
+    parser.add_argument("--passwords-from-env", action="store_true",
+                        help="read role passwords from DB_PASSWORD_<ROLE> variables")
 
     args = parser.parse_args()
     if not args.admin_user:
         parser.error("no admin user given (use --admin-user or POSTGRES_USER)")
-    if not args.admin_password:
-        args.admin_password = getpass.getpass(f"Password for {args.admin_user}: ")
+
+    if args.passwords_from_env:
+        # Every missing one named at once, before any connection.
+        missing = []
+        if not args.admin_password:
+            missing.append("POSTGRES_PASSWORD (or --admin-password)")
+        for role in ROLES:
+            if not os.getenv(password_variable(role)):
+                missing.append(password_variable(role))
+        if missing:
+            parser.error(f"missing environment variable(s): {', '.join(missing)}")
+        args.role_passwords = {role: os.getenv(password_variable(role)) for role in ROLES}
+    else:
+        args.role_passwords = None
+        if not args.admin_password:
+            args.admin_password = getpass.getpass(f"Password for {args.admin_user}: ")
     return args
 
 
@@ -256,9 +282,10 @@ def confirm_password_reset(roles: list[str]) -> bool:
         return False
 
 
-def create_role(conn: psycopg.Connection, role: str) -> str:
-    """Create a login role with a randomly generated password."""
-    password = generate_password()
+def create_role(conn: psycopg.Connection, role: str, password: str | None = None) -> str:
+    """Create a login role with a password, generated if not provided."""
+    if password is None:
+        password = generate_password()
     execute(conn, "CREATE ROLE {role} LOGIN PASSWORD {password}",
             role=sql.Identifier(role), password=sql.Literal(password))
     done("Created role '%s'", role)
@@ -274,19 +301,28 @@ def reset_password(conn: psycopg.Connection, role: str) -> str:
     return password
 
 
-def setup_roles(conn: psycopg.Connection, roles: list[str]) -> dict[str, str | None]:
+def setup_roles(conn: psycopg.Connection, roles: list[str],
+                role_passwords: dict[str, str] | None = None) -> dict[str, str | None]:
     """Create the missing roles, and offer to reset the passwords of existing ones.
 
     Maps each role to its new password, or to None when an existing password was
-    left untouched - so an unattended re-run still changes nothing.
+    left untouched - so an unattended re-run still changes nothing. With role_passwords
+    (--passwords-from-env), every role gets its given password and nothing is asked.
     """
     existing = [role for role in roles if role_exists(conn, role)]
-    reset = confirm_password_reset(existing) if existing else False
+    given = role_passwords is not None
+    reset = (not given) and bool(existing) and confirm_password_reset(existing)
 
     passwords: dict[str, str | None] = {}
     for role in roles:
+        password = role_passwords[role] if given else None
         if role not in existing:
-            passwords[role] = create_role(conn, role)
+            passwords[role] = create_role(conn, role, password)
+        elif given:
+            execute(conn, "ALTER ROLE {role} PASSWORD {password}",
+                    role=sql.Identifier(role), password=sql.Literal(password))
+            done("Set the password of role '%s' from %s", role, password_variable(role))
+            passwords[role] = password
         elif reset:
             passwords[role] = reset_password(conn, role)
         else:
@@ -363,7 +399,11 @@ def report(args: argparse.Namespace, passwords: dict[str, str | None]) -> None:
                 elif schema not in MODULE_SCHEMAS:
                     read_only.append(f"{database}.{schema}")
         print(f"  {role}")
-        print(f"    password : {passwords[role] or unchanged}")
+        if args.role_passwords:
+            password_display = f"from {password_variable(role)}"
+        else:
+            password_display = passwords[role] or unchanged
+        print(f"    password : {password_display}")
         access = [f"full on {', '.join(full)}"] if full else []
         access += [f"read-only on {', '.join(read_only)}"] if read_only else []
         print(f"    access   : {' — '.join(access)}")
@@ -386,7 +426,7 @@ def main() -> None:
 
         # Roles live in the cluster, not in the database, so create them here.
         step("Creating roles: %s", ", ".join(roles))
-        passwords = setup_roles(conn, roles)
+        passwords = setup_roles(conn, roles, args.role_passwords)
         grant_role_membership(conn, roles, args.admin_user)
         # app_user runs the migrations that move tables into the module schemas and hand them
         # over (OWNER TO), which both need membership. Not a superuser, so always granted.
