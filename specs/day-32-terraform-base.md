@@ -93,60 +93,108 @@ In this order, each from fresh `main`. No Track 0: no Java test is involved, and
 goes in C2's PR with the `bus-init` change.
 
 ## Acceptance criteria
-- [ ] C32.1 **new** — `terraform fmt -check -recursive infra/terraform` passes, and
+- [x] C32.1 **new** — `terraform fmt -check -recursive infra/terraform` passes, and
       `terraform init -backend=false && terraform validate` passes in `bootstrap/`, the main
       root and `localstack/`. Red today: there is no `infra/` directory. Seen failing: a
       misindented block makes `fmt -check` exit 3 and the CI run red.
-- [ ] C32.2 **new** — The bootstrap plan has one S3 bucket with versioning `Enabled`, all four
+      Met on f99d62c: `fmt -check -recursive` exits 0, and `validate` passes in `bootstrap/`, the
+      main root and `localstack/` (the Verify above, from a clean `.terraform`); infra-ci's `fmt` and
+      `validate` steps are green on every run. #346.
+      broken: `bucket` misindented in `bootstrap/main.tf` → `fmt -check` exit 3, naming `bootstrap/main.tf` (#346)
+- [x] C32.2 **new** — The bootstrap plan has one S3 bucket with versioning `Enabled`, all four
       public-access blocks true and server-side encryption, and one `aws_budgets_budget`
       (`COST`, `MONTHLY`, its limit a variable) with a notification to an address that is a
       variable. `infra-checks.py` checks it on the plan JSON. Red today: no plan. Seen failing:
       versioning `Suspended` → the check names the bucket.
-- [ ] C32.3 **new** — State is remote and locked. The main root's backend is `s3` with
+      `infra-checks.py`'s C32.2 on the bootstrap plan, in infra-ci since #347.
+      broken: versioning `Suspended` → `C32.2 aws_s3_bucket_versioning.state (bucket jobmatch-microservices-tfstate): status Suspended, want Enabled` (#347)
+- [x] C32.3 **new** — State is remote and locked. The main root's backend is `s3` with
       `use_lockfile = true` and its bucket is the bootstrap's (grep). On LocalStack, while one
       `terraform apply` in `localstack/` waits at its prompt, a second
       `terraform plan -lock-timeout=0s` there fails with `Error acquiring the state lock`, and
       succeeds once the first is answered `no` (that apply exits 1; the step expects it). Red
       today: no backend. Tried by the auditor on LocalStack 4.14.0 and Terraform 1.16.3: the
       second plan failed with `412 PreconditionFailed`, and passed after.
-- [ ] C32.4 **new** — The main root's plan has one `aws_db_instance` with engine `postgres`,
+      `infra/terraform/versions.tf:11,15`: `bucket = "jobmatch-microservices-tfstate"`, the
+      bootstrap's default, and `use_lockfile = true`; `infra-checks.py` compares the two and rejects
+      `skip_*` flags in the main provider. infra-ci's lock test: the second plan failed with `Error
+      acquiring the state lock`, the apply answered `no` printed `Apply cancelled`, and the plan after
+      it passed. #346 (backends), #347 (checks, lock test).
+      broken: `use_lockfile = false` in the main root → `C32.3 main root backend: use_lockfile false, want true` (#347)
+      broken: bootstrap bucket default renamed → `C32.3 backend bucket jobmatch-microservices-tfstate is not the bootstrap's bucket jobmatch-other-tfstate` (#347)
+      broken: lock test's apply run with `-lock=false` → `ERROR: the second plan got the state lock while apply held it` (#347)
+- [x] C32.4 **new** — The main root's plan has one `aws_db_instance` with engine `postgres`,
       `engine_version` 18, `publicly_accessible = false`, `manage_master_user_password = true`,
       a null `password`, a subnet group of the private subnets only, and a security group whose
       only ingress is 5432 from the tasks' security group (no CIDR). `infra-checks.py` checks
       each. Red today: no plan. Seen failing: `publicly_accessible = true` → the check names it.
-- [ ] C32.5 **new** — No secret value is in a plan JSON or the LocalStack state:
+      `check_c32_4` follows the configuration's references from the instance to its subnets and its
+      one ingress rule, since their ids are unknown at plan time. #348.
+      broken: `publicly_accessible = true` → `C32.4 module.database.aws_db_instance.main: publicly_accessible True, want False` (#348)
+      broken: database given `module.network.public_subnet_ids` → `C32.4 module.network.aws_route_table_association.public: puts a database subnet behind an internet gateway` (#348)
+      broken: the 5432 rule from `cidr_ipv4 = "0.0.0.0/0"` → `cidr_ipv4 0.0.0.0/0, want None` and `source [], want the tasks security group only` (#348)
+- [x] C32.5 **new** — No secret value is in a plan JSON or the LocalStack state:
       `infra-checks.py` sweeps them for AWS access-key ids (`AKIA`/`ASIA` followed by 16
       characters), private-key headers and any argument named `password` with a non-null value.
       It reads values, not `after_sensitive`, which marks `password` even when it is null; and
       it looks for secrets, not for the word. Red today: no script. Seen failing (B's PR): a
       literal `password = "..."` on the instance → the sweep names the attribute.
-- [ ] C32.6 **new** — After the LocalStack apply, the topic, both queues, both DLQs, the redrive
+      The sweep reads values, not `after_sensitive`: Track B's null `password` passes it. #347
+      (sweep), #348 (break).
+      broken: an `AKIA…` string in a bucket tag → `C32.5 bootstrap-plan planned_values.root_module.resources[1].values.tags.note: AWS access key ID found` (#347)
+      broken: a literal `password = "..."` on the instance → `C32.5 main-plan ...values.password: password has a non-null value (not printing value)` (#348)
+- [x] C32.6 **new** — After the LocalStack apply, the topic, both queues, both DLQs, the redrive
       policies (`maxReceiveCount` 5), raw delivery on both subscriptions and the DLQ retention
       are what `bus-init` creates in compose's LocalStack, and the names and `maxReceiveCount`
       are `EventBus.java`'s. CI starts both LocalStacks; `infra-checks.py` lists any difference.
       Red today: no Terraform. Seen failing: `maxReceiveCount` 4 in `bus-init` → the check
       names the queue and the attribute.
-- [ ] C32.7 **new** — Each queue's policy allows `sqs:SendMessage` to the principal
+      infra-ci starts compose's LocalStack beside the Terraform one; `infra-checks.py` checks each
+      against `EventBus.java` and then the two against each other, DLQ retention included. #351
+      (with the bus from #350).
+      broken: `maxReceiveCount` 4 in bus-init → `C32.6 compose queue applications-user-deleted: maxReceiveCount 4, EventBus.java 5` and `C32.6 queue applications-user-deleted: maxReceiveCount terraform 5, compose 4` (#351)
+      broken: `MAX_RECEIVES = 6` in EventBus.java → `C32.6 terraform queue applications-user-deleted: maxReceiveCount 5, EventBus.java 6` (#351)
+- [x] C32.7 **new** — Each queue's policy allows `sqs:SendMessage` to the principal
       `sns.amazonaws.com` only with `aws:SourceArn` equal to the topic's ARN; checked on the
       plan JSON, since LocalStack does not enforce queue policies. Red today: no plan. Seen
       failing: the condition removed → the check names the queue.
-- [ ] C32.8 **new** — One CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible`,
+      Met with a departure: checked on the LocalStack state, not the plan JSON. The policy holds
+      the topic's ARN, unknown at plan time without an account (`policy` null, `after_unknown`); the
+      state holds the same module's policy as applied. #350.
+      broken: the queue policy's `Condition` removed, applied to LocalStack → `C32.7 terraform queue applications-user-deleted: Condition keys [], want ['ArnEquals']` (#350)
+- [x] C32.8 **new** — One CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible`,
       threshold 0, `GreaterThanThreshold`, its action an SNS topic with an email subscription
       to an address that is a variable. Checked on the plan JSON. Red today: no plan. Seen
       failing: `GreaterThanOrEqualToThreshold` → the check names the alarm.
-- [ ] C32.9 **new** — After the LocalStack apply, the score table has the name in matching's
+      Checked on the main plan; the action is followed through the configuration's references to a
+      topic with an `email` subscription whose endpoint is a `var.`. #350.
+      broken: comparison_operator `GreaterThanOrEqualToThreshold` → `C32.8 module.bus.aws_cloudwatch_metric_alarm.dlq["applications-user-deleted"]: comparison_operator GreaterThanOrEqualToThreshold, want GreaterThanThreshold` (#350)
+- [x] C32.9 **new** — After the LocalStack apply, the score table has the name in matching's
       `application.yaml` and the key schema, attribute types, billing mode and enabled TTL
       attribute that `ScoreStoreConfig` creates. Red today: no table. Seen failing: `SORT_KEY`'s
       value changed in the source → the check names the key.
-- [ ] C32.10 **new** — A second `terraform apply` in `localstack/` with nothing changed prints
+      Expected values are read from `ScoreStoreConfig.java` and matching's `application.yaml`, not
+      written into the script. #349.
+      broken: `SORT_KEY = "posting_scorer_v2"` in `ScoreStoreConfig.java` → `C32.9 table job_match_scores: RANGE key posting_scorer, want posting_scorer_v2` (#349)
+      broken: `ttl { enabled = false }` in `modules/scores`, applied → `C32.9 table job_match_scores: TTL status DISABLED, want ENABLED` (#349)
+- [x] C32.10 **new** — A second `terraform apply` in `localstack/` with nothing changed prints
       `No changes.`; CI fails otherwise. Red today: no root. Seen failing: a tag set to
       `timestamp()` → the second apply shows a change and the step fails.
-- [ ] C32.11 **new** — `infra-ci.yaml` runs C32.1–C32.10 on a PR touching any path In scope
+      infra-ci's step "second apply makes no changes" greps for `No changes.` #349.
+      broken: a tag `Applied = timestamp()` in `modules/scores` → the second apply showed `~ tags` and `Plan: 0 to add, 1 to change, 0 to destroy`, and the step's commands exited 1 (#349)
+- [x] C32.11 **new** — `infra-ci.yaml` runs C32.1–C32.10 on a PR touching any path In scope
       lists, with no AWS secret in the workflow and no job that applies outside LocalStack
       (`grep -n "apply" .github/workflows/infra-ci.yaml` shows only the LocalStack steps). Red
       today: no workflow. Seen failing: the `fmt` break in C32.1 turns the run red; a PR that
       changes only `ScoreStoreConfig.java`'s `SORT_KEY` value runs it and fails C32.9.
-- [ ] C32.12 **hold** — Compose's event bus still comes up with the retention added to
+      Met, with the "seen failing" run locally rather than as a red CI run: none of infra-ci's
+      12 runs so far was red. Its `paths` name `ScoreStoreConfig.java`, matching's
+      `application.yaml`, `EventBus.java`, `scripts/bus-init/**` and `docker-compose.yml`; its only
+      credentials are `test`/`test`; `grep -n "apply"` shows only the lock test (`:125-183`) and the two
+      LocalStack applies (`:194-202`). The breaks were run through the workflow's own `run:` steps
+      (#347). #346 (fmt, validate), #347 (plans, lock test, apply), #349 (second apply), #351
+      (compose's LocalStack).
+- [x] C32.12 **hold** — Compose's event bus still comes up with the retention added to
       `bus-init`: with the maintainer's stack down (compose pins the network name
       `finalproject`, so `-p` does not isolate it), `docker compose -p day32 --env-file
       .env.example up -d --wait localstack` reports `SUCCESSFUL` at `/_localstack/init/ready`,
@@ -156,6 +204,11 @@ goes in C2's PR with the `bus-init` change.
       per PR). Passes today (auditor: four queues, `SUCCESSFUL`). The auditor's break, on a
       scratch copy: a stray `"` in the attribute JSON → `"state": "ERROR"`, exit code 2, no
       queues. C2's PR repeats it on the changed script.
+      Held. The auditor before the day, and #351 after its change: `up -d --wait localstack` healthy,
+      `/_localstack/init/ready` `SUCCESSFUL`, `awslocal sqs list-queues` the four queues,
+      `matching-user-deleted-dlq`'s `MessageRetentionPeriod` 1209600; then `down` without `-v`. No
+      track PR (#346–#351) changes a file under `services/`.
+      broken: a stray `"` in bus-init's attribute JSON → init `"state": "ERROR"`, `container day32-localstack-1 is unhealthy`, one queue (the first DLQ) instead of four (#351)
 
 ## Verify
 ```bash
@@ -225,3 +278,70 @@ done
 - **Hand-off** H32.2 → Day 33: H42.3's docs: the gateway's `application.yaml` comments ("the
   monolith's remainder", "until Track E1"), identity's README `../mvnw` (the wrapper is
   `../../mvnw`), and `project_db` in identity's `docs/configuration.md`.
+- **Track order: A1 (#346), A2 (#347), B (#348), C1 (#349), C2a (#350), C2b (#351),** the spec's
+  order. Estimated 4 PRs; took 6, in 2,103 track lines. A split at 944 lines into the Terraform
+  files (A1) and the checks with the workflow (A2), and C2 at about 530 into the bus (C2a) and
+  the comparison with compose (C2b). #347 merged with an `Oversized:` line (674 lines, all new,
+  504 of them `infra-checks.py`), the maintainer's choice over a split into A2a and A2b: the
+  seventh override. One plan change (#342) and one spec change (#345).
+- **Departures, each recorded in its PR:**
+  - **C32.7 is checked on the LocalStack state, not the plan JSON** (#350). The policy holds the
+    topic's ARN, which the main plan without an account leaves unknown (`policy` null,
+    `after_unknown: true`). The state holds the same module's policy as applied, with real
+    ARNs; LocalStack still does not enforce it, and the check reads the document.
+  - **C32.12's break left one queue, not none** (#351). The first DLQ is created before the
+    broken line runs; the auditor's record said no queues.
+  - **C32.11's "seen failing" was run locally, through the workflow's own `run:` steps** (#347),
+    not as a red CI run: none of infra-ci's 12 runs to the close was red.
+- **Defect** — found: Track A1 · cause: spec · the estimate: 4 PRs, and Track A alone came to 944
+  lines; C2 to about 530. Took 6, and #347 still needed `Oversized:`.
+- **Defect** — found: Track C2a · cause: spec · C32.7 asked for a check on the plan JSON, where
+  the policy is unknown until apply; it could not pass as written.
+- **Defect** — found: Track C2b (break) · cause: spec · C32.12 recorded the stray-quote break as
+  leaving no queues; it left one.
+- **Defect** — found: review (Track A1/A2) · cause: implementation · the draft's LocalStack state
+  sweep passed silently on every error, the state bucket and key were hardcoded, the
+  bootstrap-bucket check was missing, and the lock test could never reach the prompt (the fifo's
+  write end first opened by the `echo no`).
+- **Defect** — found: review (Track A2) · cause: implementation · the C32.5 sweep descended into
+  `after_sensitive`, which marks a null `password`, so Track B's instance would have failed it;
+  the `skip_*` regex stopped at the first `}` and missed a flag after `default_tags`; and
+  whitespace matching through `re.escape` did nothing.
+- **Defect** — found: review (Track A2) · cause: process · the implementer reported "no
+  departures" with the lock test never run, then a fix done that was not (versioning
+  `Suspended` still printed two failures).
+- **Defect** — found: review (Track B) · cause: implementation · the draft's C32.4 found the
+  database's subnets by "private" in their address, so the public subnets passed; it was also
+  about 250 lines and took the PR over 400. Rewritten as a resolver of references (120).
+- **Defect** — found: Track B (break) · cause: implementation · C32.4's first message printed the
+  password value in the password break.
+- **Defect** — found: review (Track C1) · cause: implementation · a repeated `boto3` guard and five
+  copy-pasted regex blocks, now one pattern table.
+- **Defect** — found: review (Track C2a) · cause: implementation · the draft's C32.7 passed when
+  the topic was missing from the state (`None == None`); its C32.8 skipped alarms whose
+  `QueueName` was not a DLQ; and it applied with a local backend, leaving a `terraform.tfstate`.
+- **Defect** — found: review (Track C2b) · cause: implementation · the draft compared the two
+  LocalStacks only with each other, never with `EventBus.java`, so a `maxReceiveCount` changed on
+  both sides passed; it skipped a key when either side was `None`, so a missing queue passed;
+  and a snapshot error went into a field nothing read. Its report twice said C32.6 was complete.
+- **Defect** — found: Track C2b · cause: process · the main session's own edit left
+  `infra-checks.py` with mixed line endings once; normalised to LF before the commit.
+- **Defect** — found: Track C1 · cause: environment · the session's first local lock test fed
+  the fifo through `docker run -i` from Git Bash; Terraform saw EOF and released the lock before
+  the second plan. Rerun inside one long-lived container; CI runs Terraform natively.
+- **Defect** — found: close · cause: process · Track A1 had no Jira sub-task and no key in its
+  branch, and KAN-99 (the plan change, #342) stayed In Progress after its merge. The close added
+  A1 as KAN-105.
+- **Defect** — found: close · cause: tooling · `spec-drift.py` reads `C32.x` in #345's text as a
+  track named "C32" and reports "Day 32 Track C32: announced in #345, no branch names it" as the
+  next step.
+- **The close's Verify, on f99d62c:** `fmt -check` and `validate` in all three roots as above;
+  the rest is infra-ci's, green on #351 and on `main` after it. A `localstack/.terraform` left
+  from a track's S3-backend run makes `init -backend=false` try the stopped LocalStack; Verify
+  needs a clean one.
+- **Hand-off** H32.3 → Day 35: the state bucket's name `jobmatch-microservices-tfstate` is
+  literal in both backends and the bootstrap's default; S3 names are global, so if it is taken,
+  all three change together.
+- **Hand-off** H32.4 → Day 35: `alert_email` has no default in the main root or the bootstrap
+  (CI passes `alerts@example.com`); the apply must supply the maintainer's address, and the
+  budget's limit defaults to 20 USD.

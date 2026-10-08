@@ -102,9 +102,9 @@ implementer never commits or pushes.
   dashboard reads no other wording.
 - The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
   split the PR along a line where each part stands alone. An `Oversized:` line in the
-  description turns the failure into a warning. It has been used six times: #1, #2 and #3
+  description turns the failure into a warning. It has been used seven times: #1, #2 and #3
   (Days 1-2 and the README rewrite), then #224 (Day 21 E1a, 950 lines), #296 (Day 25 E1a,
-  1,225 lines) and #326 (the README's results moved to `docs/lab-notebook.md`, outside the days). The two extraction tracks could not split and stay green: once a module's code
+  1,225 lines) and #326 (the README's results moved to `docs/lab-notebook.md`, outside the days), and #347 (Day 32 A2, 674 new lines, the maintainer's choice over a split). The two extraction tracks could not split and stay green: once a module's code
   leaves the monolith, its database tests fail and the harness must route its endpoints to the
   new container in the same PR. Both specs expected the line. The moved code showed as renames;
   the counted lines were monolith tests deleted and rebuilt on the service's base, and in #296
