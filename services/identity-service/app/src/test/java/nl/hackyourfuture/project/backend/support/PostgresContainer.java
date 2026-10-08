@@ -140,6 +140,47 @@ public final class PostgresContainer {
         return ROLE_PASSWORD;
     }
 
+    /**
+     * Create a new, empty database with the same layout as identity_db before any migration:
+     * the {@code app} schema, and a schema for each module, owned by its role (Day 33's
+     * MIGRATE_ONLY and MIGRATE_ON_START tests). The roles are the cluster's, made once above.
+     */
+    public static void createDatabase(String name) {
+        execute("CREATE DATABASE " + name);
+        executeInDatabase(name, createDatabaseSchemas());
+    }
+
+    /** A URL onto another database of the container's, with one schema as the search path. */
+    public static String jdbcUrl(String database, String schema) {
+        return "jdbc:postgresql://" + CONTAINER.getHost() + ":" + CONTAINER.getMappedPort(5432) + "/"
+                + database + "?currentSchema=" + schema;
+    }
+
+    private static void executeInDatabase(String database, String sql) {
+        try (Connection connection = buildConnection(database);
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to run SQL against database " + database, e);
+        }
+    }
+
+    private static Connection buildConnection(String database) throws SQLException {
+        var dataSource = new SimpleDriverDataSource();
+        dataSource.setDriverClass(org.postgresql.Driver.class);
+        dataSource.setUrl(jdbcUrl(database, "app"));
+        dataSource.setUsername(CONTAINER.getUsername());
+        dataSource.setPassword(CONTAINER.getPassword());
+        return dataSource.getConnection();
+    }
+
+    private static String createDatabaseSchemas() {
+        List<String> statements = new ArrayList<>();
+        statements.add("CREATE SCHEMA app");
+        statements.addAll(moduleSchemaStatements());
+        return String.join(";\n", statements);
+    }
+
     /** Runs a multi-statement script. Postgres accepts these over the simple query protocol. */
     public static void execute(String sql) {
         try (Connection connection = DATA_SOURCE.getConnection();
@@ -187,6 +228,14 @@ public final class PostgresContainer {
         }
         statements.add("CREATE ROLE jobs_user LOGIN PASSWORD '" + ROLE_PASSWORD + "'");
         statements.add("CREATE ROLE analytics_user LOGIN PASSWORD '" + ROLE_PASSWORD + "'");
+        statements.addAll(moduleSchemaStatements());
+        statements.add("REVOKE CONNECT ON DATABASE identity_db FROM PUBLIC");
+        statements.add("GRANT CONNECT ON DATABASE identity_db TO " + String.join(", ", IDENTITY_DB_CONNECT));
+        execute(String.join(";\n", statements));
+    }
+
+    private static List<String> moduleSchemaStatements() {
+        List<String> statements = new ArrayList<>();
         for (String schema : MODULE_SCHEMAS) {
             statements.add("CREATE SCHEMA " + schema + " AUTHORIZATION " + schema + "_user");
             statements.add("GRANT USAGE ON SCHEMA " + schema + " TO " + othersThan(schema));
@@ -195,9 +244,7 @@ public final class PostgresContainer {
                         + " GRANT SELECT ON " + objects + " TO " + othersThan(schema));
             }
         }
-        statements.add("REVOKE CONNECT ON DATABASE identity_db FROM PUBLIC");
-        statements.add("GRANT CONNECT ON DATABASE identity_db TO " + String.join(", ", IDENTITY_DB_CONNECT));
-        execute(String.join(";\n", statements));
+        return statements;
     }
 
     /**

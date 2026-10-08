@@ -11,6 +11,8 @@ spring:
     user: ${DB_USER:admin}
     password: ${DB_PASSWORD:password}
     schemas: app
+    # false: start without migrating, for when a MIGRATE_ONLY run has done it (Day 33)
+    enabled: ${MIGRATE_ON_START:true}
     # Used for password reset emails
   mail:
     host: ${MAIL_HOST:smtp-relay.brevo.com}

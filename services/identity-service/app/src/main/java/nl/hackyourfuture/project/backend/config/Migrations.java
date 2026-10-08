@@ -1,12 +1,10 @@
 package nl.hackyourfuture.project.backend.config;
 
 import org.flywaydb.core.Flyway;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import javax.sql.DataSource;
 
 /**
  * The migrations, in the order Day 11 needs them.
@@ -22,22 +20,28 @@ import javax.sql.DataSource;
  * {@code identity.refresh_tokens} is the first. jobs has none: it owns no tables. matching has
  * none since Day 23: matching-service keeps its scores in DynamoDB and has no database.
  * applications has none since Day 25: application-service migrates saved_jobs in its own database.
+ *
+ * <p>The identity module's Flyway takes the datasource login directly (not the pool bean) so that
+ * a MIGRATE_ONLY run can supply just the logins, without needing the pool or the signing key
+ * (Day 33, ECS one-off migrate task).
  */
 @Configuration(proxyBeanMethods = false)
 class Migrations {
 
     @Bean
     FlywayMigrationStrategy ownerThenModules(
-            @Qualifier("identityDataSource") DataSource identity) {
+            @Value("${app.datasource.identity.url}") String identityUrl,
+            @Value("${app.datasource.identity.username}") String identityUser,
+            @Value("${app.datasource.identity.password}") String identityPassword) {
         return owner -> {
             owner.migrate();
-            migrate("identity", identity);
+            migrate("identity", identityUrl, identityUser, identityPassword);
         };
     }
 
-    private static void migrate(String module, DataSource dataSource) {
+    private static void migrate(String module, String url, String user, String password) {
         Flyway.configure()
-                .dataSource(dataSource)
+                .dataSource(url, user, password)
                 .schemas(module)
                 .createSchemas(false)
                 .locations("classpath:db/" + module)
