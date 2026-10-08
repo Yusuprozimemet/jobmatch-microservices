@@ -3,8 +3,8 @@
 Reads plan JSON (terraform show -json) and validates infrastructure criteria.
 With --localstack, also checks applied state and resources against specifications.
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
-C32.4 (network and database), C32.5 (secret sweep), C32.7 (queue policies in the LocalStack
-state), C32.8 (alarms) and C32.9 (score table on LocalStack).
+C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7 (queue policies
+in the LocalStack state), C32.8 (alarms), and C32.9 (score table on LocalStack).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -509,6 +509,207 @@ def check_c32_5_sweep(plan: dict, path_label: str) -> list[str]:
     return failures
 
 
+def bus_expected(repo_root: Path) -> tuple[str, set[str], int, str]:
+    """Read TOPIC, queue names, MAX_RECEIVES, and DLQ suffix from EventBus.java.
+
+    Returns (topic_name, set of queue names, max_receive_count, dlq_suffix).
+    Raises ValueError if constants are missing.
+    """
+    event_bus_path = repo_root / "services" / "identity-service" / "app" / "src" / "test" / \
+                     "java" / "nl" / "hackyourfuture" / "project" / "backend" / "support" / "EventBus.java"
+
+    try:
+        content = event_bus_path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise ValueError(f"EventBus.java: error reading: {e}")
+
+    patterns = {
+        "TOPIC": r'static final String TOPIC = "([^"]*)"',
+        "APPLICATIONS_QUEUE": r'static final String APPLICATIONS_QUEUE = "([^"]*)"',
+        "MATCHING_QUEUE": r'static final String MATCHING_QUEUE = "([^"]*)"',
+        "MAX_RECEIVES": r'static final int MAX_RECEIVES = (\d+)',
+    }
+    values = {}
+    for name, pattern in patterns.items():
+        match = re.search(pattern, content)
+        if not match:
+            raise ValueError(f"EventBus.java: {name} not found")
+        values[name] = match.group(1)
+
+    topic = values["TOPIC"]
+    eventbus_queues = {values["APPLICATIONS_QUEUE"], values["MATCHING_QUEUE"]}
+    max_receives = int(values["MAX_RECEIVES"])
+
+    # Read DLQ suffix from deadLetterQueue method
+    dlq_match = re.search(r'return queue \+ "([^"]*)";', content)
+    if not dlq_match:
+        raise ValueError("EventBus.java: DLQ suffix not found in deadLetterQueue")
+    dlq_suffix = dlq_match.group(1)
+
+    # Read queue names from docker-compose.yml
+    compose_path = repo_root / "docker-compose.yml"
+    try:
+        compose_content = compose_path.read_text(encoding="utf-8")
+    except Exception as e:
+        raise ValueError(f"docker-compose.yml: error reading: {e}")
+
+    # Find all EVENTS_USER_DELETED_QUEUE_URL lines and extract queue names
+    compose_queues = set()
+    for match in re.finditer(r'EVENTS_USER_DELETED_QUEUE_URL:\s*\S+/([^\s/]+)\s*$', compose_content, re.MULTILINE):
+        queue_name = match.group(1)
+        compose_queues.add(queue_name)
+
+    if compose_queues != eventbus_queues:
+        raise ValueError(f"docker-compose.yml: queues {sorted(compose_queues)}, EventBus.java {sorted(eventbus_queues)}")
+
+    return topic, eventbus_queues, max_receives, dlq_suffix
+
+
+def bus_snapshot(endpoint: str, topic: str, queues: set[str], dlq_suffix: str) -> dict:
+    """Snapshot bus resources on LocalStack: queues, DLQs, policies, subscriptions.
+
+    Returns dict with topic_exists and per-queue dicts containing:
+    {exists, dlq_exists, max_receive_count, dead_letter_target, dlq_retention, raw_delivery}.
+    Raises exceptions on error.
+    """
+    import boto3
+    from botocore.exceptions import ClientError
+
+    result = {"topic_exists": False, "queues": {}}
+
+    sns = boto3.client("sns", endpoint_url=endpoint, region_name="eu-west-1",
+                      aws_access_key_id="test", aws_secret_access_key="test")
+    sqs = boto3.client("sqs", endpoint_url=endpoint, region_name="eu-west-1",
+                      aws_access_key_id="test", aws_secret_access_key="test")
+
+    # Check topic exists
+    topics = sns.list_topics().get("Topics", [])
+    topic_arns = [t["TopicArn"] for t in topics]
+    result["topic_exists"] = any(arn.endswith(":" + topic) for arn in topic_arns)
+
+    # Check queues and DLQs
+    for queue_name in sorted(queues):
+        q_info = {
+            "exists": None,
+            "dlq_exists": None,
+            "max_receive_count": None,
+            "dead_letter_target": None,
+            "dlq_retention": None,
+            "raw_delivery": None,
+        }
+
+        try:
+            queue_url = sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
+            q_info["exists"] = True
+
+            # Get queue attributes
+            attrs = sqs.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["All"])["Attributes"]
+            redrive = attrs.get("RedrivePolicy")
+            if redrive:
+                policy = json.loads(redrive)
+                q_info["max_receive_count"] = int(policy.get("maxReceiveCount", -1))
+                dlq_arn = policy.get("deadLetterTargetArn")
+                if dlq_arn:
+                    q_info["dead_letter_target"] = dlq_arn.split(":")[-1]
+
+            # Check DLQ
+            dlq_name = f"{queue_name}{dlq_suffix}"
+            try:
+                dlq_url = sqs.get_queue_url(QueueName=dlq_name)["QueueUrl"]
+                q_info["dlq_exists"] = True
+                dlq_attrs = sqs.get_queue_attributes(QueueUrl=dlq_url, AttributeNames=["All"])["Attributes"]
+                q_info["dlq_retention"] = int(dlq_attrs.get("MessageRetentionPeriod", 0))
+            except ClientError:
+                q_info["dlq_exists"] = False
+
+            # Check subscription raw_message_delivery
+            topic_arns = [t["TopicArn"] for t in topics]
+            topic_arn = next((arn for arn in topic_arns if arn.endswith(":" + topic)), None)
+            if topic_arn:
+                subs = sns.list_subscriptions_by_topic(TopicArn=topic_arn)["Subscriptions"]
+                for sub in subs:
+                    sub_endpoint = sub.get("Endpoint")
+                    if sub_endpoint and sub_endpoint.endswith(":" + queue_name):
+                        attrs = sns.get_subscription_attributes(SubscriptionArn=sub["SubscriptionArn"])
+                        raw = attrs.get("Attributes", {}).get("RawMessageDelivery")
+                        q_info["raw_delivery"] = raw == "true" if raw else None
+                        break
+        except ClientError:
+            q_info["exists"] = False
+
+        result["queues"][queue_name] = q_info
+
+    return result
+
+
+def check_c32_6(terraform_endpoint: str, compose_endpoint: str, repo_root: Path) -> list[str]:
+    """Check bus resources match between Terraform (LocalStack) and compose (LocalStack)."""
+    failures = []
+
+    try:
+        topic, queues, max_receives, dlq_suffix = bus_expected(repo_root)
+    except ValueError as e:
+        failures.append(f"C32.6 {e}")
+        return failures
+
+    # Snapshot both LocalStacks, catching exceptions per side
+    tf_snap = None
+    compose_snap = None
+
+    try:
+        tf_snap = bus_snapshot(terraform_endpoint, topic, queues, dlq_suffix)
+    except Exception as e:
+        failures.append(f"C32.6 terraform LocalStack: {type(e).__name__}: {e}")
+
+    try:
+        compose_snap = bus_snapshot(compose_endpoint, topic, queues, dlq_suffix)
+    except Exception as e:
+        failures.append(f"C32.6 compose LocalStack: {type(e).__name__}: {e}")
+
+    if not tf_snap or not compose_snap:
+        return failures
+
+    # Check topic exists on both sides
+    if not tf_snap.get("topic_exists"):
+        failures.append(f"C32.6 terraform topic {topic}: missing")
+    if not compose_snap.get("topic_exists"):
+        failures.append(f"C32.6 compose topic {topic}: missing")
+
+    # Check queues and DLQs
+    for queue_name in sorted(queues):
+        for env, snap in [("terraform", tf_snap), ("compose", compose_snap)]:
+            q_info = snap.get("queues", {}).get(queue_name, {})
+
+            if not q_info.get("exists"):
+                failures.append(f"C32.6 {env} queue {queue_name}: missing")
+                continue
+
+            if not q_info.get("dlq_exists"):
+                failures.append(f"C32.6 {env} queue {queue_name}: dlq missing")
+            if q_info.get("max_receive_count") != max_receives:
+                failures.append(f"C32.6 {env} queue {queue_name}: maxReceiveCount "
+                                f"{q_info.get('max_receive_count')}, EventBus.java {max_receives}")
+            if q_info.get("dead_letter_target") != queue_name + dlq_suffix:
+                failures.append(f"C32.6 {env} queue {queue_name}: deadLetterTargetArn "
+                                f"{q_info.get('dead_letter_target')}, EventBus.java {queue_name + dlq_suffix}")
+            if q_info.get("raw_delivery") is not True:
+                failures.append(f"C32.6 {env} queue {queue_name}: RawMessageDelivery {q_info.get('raw_delivery')}")
+
+        # Compare all attributes between terraform and compose
+        tf_q_info = tf_snap.get("queues", {}).get(queue_name, {})
+        compose_q_info = compose_snap.get("queues", {}).get(queue_name, {})
+
+        names = {"max_receive_count": "maxReceiveCount", "dead_letter_target": "deadLetterTargetArn",
+                 "dlq_retention": "MessageRetentionPeriod", "raw_delivery": "RawMessageDelivery"}
+        for key in names:
+            tf_val = tf_q_info.get(key)
+            compose_val = compose_q_info.get(key)
+            if tf_val != compose_val:
+                failures.append(f"C32.6 queue {queue_name}: {names[key]} terraform {tf_val}, compose {compose_val}")
+
+    return failures
+
+
 def check_c32_7_state(state: dict, label: str) -> list[str]:
     """Check queue policies in Terraform state: Allow SendMessage from topic only.
 
@@ -827,6 +1028,7 @@ def main():
     parser.add_argument("--bootstrap-plan", help="Path to bootstrap plan JSON")
     parser.add_argument("--main-plan", help="Path to main root plan JSON")
     parser.add_argument("--localstack", help="LocalStack endpoint URL (e.g., http://localhost:4566)")
+    parser.add_argument("--compose-localstack", help="Compose LocalStack endpoint URL")
 
     args = parser.parse_args()
 
@@ -933,6 +1135,13 @@ def main():
         # C32.9: the score table on LocalStack
         failures.extend(check_c32_9(args.localstack, repo_root))
         checks_run.append("score table")
+
+    # C32.6: Check bus resources match between Terraform and compose LocalStack
+    if args.localstack and args.compose_localstack:
+        failures.extend(check_c32_6(args.localstack, args.compose_localstack, repo_root))
+        checks_run.append("bus")
+    elif args.localstack and not args.compose_localstack:
+        failures.append("C32.6 --compose-localstack not given")
 
     # Print results
     if failures:
