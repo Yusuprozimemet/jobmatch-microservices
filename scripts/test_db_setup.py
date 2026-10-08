@@ -5,14 +5,14 @@ change to its grants could merge unseen. This runs it as an unattended job would
 second run must change nothing, and the databases, roles, schema owners, CONNECT grants and
 privileges must equal EXPECTED, taken from the script as it was on Day 33.
 
-It creates databases and roles, so it needs a Postgres of its own: CI's service container, or
+It creates databases and roles, so it needs a Postgres with password authentication:
 
-    docker run -d --name dbsetup-test -e POSTGRES_HOST_AUTH_METHOD=trust \\
-        -p 55432:5432 postgres:18.4-alpine
-    POSTGRES_PORT=55432 python -m pytest -q scripts/test_db_setup.py
+    PW=$(python -c "import secrets; print(secrets.token_hex(16))")
+    docker run -d --name dbsetup-test -e POSTGRES_PASSWORD=$PW -p 55432:5432 postgres:18.4-alpine
+    POSTGRES_PORT=55432 POSTGRES_PASSWORD=$PW python -m pytest -q scripts/test_db_setup.py
 
-Connection details come from POSTGRES_HOST, POSTGRES_PORT and POSTGRES_USER. Both containers
-trust every login, so without POSTGRES_PASSWORD a random one is passed and none is stored.
+Connection details come from POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER and POSTGRES_PASSWORD.
+The passwords test needs the container to check them: under trust auth it fails, saying so.
 
 Requires: pip install "psycopg[binary]" pytest
 """
@@ -139,16 +139,36 @@ def connect(database: str) -> psycopg.Connection:
                            password=ADMIN_PASSWORD, autocommit=True)
 
 
+def setup_env(port: int, passwords: dict[str, str] | None = None) -> dict[str, str]:
+    """The script's environment: the admin, `passwords`, and no inherited DB_PASSWORD_*."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DB_PASSWORD_")}
+    env.update({
+        "POSTGRES_HOST": HOST,
+        "POSTGRES_PORT": str(port),
+        "POSTGRES_USER": ADMIN,
+        "POSTGRES_PASSWORD": ADMIN_PASSWORD,
+        "PYTHONIOENCODING": "utf-8",  # its log has emoji; a Windows console is not UTF-8
+    })
+    if passwords:
+        env.update(passwords)
+    return env
+
+
 def run_setup() -> subprocess.CompletedProcess:
     """Run the script with no terminal and the admin password in the environment."""
-    env = {**os.environ, "POSTGRES_HOST": HOST, "POSTGRES_PORT": str(PORT),
-           "POSTGRES_USER": ADMIN, "POSTGRES_PASSWORD": ADMIN_PASSWORD,
-           "PYTHONIOENCODING": "utf-8"}  # its log has emoji; a Windows console is not UTF-8
+    env = setup_env(PORT)
     result = subprocess.run([sys.executable, str(SCRIPT)], env=env, stdin=subprocess.DEVNULL,
                             capture_output=True, text=True, encoding="utf-8")
     # stderr is the log, which holds no password; stdout, the report, can.
     assert result.returncode == 0, f"db-setup.py exited {result.returncode}:\n{result.stderr}"
     return result
+
+
+def run_setup_from_env(env: dict[str, str]) -> subprocess.CompletedProcess:
+    """Run the script with --passwords-from-env and no terminal; the caller checks the exit."""
+    return subprocess.run([sys.executable, str(SCRIPT), "--passwords-from-env"], env=env,
+                          stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                          encoding="utf-8")
 
 
 def snapshot() -> dict:
@@ -238,3 +258,66 @@ def test_the_second_run_reports_every_password_unchanged(runs):
     output = runs["second"].stdout + runs["second"].stderr
     leaked = [role for role, password in first.items() if password in output]
     assert not leaked, f"the second run printed the first run's password of {leaked}"
+
+
+def test_a_missing_password_fails_before_connecting():
+    passwords = {f"DB_PASSWORD_{role.upper()}": secrets.token_hex(16)
+                 for role in ROLES if role not in ("jobs_user", "matching_user")}
+    env = setup_env(1, passwords)  # port 1: a connection attempt would fail differently
+    env.pop("POSTGRES_PASSWORD")
+    result = run_setup_from_env(env)
+    assert result.returncode == 2, result.stderr
+    stderr = result.stderr
+    assert "DB_PASSWORD_JOBS_USER" in stderr
+    assert "DB_PASSWORD_MATCHING_USER" in stderr
+    assert "POSTGRES_PASSWORD" in stderr
+    for var in passwords:
+        assert var not in stderr, f"{var} is set but named as missing"
+    assert "Connecting to" not in stderr
+    assert "Could not connect" not in stderr
+
+
+def test_passwords_from_env_sets_every_role_and_keeps_the_pin(runs):
+    # jobs_user owns nothing, so it can go: the run then creates one role and resets the rest.
+    for db in DATABASES:
+        with connect(db) as conn:
+            conn.execute("DROP OWNED BY jobs_user")
+    with connect("postgres") as conn:
+        conn.execute("DROP ROLE jobs_user")
+    passwords = {role: secrets.token_hex(16) for role in ROLES}
+    result = run_setup_from_env(setup_env(PORT, {
+        f"DB_PASSWORD_{role.upper()}": password for role, password in passwords.items()}))
+    # stderr only: stdout is the report, which should hold no password but might.
+    assert result.returncode == 0, f"db-setup.py exited {result.returncode}:\n{result.stderr}"
+    output = result.stdout + result.stderr
+    leaked = [role for role, password in passwords.items() if password in output]
+    assert not leaked, f"db-setup.py printed the password of {leaked}"
+    # Under trust auth every login below would pass whatever the password.
+    try:
+        psycopg.connect(host=HOST, port=PORT, dbname="postgres", user="identity_user",
+                        password=secrets.token_hex(16), autocommit=True).close()
+    except psycopg.OperationalError:
+        pass
+    else:
+        pytest.fail("Postgres accepts any password (trust auth); run it with"
+                    " POSTGRES_PASSWORD, see the docstring")
+    connection_tests = [
+        ("identity_user", "identity_db"),
+        ("applications_user", "apps_db"),
+        ("analytics_user", "jobs_db"),
+        ("analytics_dev_user", "jobs_db"),
+        ("jobs_user", "jobs_db"),
+        ("app_user", "postgres"),
+        ("matching_user", "postgres"),
+    ]
+    failures = []
+    for role, database in connection_tests:
+        try:
+            with psycopg.connect(host=HOST, port=PORT, dbname=database, user=role,
+                                 password=passwords[role], autocommit=True) as conn:
+                if conn.execute("SELECT current_user").fetchone()[0] != role:
+                    failures.append(f"{role}: logged in as another role")
+        except psycopg.OperationalError as error:  # the type only: a message may hold more
+            failures.append(f"{role}: {type(error).__name__}")
+    assert not failures, "\n".join(failures)
+    assert snapshot() == EXPECTED

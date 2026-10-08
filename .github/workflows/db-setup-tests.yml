@@ -28,10 +28,11 @@ jobs:
     services:
       postgres:
         image: postgres:18.4-alpine
-        # Trust, so no password lives here: the container exists for one job
-        # and publishes only to the runner. The test passes a random password.
+        # Password auth, so the db-setup test can check that each role logs in with its own
+        # password. The container exists for one job and publishes only to the runner; its
+        # password is the run's id, not a secret.
         env:
-          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_PASSWORD: ${{ format('dbsetup-{0}-{1}', github.run_id, github.run_attempt) }}
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
@@ -49,3 +50,4 @@ jobs:
         env:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ format('dbsetup-{0}-{1}', github.run_id, github.run_attempt) }}
