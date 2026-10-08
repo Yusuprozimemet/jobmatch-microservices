@@ -3,7 +3,8 @@
 Reads plan JSON (terraform show -json) and validates infrastructure criteria.
 With --localstack, also checks applied state and resources against specifications.
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
-C32.4 (network and database), C32.5 (secret sweep), and C32.9 (score table on LocalStack).
+C32.4 (network and database), C32.5 (secret sweep), C32.7 (queue policies in the LocalStack
+state), C32.8 (alarms) and C32.9 (score table on LocalStack).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -508,6 +509,192 @@ def check_c32_5_sweep(plan: dict, path_label: str) -> list[str]:
     return failures
 
 
+def check_c32_7_state(state: dict, label: str) -> list[str]:
+    """Check queue policies in Terraform state: Allow SendMessage from topic only.
+
+    The policy is embedded in state after apply, not in the plan (which lacks the account
+    to know the ARN). This check runs on the already-parsed state JSON from S3.
+    """
+    failures = []
+
+    # Find the SNS topic ARN
+    topic_arn = None
+    for resource in state.get("resources", []):
+        if resource.get("type") == "aws_sns_topic" and resource.get("name") == "user_deleted":
+            for instance in resource.get("instances", []):
+                topic_arn = instance.get("attributes", {}).get("arn")
+                if topic_arn:
+                    break
+
+    if not topic_arn:
+        failures.append(f"C32.7 {label}: topic user_deleted not in state")
+        return failures
+
+    # Count non-DLQ queues
+    non_dlq_queues = []
+    for resource in state.get("resources", []):
+        if resource.get("type") == "aws_sqs_queue" and resource.get("name") == "queue":
+            for instance in resource.get("instances", []):
+                queue_name = instance.get("attributes", {}).get("name")
+                if queue_name and not queue_name.endswith("-dlq"):
+                    non_dlq_queues.append(queue_name)
+
+    # Find and check queue policies
+    queue_policies = []
+    for resource in state.get("resources", []):
+        if resource.get("type") == "aws_sqs_queue_policy" and resource.get("name") == "queue":
+            for instance in resource.get("instances", []):
+                queue_policies.append(instance)
+
+    if len(queue_policies) != len(non_dlq_queues):
+        failures.append(f"C32.7 {label}: {len(queue_policies)} queue policies, want {len(non_dlq_queues)} (one per non-dlq queue)")
+
+    for policy_instance in queue_policies:
+        attrs = policy_instance.get("attributes", {})
+        queue_url = attrs.get("queue_url")
+        queue_name = queue_url.split("/")[-1] if queue_url else "unknown"
+
+        policy_str = attrs.get("policy")
+        if not policy_str:
+            failures.append(f"C32.7 {label} queue {queue_name}: policy missing")
+            continue
+
+        try:
+            policy = json.loads(policy_str)
+            statements = policy.get("Statement", [])
+
+            if len(statements) != 1:
+                failures.append(f"C32.7 {label} queue {queue_name}: {len(statements)} statements, want 1")
+                continue
+
+            stmt = statements[0]
+
+            if stmt.get("Effect") != "Allow":
+                failures.append(f"C32.7 {label} queue {queue_name}: Effect {stmt.get('Effect')}, want Allow")
+
+            principal = stmt.get("Principal", {})
+            service = principal.get("Service")
+            if isinstance(service, str):
+                service = [service]
+            if service != ["sns.amazonaws.com"]:
+                failures.append(f"C32.7 {label} queue {queue_name}: Principal.Service {service}, want ['sns.amazonaws.com']")
+
+            action = stmt.get("Action")
+            if isinstance(action, str):
+                action = [action]
+            if action != ["sqs:SendMessage"]:
+                failures.append(f"C32.7 {label} queue {queue_name}: Action {action}, want ['sqs:SendMessage']")
+
+            condition = stmt.get("Condition", {})
+
+            # Require exactly "ArnEquals" key with only "aws:SourceArn"
+            if set(condition.keys()) != {"ArnEquals"}:
+                failures.append(f"C32.7 {label} queue {queue_name}: Condition keys {sorted(condition.keys())}, want ['ArnEquals']")
+
+            arn_equals = condition.get("ArnEquals", {})
+            if set(arn_equals.keys()) != {"aws:SourceArn"}:
+                failures.append(f"C32.7 {label} queue {queue_name}: Condition ArnEquals keys {sorted(arn_equals.keys())}, want ['aws:SourceArn']")
+
+            source_arn = arn_equals.get("aws:SourceArn")
+            if source_arn != topic_arn:
+                failures.append(f"C32.7 {label} queue {queue_name}: Condition ArnEquals aws:SourceArn {source_arn}, want {topic_arn}")
+        except json.JSONDecodeError:
+            failures.append(f"C32.7 {label} queue {queue_name}: policy is not valid JSON")
+
+    return failures
+
+
+def check_c32_8(plan: dict) -> list[str]:
+    """Check CloudWatch alarms on DLQs: metric, threshold, comparison, actions."""
+    failures = []
+
+    # Find all DLQ names
+    dlq_names = set()
+    for resource in resources(plan):
+        if resource["type"] == "aws_sqs_queue":
+            name = resource["values"].get("name")
+            if name and name.endswith("-dlq"):
+                dlq_names.add(name)
+
+    # Find all alarms from module.bus and count by DLQ
+    all_alarms = [r for r in resources(plan) if r["type"] == "aws_cloudwatch_metric_alarm"]
+    bus_alarms = [r for r in all_alarms if r["address"].startswith("module.bus.aws_cloudwatch_metric_alarm.dlq")]
+    alarm_count_by_dlq = {}
+    for alarm in bus_alarms:
+        dims = alarm["values"].get("dimensions", {})
+        queue_name = dims.get("QueueName")
+        alarm_count_by_dlq[queue_name] = alarm_count_by_dlq.get(queue_name, 0) + 1
+        if queue_name not in dlq_names:
+            failures.append(f"C32.8 {alarm['address']}: dimensions.QueueName {queue_name} not in DLQ names {sorted(dlq_names)}")
+
+    # Check each DLQ has exactly one alarm
+    for dlq_name in sorted(dlq_names):
+        count = alarm_count_by_dlq.get(dlq_name, 0)
+        if count != 1:
+            failures.append(f"C32.8 {dlq_name}: {count} alarms, want 1")
+
+    # Configuration resources indexed by address for resolving references
+    config_by_addr = {}
+    for path, resource in config_with_path(plan):
+        addr = "".join(f"module.{n}." for n in path) + resource["address"]
+        config_by_addr[addr] = (path, resource)
+
+    # Check email subscription to var once (outside per-alarm loop)
+    has_email_var_sub = False
+    config_addr = "module.bus.aws_cloudwatch_metric_alarm.dlq"
+    if config_addr in config_by_addr:
+        path, config_res = config_by_addr[config_addr]
+        config_values = config_res.get("expressions", {})
+
+        alarm_actions_expr = config_values.get("alarm_actions", {})
+        if isinstance(alarm_actions_expr, dict):
+            refs = alarm_actions_expr.get("references", [])
+            resolved_topics = resolve(plan, path, refs)
+
+            for topic_addr in resolved_topics:
+                for sub_addr, (sub_path, sub_res) in config_by_addr.items():
+                    if sub_res["type"] == "aws_sns_topic_subscription":
+                        sub_expr = sub_res.get("expressions", {})
+                        # Check protocol is "email"
+                        protocol_expr = sub_expr.get("protocol", {})
+                        protocol_val = protocol_expr.get("constant_value") if isinstance(protocol_expr, dict) else protocol_expr
+                        if protocol_val != "email":
+                            continue
+
+                        topic_refs = sub_expr.get("topic_arn", {}).get("references", [])
+                        if topic_addr in resolve(plan, sub_path, topic_refs):
+                            endpoint_expr = sub_expr.get("endpoint", {})
+                            if isinstance(endpoint_expr, dict):
+                                endpoint_refs = endpoint_expr.get("references", [])
+                                if any("var." in str(r) for r in endpoint_refs):
+                                    has_email_var_sub = True
+                                    break
+                if has_email_var_sub:
+                    break
+
+    # Check each alarm has valid configuration
+    for alarm in bus_alarms:
+        addr = alarm["address"]
+        values = alarm["values"]
+
+        if values.get("namespace") != "AWS/SQS":
+            failures.append(f"C32.8 {addr}: namespace {values.get('namespace')}, want AWS/SQS")
+
+        if values.get("metric_name") != "ApproximateNumberOfMessagesVisible":
+            failures.append(f"C32.8 {addr}: metric_name {values.get('metric_name')}, want ApproximateNumberOfMessagesVisible")
+
+        if float(values.get("threshold", -1)) != 0.0:
+            failures.append(f"C32.8 {addr}: threshold {values.get('threshold')}, want 0")
+
+        if values.get("comparison_operator") != "GreaterThanThreshold":
+            failures.append(f"C32.8 {addr}: comparison_operator {values.get('comparison_operator')}, want GreaterThanThreshold")
+
+        if not has_email_var_sub:
+            failures.append(f"C32.8 {addr}: alarm_actions do not reference an SNS topic with email subscription to a var")
+
+    return failures
+
+
 def check_c32_9(endpoint: str, repo_root: Path) -> list[str]:
     """Check score table on LocalStack: name, keys, billing mode, and TTL against source."""
     failures = []
@@ -688,6 +875,11 @@ def main():
         failures.extend(check_c32_4(main_plan))
         checks_run.append("database")
 
+    # C32.8: Main plan alarm checks
+    if args.main_plan and main_plan:
+        failures.extend(check_c32_8(main_plan))
+        checks_run.append("alarms")
+
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
         failures.extend(check_c32_5_sweep(bootstrap_plan, "bootstrap-plan"))
@@ -697,6 +889,7 @@ def main():
         failures.extend(check_c32_5_sweep(main_plan, "main-plan"))
 
     # C32.5: Secret sweep on LocalStack state
+    localstack_state = None
     if args.localstack:
         checks_run.append("LocalStack state")
         try:
@@ -729,6 +922,9 @@ def main():
                         state_content = response["Body"].read().decode("utf-8")
                         localstack_state = json.loads(state_content)
                         failures.extend(check_c32_5_sweep(localstack_state, f"state s3://{bucket}/{key}"))
+
+                        # C32.7: Check queue policies in state
+                        failures.extend(check_c32_7_state(localstack_state, "terraform"))
                     except s3_client.exceptions.NoSuchKey:
                         failures.append(f"C32.5 state s3://{bucket}/{key}: object not found")
                     except Exception as e:

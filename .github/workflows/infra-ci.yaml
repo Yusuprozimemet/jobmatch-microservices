@@ -110,7 +110,8 @@ jobs:
           EOF
 
           terraform -chdir=infra/terraform init -reconfigure -input=false
-          terraform -chdir=infra/terraform plan -input=false -out=tfplan
+          terraform -chdir=infra/terraform plan -input=false -out=tfplan \
+            -var alert_email=alerts@example.com
           terraform -chdir=infra/terraform show -json tfplan > "$RUNNER_TEMP/main-plan.json"
 
       - name: LocalStack state bucket
