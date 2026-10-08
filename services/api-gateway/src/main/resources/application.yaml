@@ -54,18 +54,17 @@ management:
           endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
 
 gateway:
-  # identity-service's base URL (Day 28, the monolith's remainder): http://identity-service:8080 in
+  # identity-service's base URL (Day 28): http://identity-service:8080 in
   # compose. Everything under /api/** the three routes below do not take goes there.
   identity-service-url: ${IDENTITY_SERVICE_URL:http://localhost:8080}
   # Where job search goes (Day 40): job-service, http://job-service:8080 in compose (Day 17). The
   # backend default only suits a backend that still serves it; the monolith no longer does.
   job-service-url: ${JOB_SERVICE_URL:${gateway.identity-service-url}}
-  # Where top-matches goes (Day 21): matching-service, http://matching-service:8080 in compose from
-  # Track E2. The backend default suits a backend that still serves it, as it does until Track E1.
+  # Where top-matches goes (Day 21): matching-service, http://matching-service:8080 in compose. The
+  # backend default only suits a backend that still serves it; identity-service no longer does.
   matching-service-url: ${MATCHING_SERVICE_URL:${gateway.identity-service-url}}
-  # Where saved jobs go (Day 25): application-service, http://application-service:8080 in compose
-  # from Track E2. The backend default suits a backend that still serves them, as it does until
-  # Track E1.
+  # Where saved jobs go (Day 25): application-service, http://application-service:8080 in compose.
+  # The backend default only suits a backend that still serves them; identity-service no longer does.
   application-service-url: ${APPLICATION_SERVICE_URL:${gateway.identity-service-url}}
   # The key set access tokens are verified with; identity-service publishes it.
   jwks-url: ${gateway.identity-service-url}/.well-known/jwks.json
