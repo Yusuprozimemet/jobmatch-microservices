@@ -10,3 +10,7 @@ module "database" {
   subnet_ids         = module.network.private_subnet_ids
   security_group_ids = [module.network.database_security_group_id]
 }
+
+module "scores" {
+  source = "./modules/scores"
+}

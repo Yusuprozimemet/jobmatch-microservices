@@ -3,8 +3,8 @@
 Reads plan JSON (terraform show -json) and validates infrastructure criteria.
 With --localstack, also checks applied state and resources against specifications.
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
-C32.4 (network and database), and C32.5 (secret sweep).
-Track B checks C32.4; Track C adds bus/scores.
+C32.4 (network and database), C32.5 (secret sweep), and C32.9 (score table on LocalStack).
+Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
 
@@ -508,6 +508,131 @@ def check_c32_5_sweep(plan: dict, path_label: str) -> list[str]:
     return failures
 
 
+def check_c32_9(endpoint: str, repo_root: Path) -> list[str]:
+    """Check score table on LocalStack: name, keys, billing mode, and TTL against source."""
+    failures = []
+
+    config_path = repo_root / "services" / "matching-service" / "src" / "main" / "java" / \
+                  "nl" / "hackyourfuture" / "project" / "backend" / "matching" / "ScoreStoreConfig.java"
+
+    try:
+        config_content = config_path.read_text(encoding="utf-8")
+    except Exception as e:
+        failures.append(f"C32.9 ScoreStoreConfig.java: error reading: {e}")
+        return failures
+
+    patterns = {
+        "PARTITION_KEY": r'static final String PARTITION_KEY = "([^"]*)"',
+        "SORT_KEY": r'static final String SORT_KEY = "([^"]*)"',
+        "TTL_ATTRIBUTE": r'static final String TTL_ATTRIBUTE = "([^"]*)"',
+        "BillingMode": r"BillingMode\.(\w+)",
+        "ScalarAttributeType": r"ScalarAttributeType\.(\w+)",
+    }
+    want = {}
+    for name, pattern in patterns.items():
+        match = re.search(pattern, config_content)
+        if match:
+            want[name] = match.group(1)
+        else:
+            failures.append(f"C32.9 ScoreStoreConfig.java: {name} not found")
+    if failures:
+        return failures
+
+    partition_key = want["PARTITION_KEY"]
+    sort_key = want["SORT_KEY"]
+    ttl_attr = want["TTL_ATTRIBUTE"]
+    billing_mode_str = want["BillingMode"]
+    scalar_type = want["ScalarAttributeType"]
+
+    # Read table name from application.yaml
+    app_yaml_path = repo_root / "services" / "matching-service" / "src" / "main" / \
+                    "resources" / "application.yaml"
+
+    table_name = None
+    try:
+        app_content = app_yaml_path.read_text(encoding="utf-8")
+        table_match = re.search(r'\$\{SCORES_TABLE:([^}]+)\}', app_content)
+        if table_match:
+            table_name = table_match.group(1)
+        else:
+            failures.append("C32.9 config: table name not found in application.yaml")
+            return failures
+    except Exception as e:
+        failures.append(f"C32.9 config: error reading application.yaml: {e}")
+        return failures
+
+    # Check table on LocalStack
+    try:
+        import boto3
+        from botocore.exceptions import ClientError
+    except ImportError:
+        failures.append("C32.9 table: boto3 not available")
+        return failures
+
+    try:
+        dynamodb = boto3.client(
+            "dynamodb",
+            endpoint_url=endpoint,
+            region_name="eu-west-1",
+            aws_access_key_id="test",
+            aws_secret_access_key="test"
+        )
+
+        response = dynamodb.describe_table(TableName=table_name)
+        table = response["Table"]
+
+        # Check KeySchema
+        key_schema = table.get("KeySchema", [])
+        key_by_type = {item["KeyType"]: item["AttributeName"] for item in key_schema}
+
+        if len(key_schema) != 2:
+            failures.append(f"C32.9 table {table_name}: {len(key_schema)} keys, want 2")
+
+        hash_key = key_by_type.get("HASH")
+        if hash_key != partition_key:
+            failures.append(f"C32.9 table {table_name}: HASH key {hash_key}, want {partition_key}")
+
+        range_key = key_by_type.get("RANGE")
+        if range_key != sort_key:
+            failures.append(f"C32.9 table {table_name}: RANGE key {range_key}, want {sort_key}")
+
+        # Check AttributeDefinitions for types
+        attr_types = {item["AttributeName"]: item["AttributeType"] for item in table.get("AttributeDefinitions", [])}
+
+        if attr_types.get(partition_key) != scalar_type:
+            failures.append(f"C32.9 table {table_name}: {partition_key} type {attr_types.get(partition_key)}, want {scalar_type}")
+
+        if attr_types.get(sort_key) != scalar_type:
+            failures.append(f"C32.9 table {table_name}: {sort_key} type {attr_types.get(sort_key)}, want {scalar_type}")
+
+        # Check BillingMode
+        billing_mode = table.get("BillingModeSummary", {}).get("BillingMode")
+        if billing_mode != billing_mode_str:
+            failures.append(f"C32.9 table {table_name}: billing mode {billing_mode}, want {billing_mode_str}")
+
+        # Check TTL
+        ttl_response = dynamodb.describe_time_to_live(TableName=table_name)
+        ttl_desc = ttl_response.get("TimeToLiveDescription", {})
+        ttl_status = ttl_desc.get("TimeToLiveStatus")
+        ttl_attr_name = ttl_desc.get("AttributeName")
+
+        if ttl_status != "ENABLED":
+            failures.append(f"C32.9 table {table_name}: TTL status {ttl_status}, want ENABLED")
+
+        if ttl_attr_name != ttl_attr:
+            failures.append(f"C32.9 table {table_name}: TTL attribute {ttl_attr_name}, want {ttl_attr}")
+
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            failures.append(f"C32.9 table {table_name}: not found")
+        else:
+            failures.append(f"C32.9 table {table_name}: {type(e).__name__}: {e}")
+    except Exception as e:
+        failures.append(f"C32.9 table {table_name}: {type(e).__name__}: {e}")
+
+    return failures
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate Terraform infrastructure against criteria"
@@ -608,6 +733,10 @@ def main():
                         failures.append(f"C32.5 state s3://{bucket}/{key}: object not found")
                     except Exception as e:
                         failures.append(f"C32.5 state s3://{bucket}/{key}: {type(e).__name__}: {e}")
+
+        # C32.9: the score table on LocalStack
+        failures.extend(check_c32_9(args.localstack, repo_root))
+        checks_run.append("score table")
 
     # Print results
     if failures:
