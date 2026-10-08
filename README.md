@@ -12,9 +12,17 @@ any code exists. The work is done by [Claude](https://www.anthropic.com/claude):
 each day, and since Day 39 an implementer agent on Haiku writes each track's code. I set the plan
 and the constraints and approve every change; Claude drafts and audits the specifications.
 
+Days are numbered by their place in the plan, not by date. Days added later took new numbers
+and ran where the plan needed them: Days 38–40 before Day 17, Day 41 before Day 21, and Day 42
+before Day 32. The [phase table](#the-migration-plan) gives the order they ran in.
+
 > **This repository is an engineering experiment.** Its migration metrics are experimental
 > diagnostic signals, not optimization targets or standard measures of quality.
 
+> **Where it stands (Day 33):** Phase 7, ECS on Fargate with Terraform, is under way. The
+> monolith is gone; five services run in Docker Compose behind the gateway, and none is deployed
+> to AWS yet. See the [known limits](#known-limits).
+>
 > **Status:** in progress. The [migration dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/) shows the current day
 > and the next step; it is rebuilt from the repository after every merge. The full record, day by
 > day, is the [lab notebook](docs/lab-notebook.md); the short version is in
@@ -114,9 +122,10 @@ where it lives, so a reader can check it rather than take it on trust:
 branch per track (`day-04/track-b-saved-jobs-tests`), and the acceptance criteria are copied into
 the pull request description and ticked there.
 
-**Division of labour.** I write the plan and the specs, review every diff, and decide what
-merges. Claude Opus 5.5 does the rest: it runs the auditors, writes the spec changes and each
-track's brief, reviews the code, runs the checks, commits and opens the pull requests. The code
+**Division of labour.** I set the plan, direct and approve the specs, review every diff, and
+decide what merges. Claude Opus 5.5 does the rest: it drafts and audits the specs, writes the
+spec changes and each track's brief, reviews the code, runs the checks, commits and opens the
+pull requests. The code
 itself is written by an implementer agent on Claude Haiku (before Day 39, by Opus). Where a spec
 turns out to be wrong, the agent says so in writing rather than working around it. The agent's
 authority ends at the spec boundary: work found outside it is added to that day's *Notes* and
@@ -165,7 +174,7 @@ anything that requires a network.
 | **4 — Extract matching-service** | 21–24 | Isolates the 20-second LLM timeout from job search; match scores move to NoSQL with a native TTL. | done (tag `phase-4`) |
 | **5 — Extract application-service** | 25–28 | Message bus with a transactional outbox and the `user.deleted` cascade first, then saved jobs to its own store; identity-service is what remains of the monolith. Ended at Day 28, where the work stopped to be evaluated. | done (tag `phase-5`) |
 | **Cleanup day** | 42 | What Phases 3–5 left behind and no day owns: identity's unused service issuer and seam code, the role-setup copies, logging, application-service's metrics. Added by the course correction after Phase 5. | done |
-| **7 — ECS on Fargate** | 32–35 | Terraform for the data stores, the services behind an ALB with task roles and secrets, observability, then one deployment and `terraform destroy`. Rewritten from the Kubernetes drafts after Day 28; Days 36–37 dropped. | in progress: Day 32 done |
+| **7 — ECS on Fargate** | 32–35 | Terraform for the data stores, the services behind an ALB with task roles and secrets, observability, then one deployment and `terraform destroy`. Rewritten from the Kubernetes drafts after Day 28; Days 36–37 dropped. | in progress: Day 32 done, Day 33 under way |
 | **6 — Functions + uploads** | 29–31 | CV parsing and mail off the request path; direct uploads. Deferred until after Phase 7, and cut if it still adds only features. | deferred |
 
 Two phases stand on their own as stopping points. **Day 16** leaves a working monolith with a
@@ -211,6 +220,23 @@ Terraform for the data stores, task roles and secrets, then one deployment and
 [`plan.md`](plan.md): no self-run Postgres and no Kubernetes, no separate profile-service, no
 managed API gateway, and one IaC tool, not Terraform and Pulumi both.
 
+### Known limits
+
+What a production reader should know before trusting the system, as of Day 33:
+
+- **Rate limiting is in memory.** The gateway limits the credential routes per client (Day 15),
+  in its own memory: correct for one gateway replica; more than one needs a shared store.
+- **Account deletion is eventual.** identity-service records `user.deleted` in a transactional
+  outbox, and SNS/SQS carries it to matching- and application-service. Their copies of the
+  user's data go shortly after the request, not inside it.
+- **Nothing runs on AWS yet.** DynamoDB and SNS/SQS are local stand-ins, and Day 32's Terraform
+  has been planned without an account and applied only to LocalStack.
+- **Secrets are local placeholders.** Day 33 makes every key and password load from the
+  environment, so ECS can pass them in from Secrets Manager; until Phase 7 deploys, the only
+  secrets are `.env.example`'s.
+- **Phase 6 is deferred, and may be cut.** The app has no uploads or CV parsing yet for it to
+  move, and mail is already sent off the request thread; compose passes no mail settings.
+
 ## Findings so far
 
 Recorded as they happen, including the ones that make the method look worse. The evidence for
@@ -231,9 +257,10 @@ each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
   once its specs were rewritten, and took 29.
 - **Review changes the small model's drafts.** On Days 21–28, 30 of 63 tracks the implementer
   wrote had a defect that review found before merge.
-- **The 400-line gate held.** It forced a split thirty times; it was overridden six times: three
-  before Day 3, two for the moves of whole modules their specs had planned, and one to move this
-  README's day-by-day record into the lab notebook.
+- **The 400-line gate held.** It forced a split thirty-four times; it was overridden seven times:
+  three before Day 3, two for the moves of whole modules their specs had planned, one to move this
+  README's day-by-day record into the lab notebook, and one on Day 32 for a single new checking
+  script, my choice over a split.
 - **Not yet answered:** whether the services are independently deployable. Each builds and tests
   from its own workflow; none deploys until Phase 7.
 
@@ -243,13 +270,15 @@ Verdicts on each hypothesis are written when the last phase closes, in the lab n
 ## Running it
 
 You need Docker (with Compose) and git, nothing else: every service builds inside its own image.
-Copy the environment file, bring up the stack, and open [http://localhost:3000](http://localhost:3000):
+Copy the environment file, bring up the stack, and open [http://localhost:3000](http://localhost:3000) (on
+Windows, clone with `git clone -c core.longpaths=true`: some paths pass 260 characters):
 
 ```bash
 git clone https://github.com/Yusuprozimemet/jobmatch-microservices.git && cd jobmatch-microservices
 cp .env.example .env
 docker compose up -d --build    # or scripts/dev-up.sh; the first build takes several minutes
 docker compose ps               # wait until every service is healthy
+scripts/seed-jobs.sh            # sample job listings; without it /api/jobs answers 500
 ```
 
 The browser talks to the web app on 3000, which sends `/api` to the API gateway. The gateway,
@@ -266,13 +295,8 @@ says what each key does.
 
 Job listings come from the data pipeline, which publishes its marts into `jobs_db`, job-service's
 own database (Day 20). On a fresh database volume `/api/jobs` answers 500 until it has published
-them — see [`data/README.md`](data/README.md) — so load the test suite's mart instead:
-
-```bash
-for f in analytics-schema analytics-seed; do
-  docker compose exec -T db psql -U admin -d jobs_db -v ON_ERROR_STOP=1     -c "SET ROLE analytics_user" -f - < services/identity-service/app/src/test/resources/fixtures/$f.sql
-done
-```
+them — see [`data/README.md`](data/README.md) — so the quickstart above loads the test suite's
+mart instead with `scripts/seed-jobs.sh`.
 
 Run the contract test suite (it needs a JDK 25; the Maven wrapper is at the root):
 
@@ -346,3 +370,5 @@ team listing is in the [original README](docs/original-readme.md#team). This mig
 repository's division of work: I set the plan and the constraints and approve every change;
 Claude (Opus 5.5) drafts the specifications, runs the audits and reviews each track; Haiku
 writes the code from the main session's briefs, since Day 39. Commits state which.
+
+Released under the [MIT License](LICENSE).

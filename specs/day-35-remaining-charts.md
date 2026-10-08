@@ -3,6 +3,8 @@
 **Phase:** 7 · **Depends on:** Day 34 · **Expected PRs:** 4
 **Status:** provisional — re-read and revise before starting.
 
+> **Superseded in part.** Phase 7 moved from Kubernetes to ECS on Fargate (`plan.md`, "Course correction after Phase 5"), so the Helm charts below will not be built. This spec is rewritten for ECS, and audited, before Day 35 starts.
+
 ## Goal
 All four services plus the gateway run in the cluster, with the frontend.
 
