@@ -3,8 +3,8 @@
 Reads plan JSON (terraform show -json) and validates infrastructure criteria.
 With --localstack, also checks applied state and resources against specifications.
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
-and C32.5 (secret sweep).
-Track B adds network/database checks; Track C adds bus/scores.
+C32.4 (network and database), and C32.5 (secret sweep).
+Track B checks C32.4; Track C adds bus/scores.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
 
@@ -199,6 +199,121 @@ def check_c32_2(plan: dict) -> list[str]:
                             break
                 if not notification_has_var:
                     failures.append(f"C32.2 {config_res['address']} ({budget_name}): notification subscriber_email_addresses does not reference a var.")
+
+    return failures
+
+
+def config_with_path(plan: dict) -> Generator[tuple[tuple, dict], None, None]:
+    """Yield (module path, resource) for every resource in the configuration."""
+    def walk(module: dict, path: tuple):
+        for resource in module.get("resources", []):
+            yield path, resource
+        for name, call in module.get("module_calls", {}).items():
+            yield from walk(call.get("module", {}), path + (name,))
+
+    yield from walk(plan.get("configuration", {}).get("root_module", {}), ())
+
+
+def resolve(plan: dict, path: tuple, references: list[str]) -> set[str]:
+    """Follow references through variables and module outputs to full resource addresses.
+
+    Subnet and security group ids are unknown until apply, so the plan's values cannot say
+    which subnets the database is in; the configuration's references can.
+    """
+    def module_at(p: tuple) -> dict:
+        module = plan["configuration"]["root_module"]
+        for name in p:
+            module = module["module_calls"][name]["module"]
+        return module
+
+    found = set()
+    for ref in references:
+        parts = ref.split("[")[0].split(".")
+        if parts[0] == "var" and path:
+            call = module_at(path[:-1])["module_calls"][path[-1]]
+            expr = call.get("expressions", {}).get(parts[1], {})
+            found |= resolve(plan, path[:-1], expr.get("references", []))
+        elif parts[0] == "module" and len(parts) >= 3:
+            sub = path + (parts[1],)
+            expr = module_at(sub).get("outputs", {}).get(parts[2], {}).get("expression", {})
+            found |= resolve(plan, sub, expr.get("references", []))
+        elif parts[0] not in ("var", "module", "local", "data", "each", "count", "path") and len(parts) >= 2:
+            found.add("".join(f"module.{name}." for name in path) + ".".join(parts[:2]))
+    return found
+
+
+def check_c32_4(plan: dict) -> list[str]:
+    """Check the main plan's database: engine, access, password, private subnets, ingress."""
+    failures = []
+
+    instances = [r for r in resources(plan) if r["type"] == "aws_db_instance"]
+    if len(instances) != 1:
+        return [f"C32.4 expected exactly 1 aws_db_instance, got {len(instances)}"]
+    address, values = instances[0]["address"], instances[0]["values"]
+    want = {"engine": "postgres", "engine_version": "18", "publicly_accessible": False,
+            "manage_master_user_password": True, "password": None}
+    for key, expected in want.items():
+        got = values.get(key)
+        if (str(got) if key == "engine_version" else got) != expected:
+            shown = "a value (not printing it)" if key == "password" else got
+            failures.append(f"C32.4 {address}: {key} {shown}, want {expected}")
+
+    # Configuration resources by full address, and their references resolved.
+    config = {"".join(f"module.{n}." for n in p) + r["address"]: (p, r) for p, r in config_with_path(plan)}
+
+    def refs(addr: str, attr: str, expressions: dict | None = None) -> set[str]:
+        path, resource = config[addr]
+        expr = (expressions or resource.get("expressions", {})).get(attr, {})
+        return resolve(plan, path, expr.get("references", []) if isinstance(expr, dict) else [])
+
+    def planned(addr: str) -> list[dict]:
+        return [r for r in resources(plan) if r["address"].split("[")[0] == addr]
+
+    def of_type(kind: str) -> list[str]:
+        return [a for a, (_, r) in config.items() if r["type"] == kind]
+
+    db = address.split("[")[0]
+
+    # Subnet group: the private subnets only, none routed to an internet gateway.
+    groups = refs(db, "db_subnet_group_name")
+    subnets = set().union(*(refs(g, "subnet_ids") for g in groups if g in config))
+    if not subnets or any(not s.split(".")[-2] == "aws_subnet" for s in subnets):
+        failures.append(f"C32.4 {db}: subnet group subnets {sorted(subnets)}, want aws_subnet resources")
+    public_tables = set().union(*(refs(r, "route_table_id") for r in of_type("aws_route")
+                                  if any(g.split(".")[-2] == "aws_internet_gateway" for g in refs(r, "gateway_id"))))
+    for association in of_type("aws_route_table_association"):
+        if refs(association, "subnet_id") & subnets and refs(association, "route_table_id") & public_tables:
+            failures.append(f"C32.4 {association}: puts a database subnet behind an internet gateway")
+    for subnet in sorted(subnets):
+        for instance in planned(subnet):
+            if instance["values"].get("map_public_ip_on_launch"):
+                failures.append(f"C32.4 {instance['address']}: map_public_ip_on_launch true, want false")
+
+    # Security group: one, no inline rules, one ingress on 5432 from the tasks' group.
+    groups = refs(db, "vpc_security_group_ids")
+    if len(groups) != 1:
+        return failures + [f"C32.4 {db}: security groups {sorted(groups)}, want exactly 1"]
+    group = groups.pop()
+    for instance in planned(group):
+        if instance["values"].get("ingress"):
+            failures.append(f"C32.4 {instance['address']}: inline ingress, want none")
+    for legacy in of_type("aws_security_group_rule"):
+        if group in refs(legacy, "security_group_id"):
+            failures.append(f"C32.4 {legacy}: rule on {group}, want only the 5432 ingress rule")
+    rules = [r for r in of_type("aws_vpc_security_group_ingress_rule") if group in refs(r, "security_group_id")]
+    if len(rules) != 1:
+        return failures + [f"C32.4 {group}: {len(rules)} ingress rules, want 1"]
+    rule = rules[0]
+    for instance in planned(rule):
+        v = instance["values"]
+        for key, expected in {"from_port": 5432, "to_port": 5432, "ip_protocol": "tcp",
+                              "cidr_ipv4": None, "cidr_ipv6": None, "prefix_list_id": None}.items():
+            if v.get(key) != expected:
+                failures.append(f"C32.4 {instance['address']}: {key} {v.get(key)}, want {expected}")
+    sources = refs(rule, "referenced_security_group_id")
+    if len(sources) != 1 or not sources.issubset(set(of_type("aws_security_group"))) \
+            or not next(iter(sources)).endswith(".tasks") or group in sources:
+        failures.append(f"C32.4 {rule}: source {sorted(sources)}, want the tasks security group only")
 
     return failures
 
@@ -442,6 +557,11 @@ def main():
         bootstrap_plan
     ))
     checks_run.append("backends")
+
+    # C32.4: Main plan network and database checks
+    if args.main_plan and main_plan:
+        failures.extend(check_c32_4(main_plan))
+        checks_run.append("database")
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
