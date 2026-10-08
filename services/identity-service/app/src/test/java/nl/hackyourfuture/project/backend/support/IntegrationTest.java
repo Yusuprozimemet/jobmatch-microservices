@@ -53,6 +53,15 @@ public abstract class IntegrationTest {
             registry.add("app.datasource." + module + ".username", () -> module + "_user");
             registry.add("app.datasource." + module + ".password", PostgresContainer::rolePassword);
         }
+        useServices(registry);
+    }
+
+    /**
+     * Everything but the database: the keys, callers and event bus a context needs to start. Also
+     * for a test that points the context at a database of its own (MigrateOnStartOffIT), since a
+     * subclass's {@code @DynamicPropertySource} does not override this class's.
+     */
+    public static void useServices(DynamicPropertyRegistry registry) {
         // The application does not start without a signing key (Day 12), and none is committed.
         registry.add("app.jwt.private-key-file", () -> TestSigningKey.path().toString());
         // Register the test caller as a trusted issuer for /internal tests (Day 39, Day 17 list form).

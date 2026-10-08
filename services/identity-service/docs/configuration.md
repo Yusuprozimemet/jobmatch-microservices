@@ -185,6 +185,8 @@ All of it in [`application.yaml`](../app/src/main/resources/application.yaml).
 | `DB_PASSWORD` | `password` | |
 | `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path (Day 11). Jobs, matching and applications are their services' logins now (Days 17, 21 and 25) |
 | `DB_IDENTITY_PASSWORD` | `password` | Its password |
+| `MIGRATE_ONLY` | `false` | Apply the owner's then identity's migrations, start no web server, exit 0 (non-zero when a migration fails). For a one-off migrate task before the service starts (Day 33). Needs only the two logins |
+| `MIGRATE_ON_START` | `true` | `false` starts without migrating, for when a MIGRATE_ONLY run has done it |
 
 There is no schema setting since Day 11: the owner's Flyway migrates `app` (V1–V14), and each
 module's Flyway migrates its own schema as its own login.
