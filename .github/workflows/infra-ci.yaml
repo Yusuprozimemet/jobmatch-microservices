@@ -192,6 +192,13 @@ jobs:
       - name: apply on LocalStack
         run: terraform -chdir=infra/terraform/localstack apply -auto-approve -input=false
 
+      - name: second apply makes no changes
+        run: |
+          set -o pipefail
+          # C32.10: a second apply with nothing changed must print "No changes."
+          terraform -chdir=infra/terraform/localstack apply -auto-approve -input=false -no-color | tee "$RUNNER_TEMP/second-apply.log"
+          grep -q "No changes." "$RUNNER_TEMP/second-apply.log"
+
       - name: infra-checks.py
         run: |
           python scripts/infra-checks.py \
