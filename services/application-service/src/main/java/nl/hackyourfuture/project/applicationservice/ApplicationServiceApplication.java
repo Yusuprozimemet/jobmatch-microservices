@@ -14,6 +14,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 public class ApplicationServiceApplication {
 
     public static void main(String[] args) {
+        if (MigrateOnly.requested(System.getenv("MIGRATE_ONLY"))) {
+            System.exit(MigrateOnly.run(args));
+        }
         SpringApplication.run(ApplicationServiceApplication.class, args);
     }
 }
