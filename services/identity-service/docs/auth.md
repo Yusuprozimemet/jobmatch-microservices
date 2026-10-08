@@ -499,7 +499,7 @@ changing it.
 | `/login?error=oauth` | The failure handler. Most often the Google account's email is not verified; check the log |
 | Every browser call answers 401 even though login succeeded | The `fetch` is missing `credentials: "include"`, or a proxy strips `Set-Cookie` |
 | Signed out about 15 minutes after signing in | The refresh failed: `refresh_token` is not reaching `/api/auth/refresh` (its path is `/api/auth`), or it was revoked by a password change or reset elsewhere |
-| The backend will not start, naming `JWT_PRIVATE_KEY_FILE` | No signing key for user tokens. Compose writes one on first start; elsewhere run `scripts/jwt-key.sh backend/.jwt/private.pem` and point the variable at it |
+| The backend will not start, naming `JWT_PRIVATE_KEY_FILE` or `JWT_PRIVATE_KEY` | No signing key for user tokens. Compose writes one on first start; elsewhere run `scripts/jwt-key.sh backend/.jwt/private.pem` and point the variable at it |
 | Login answers 401 for an account the user is sure exists | It may be a Google-only account: no credentials row, so the password path cannot find it |
 | Reset email never arrives | `MAIL_USERNAME` / `MAIL_PASSWORD` unset — the startup log warns, and `forgot-password` still answers 200 by design |
 | `Invalid or expired password reset token` on a fresh link | Older than 15 minutes, already used, or a newer link was requested — requesting one deletes the previous token |
