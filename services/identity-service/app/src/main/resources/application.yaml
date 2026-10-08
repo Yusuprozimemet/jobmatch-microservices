@@ -51,6 +51,7 @@ app:
   # with scripts/jwt-key.sh, and the test harness makes its own.
   jwt:
     private-key-file: ${JWT_PRIVATE_KEY_FILE:}
+    private-key: ${JWT_PRIVATE_KEY:}
   mail:
     from: ${MAIL_FROM:jobmatch.team2026@gmail.com}
   oauth2:

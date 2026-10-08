@@ -137,7 +137,8 @@ All configuration lives in [`application.yaml`](app/src/main/resources/applicati
 | `DB_PASSWORD` | `password` | Its password |
 | `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path. Jobs, matching and applications connect from their services (Days 17, 21 and 25) |
 | `DB_IDENTITY_PASSWORD` | `password` | Its password |
-| `JWT_PRIVATE_KEY_FILE` | — | **Required.** Path to the RSA private key (PEM, PKCS#8, 2048 bits or more) tokens are signed with. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../../scripts/jwt-key.sh) writes one, and compose sets this itself |
+| `JWT_PRIVATE_KEY_FILE` | — | **Required**, or `JWT_PRIVATE_KEY`. Path to the RSA private key (PEM, PKCS#8, 2048 bits or more) tokens are signed with. The backend does not start without it and never makes one; [`scripts/jwt-key.sh`](../../scripts/jwt-key.sh) writes one, and compose sets this itself |
+| `JWT_PRIVATE_KEY` | — | The key's PEM itself, in place of `JWT_PRIVATE_KEY_FILE` (ECS passes secrets as variables). Set one of the two, not both |
 | `SPRING_PROFILES_ACTIVE` | — | Active profile: `dev` or `prod`. None is active unless you set it; the Docker image defaults to `prod` |
 
 [`.env.example`](.env.example) lists the same variables as a starting point — copy it to `.env` (gitignored) and load it as described in [Quick start](#quick-start) step 2.
