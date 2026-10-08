@@ -22,7 +22,7 @@ class ServiceTokensTest {
 
     @BeforeEach
     void setUp() throws JOSEException {
-        key = new ServiceSigningKey(TestKey.path().toString());
+        key = new ServiceSigningKey(TestKey.path().toString(), "");
         tokens = new ServiceTokens(key);
     }
 
