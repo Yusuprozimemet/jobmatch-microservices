@@ -1,0 +1,51 @@
+name: db-setup.py runs twice and matches its pin
+
+# No other job runs scripts/db-setup.py, so a change to the roles and grants it creates
+# could merge unseen. scripts/test_db_setup.py runs it twice against a fresh Postgres:
+# the second run must change nothing, and the result must equal the pin in the test.
+
+on:
+  pull_request:
+    paths:
+      - scripts/db-setup.py
+      - scripts/test_db_setup.py
+      - .github/workflows/db-setup-tests.yml
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/db-setup.py
+      - scripts/test_db_setup.py
+      - .github/workflows/db-setup-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: db-setup.py runs twice and matches its pin
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        # Trust, so no password lives here: the container exists for one job
+        # and publishes only to the runner. The test passes a random password.
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "psycopg[binary]" pytest
+      - run: python -m pytest -q scripts/test_db_setup.py
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
