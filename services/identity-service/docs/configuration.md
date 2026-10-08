@@ -182,7 +182,7 @@ All of it in [`application.yaml`](../app/src/main/resources/application.yaml).
 | --- | --- | --- |
 | `DB_HOST` | `localhost` | `db` under compose |
 | `DB_PORT` | `5432` | |
-| `DB_NAME` | `project_db` | The mart is not here: it is in `jobs_db`, job-service's (Day 20) |
+| `DB_NAME` | `identity_db` | The mart is not here: it is in `jobs_db`, job-service's (Day 20) |
 | `DB_USER` | `admin` | The owner of the migrations; only Flyway logs in as it. `app_user` in a production-like setup |
 | `DB_PASSWORD` | `password` | |
 | `DB_IDENTITY_USER` | `identity_user` | identity's own login, with its own schema as the search path (Day 11). Jobs, matching and applications are their services' logins now (Days 17, 21 and 25) |
