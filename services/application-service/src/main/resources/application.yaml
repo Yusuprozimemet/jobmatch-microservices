@@ -21,6 +21,8 @@ spring:
     schemas: applications
     create-schemas: false
     locations: classpath:db/applications
+    # false: start without migrating, for when a MIGRATE_ONLY run has done it (Day 33)
+    enabled: ${MIGRATE_ON_START:true}
 
 server:
   port: 8080

@@ -155,6 +155,8 @@ application-service's settings (Day 25), in its
 | `DB_APPLICATIONS_USER` / `DB_APPLICATIONS_PASSWORD` | `applications_user` / `password` | The only role that connects to `apps_db` ([§6](#6-the-database-schemas-and-roles)); compose passes `APPLICATIONS_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-application-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
 | `SERVICE_JWT_PRIVATE_KEY` | none | The same key's PEM itself, in place of `SERVICE_JWT_PRIVATE_KEY_FILE` (ECS passes secrets as variables). Set exactly one of the two; with both or neither it does not start |
+| `MIGRATE_ONLY` | `false` | Apply its migrations, start no web server, exit 0 (non-zero when a migration fails). For a one-off migrate task before the service starts (Day 33). Needs only its database login |
+| `MIGRATE_ON_START` | `true` | `false` starts without migrating, for when a MIGRATE_ONLY run has done it |
 | `INTERNAL_IDENTITY_URL` | empty | Where it asks whether a user exists (`/internal/users/{id}`): identity-service, `http://identity-service:8080` in compose |
 | `INTERNAL_JOBS_URL` | empty | Where it fetches posting details for the saved list (`/internal/postings/batch`): job-service, `http://job-service:8080` in compose |
 | `JOB_SERVICE_KEY_SET_URL` | empty | job-service's service key set, so it may call `/internal/saved-counts` |

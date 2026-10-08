@@ -91,4 +91,42 @@ final class PostgresContainer {
             throw new IllegalStateException("Failed to get admin connection to apps_db", e);
         }
     }
+
+    /** A connection to another database as the container admin. */
+    public static Connection adminConnection(String database) {
+        try {
+            return DriverManager.getConnection(jdbcUrl(database, "applications"), CONTAINER.getUsername(), CONTAINER.getPassword());
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to get admin connection to database " + database, e);
+        }
+    }
+
+    /** JDBC URL onto another database with the applications schema as the search path. */
+    public static String jdbcUrl(String database, String schema) {
+        return "jdbc:postgresql://" + CONTAINER.getHost() + ":" + CONTAINER.getMappedPort(5432) + "/"
+                + database + "?currentSchema=" + schema;
+    }
+
+    /**
+     * Create a new, empty database with the applications schema, owned by applications_user
+     * (Day 33's MIGRATE_ONLY and MIGRATE_ON_START tests).
+     */
+    public static void createDatabase(String name) {
+        try (Connection admin = DriverManager.getConnection(CONTAINER.getJdbcUrl(), CONTAINER.getUsername(), CONTAINER.getPassword());
+             Statement stmt = admin.createStatement()) {
+            stmt.execute("CREATE DATABASE " + name);
+            stmt.execute("REVOKE CONNECT ON DATABASE " + name + " FROM PUBLIC");
+            stmt.execute("GRANT CONNECT ON DATABASE " + name + " TO applications_user");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to create database " + name, e);
+        }
+
+        // The schema, in the new database: applications_user has no CREATE on the database.
+        try (Connection dbConnection = DriverManager.getConnection(jdbcUrl(name, "applications"), CONTAINER.getUsername(), CONTAINER.getPassword());
+             Statement stmt = dbConnection.createStatement()) {
+            stmt.execute("CREATE SCHEMA applications AUTHORIZATION applications_user");
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to create applications schema in database " + name, e);
+        }
+    }
 }
