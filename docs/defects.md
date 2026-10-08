@@ -41,9 +41,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 38: 1 setup script that crashes on Windows output
 - Day 20: 1 container path Git Bash rewrote
 
-## In the agent's own work (329)
+## In the agent's own work (358)
 
-### Spec and plan premises wrong about the code, or work they missed (124)
+### Spec and plan premises wrong about the code, or work they missed (132)
 
 - Days 1-13: 8 specs that could not be met
 - Days 1-13: 1 plan that missed a cross-module read
@@ -149,8 +149,16 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 42: 1 scope that left out six things the removals needed
 - Day 42: 1 red count of three lines where there were two, and a list entry that was never there
 - Day 42: 1 split of A2 that still left a half over the gate
+- Day 32: 1 track A that could not meet C32.1 and C32.3 without C's root
+- Day 32: 1 table name placed in `ScoreStoreConfig`, where `application.yaml` holds it
+- Day 32: 1 rewrite that cited neither H42.3 nor the Day 20–26 items naming Day 32
+- Day 32: 1 `.gitignore` for Terraform's working files that no track owned
+- Day 32: 1 estimate the audit corrected
+- Day 32: 1 plan by `init -backend=false`, which the override files cannot give
+- Day 32: 1 scope of a seed hand-off that named one file of two
+- Day 32: 1 estimate of 4 PRs for a day that took 6, one still `Oversized:`
 
-### Spec checks that could not fail, could not pass, or proved the wrong thing (90)
+### Spec checks that could not fail, could not pass, or proved the wrong thing (96)
 
 - Days 1-13: 1 spec check that could not fail
 - Days 1-13: 1 gate that does not pin what its spec says
@@ -226,8 +234,14 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 42: 1 pathspec that matched no file, so two greps could not fail
 - Day 42: 1 grep that still could not print nothing after the audit, met by a narrower one
 - Day 42: 1 hold on JSON logs whose second test reads another service
+- Day 32: 1 hold that named a test that does not exist (`UserDeletedFanOutIT`)
+- Day 32: 1 workflow whose paths missed the code the checks read, so a code change could not fail it
+- Day 32: 1 redrive comparison of `"5"` against `5`
+- Day 32: 1 set of criteria with no break to see them fail
+- Day 32: 1 queue-policy check on a plan where the policy is unknown, which could not pass
+- Day 32: 1 expected report of no queues where the break left one
 
-### Code drafts that review or a break changed, and lost work (55)
+### Code drafts that review or a break changed, and lost work (65)
 
 - Day 38: 1 metric tag unlike the backend's
 - Day 40: 1 default interval that made a wait slow
@@ -278,8 +292,18 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 42: 1 grant test that checked the table and not the schema
 - Day 42: 1 log test whose wait could pass without checking, and a dropped `Locale.ROOT`
 - Day 42: 1 draft that repointed two working links to the wrong file
+- Day 32: 1 state sweep that passed on every error, and a lock test that could never reach its prompt
+- Day 32: 1 secret sweep that read `after_sensitive`, and a regex that stopped at the first brace
+- Day 32: 1 implementer report of no departures, and of a fix that was not made
+- Day 32: 1 subnet check by address that let the public subnets pass
+- Day 32: 1 check message that printed the password it guarded
+- Day 32: 1 repeated import guard and five copy-pasted regex blocks
+- Day 32: 1 policy check that passed on a missing topic, and an alarm check that skipped alarms
+- Day 32: 1 comparison of two LocalStacks never made against the source, which skipped missing keys
+- Day 32: 1 file the main session left with mixed line endings
+- Day 32: 1 local lock test fed through `docker run -i`, which released the lock early
 
-### Tests a spec would break without naming, or behaviour it left untested (31)
+### Tests a spec would break without naming, or behaviour it left untested (32)
 
 - Days 1-13: 2 protected behaviours with no test behind them
 - Days 1-13: 1 missing claim that would have made a test flaky
@@ -299,8 +323,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 26: 2 harness tests a migration broke that the spec did not name
 - Day 25: 1 grants test a revoke broke that no spec named
 - Day 42: 1 track that would have copied four tests that already had twins
+- Day 32: 1 harness copy of the bus left uncompared
 
-### Spec Verify commands that ran nothing, the wrong thing, or something unsafe (18)
+### Spec Verify commands that ran nothing, the wrong thing, or something unsafe (20)
 
 - Days 1-13: 3 spec verify commands that ran no tests
 - Day 15: 1 verify that ran no tests
@@ -318,8 +343,10 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 25: 1 Verify that could not fail
 - Day 28: 1 Verify that could not pass on a fresh clone without the mart step
 - Day 28: 1 close run that reused a three-hour-old test volume as fresh
+- Day 32: 1 Verify that failed in Git Bash and held a placeholder tag
+- Day 32: 1 compose check that `-p` would not have isolated from the maintainer's stack
 
-### Bugs in the migration's own tooling (dashboard, commit keys) (11)
+### Bugs in the migration's own tooling (dashboard, commit keys) (13)
 
 - Day 39: 1 dashboard that could not read a split track
 - Day 17: 1 dashboard that could not read a three-way split
@@ -332,3 +359,5 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 25: 1 track announced and never opened, which the dashboard read as done
 - Day 28: 1 track branch the dashboard could not read, so it named a merged track as next
 - Day 42: 1 track with no Jira sub-task and no key in its branches
+- Day 32: 1 track with no Jira sub-task, and a plan-change issue left open after its merge
+- Day 32: 1 dashboard next step that read a criterion id as a track
