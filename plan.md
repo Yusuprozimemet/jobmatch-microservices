@@ -49,7 +49,7 @@ The audits also found what the course correction after Phase 5 did not name:
 - **No consolidated baseline.** `db-setup.py` runs before the first migration on a fresh RDS
   too, and creates the `matching` and `applications` roles V12–V15 need. A second migration
   path would edit what V1–V16 already say.
-- **What can fail without an AWS account.** Days 32–34 check `terraform fmt` and `validate`,
+- **What can fail without an AWS account.** Days 32–34 and 36 check `terraform fmt` and `validate`,
   apply the bus and the score table against LocalStack, and compare Terraform's copies
   with `bus-init` and the harness. ECS, the ALB, RDS and IAM are checked by `terraform
   plan` alone until Day 35. Real SNS to SQS needs a queue policy the emulator does not
@@ -58,6 +58,16 @@ The audits also found what the course correction after Phase 5 did not name:
   under a budget alarm, then destroyed.
 - **Days 36–37 are deleted**, with their drafts. Day 38's per-route gateway metric, which
   pointed at Day 37, goes to Day 34 or is dropped there on record.
+- **Day 33 is split in two (Day 33's spec-auditor, `092b125`, KAN-37).** Step 2 of the course
+  correction after Phase 5 is about nine PRs: the three code changes above, and the ECS
+  Terraform. Day 33 keeps the code before ECS: the signing keys from the secret's content,
+  Flyway as a migrate-and-exit run, a non-interactive `db-setup.py`, and the stale docs Day 32
+  handed on. The services, the ALB, task roles, secrets and ECR become **Day 36**, reusing a
+  deleted number so that no hand-off to Days 34 and 35 changes; it runs after Day 33 and
+  before Day 34. The maintainer also chose: the domain and its Route 53 zone are Terraform
+  variables, so the certificate is planned without a real domain until the deployment; Day 36
+  creates the ECR repositories, and the push from the service workflows switches with Day 35's
+  deploy job.
 
 ## Course correction after Phase 5
 
@@ -182,14 +192,15 @@ is part of what the repository measures, not a silent drift.
 | Uploads bucket, direct browser upload | S3, presigned PUT URLs | emulator | 29 |
 | `cv-parse`, `mailer` | Lambda (S3 event, SQS), SES | emulator | 30–31 |
 | Postgres | RDS for PostgreSQL | the compose Postgres | 32 |
-| Services | ECS on Fargate behind an ALB, images in ECR | compose | 33 |
-| Secrets | Secrets Manager, ECS task roles | environment variables | 33 |
+| Services | ECS on Fargate behind an ALB, images in ECR | compose | 36 |
+| Secrets | Secrets Manager, ECS task roles | environment variables | 33, 36 |
 | Metrics, logs, traces | ADOT collector → CloudWatch, X-Ray | the Grafana stack | 34 |
 | Infrastructure | Terraform, one state in S3 | `validate`; the bus and table applied to the emulator | 32 |
 | One deployment, then `terraform destroy` | the real account | — | 35 |
 
 Observability needs no code change: Day 5 made the services export OTLP, and only the
-collector's destination differs. Phase 7 is Days 32–35 (course correction after Phase 5);
+collector's destination differs. Phase 7 is Days 32–36 (course correction after Phase 5;
+Day 36 is split from Day 33 and runs before Day 34);
 Phase 6 keeps Days 29–31 and runs after it.
 
 ---
@@ -300,8 +311,8 @@ foreign key that deletes saved jobs with their user still exists; then the table
   the services are not public otherwise. The uploads bucket joins Phase 7's Terraform.
 
 ### Phase 7 — ECS on Fargate
-After the cleanup day (Day 42); rewritten as Days 32–35 (course correction after Phase 5,
-and before Phase 7).
+After the cleanup day (Day 42); rewritten as Days 32–36 (course correction after Phase 5,
+and before Phase 7, which split Day 36 from Day 33).
 - **Terraform** for everything long-lived: network, ECS cluster and services, RDS, DynamoDB,
   SNS/SQS with their queue policies, ECR, the ALB and its certificate, Secrets Manager and
   CloudWatch. The only S3 bucket is the state's.
@@ -368,10 +379,10 @@ the README's Day entries record two estimates, the provisional spec's and the re
 
 ## Day-by-day specs
 
-All seven phases, the platform step and the cleanup day are broken into 40 day specs in
+All seven phases, the platform step and the cleanup day are broken into 41 day specs in
 [`specs/`](specs/). Read [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-28 and 38-42 (Phases 0-5, the platform step and the cleanup day) are done. Days 29-35
+Days 1-28 and 38-42 (Phases 0-5, the platform step and the cleanup day) are done. Days 29-36
 are **provisional**: written from this plan before the course correction, so each is
 rewritten against the code, with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
 links hold; they run in this order, and the dashboard follows it:
@@ -382,5 +393,6 @@ links hold; they run in this order, and the dashboard follows it:
    22 (no dual write), 23, 24.
 4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
 5. The cleanup day (course correction after Phase 5), numbered after the last; done.
-6. Phase 7 rewritten as Days 32–35 for ECS on Fargate; the two days after them are deleted.
+6. Phase 7 for ECS on Fargate, in this order: Days 32, 33 (the code before ECS),
+   36 (the services on ECS), 34, 35.
 7. Phase 6 (Days 29–31), after Phase 7, or cut.

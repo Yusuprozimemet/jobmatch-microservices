@@ -73,15 +73,15 @@ specs/
 | 41, 21–24 | 4 — extract matching-service | LLM isolated; scores in NoSQL | ready |
 | 25–28 | 5 — extract application-service | Events, GDPR cascade, monolith gone | ready |
 | 42 | cleanup day | What Phases 3–5 left behind, before Phase 7 | ready |
-| 32–35 | 7 — ECS on Fargate | Terraform, the services on ECS, observability, one deployment and its teardown | provisional |
+| 32, 33, 36, 34, 35 | 7 — ECS on Fargate | Terraform, the code before ECS, the services on ECS, observability, one deployment and its teardown | provisional |
 | 29–31 | 6 — functions + uploads bucket | CV parsing, email off the request path; after Phase 7, or cut | provisional |
 
 ## Provisional specs
 
-Days 29–35 are written from `plan.md`, not from experience. **Re-read and revise the
+Days 29–36 are written from `plan.md`, not from experience. **Re-read and revise the
 phase before starting it.** Each of them carries a `Status: provisional` line; delete that
 line when the day has been reviewed and is ready to work. Days 17–20 and 41, 21–24 were
-rewritten against the code when their phase reached them; Days 38–40 and 42 were written against it from the start. Days 36–37 were deleted before Phase 7 (`plan.md`, course correction before Phase 7).
+rewritten against the code when their phase reached them; Days 38–40 and 42 were written against it from the start. Days 36–37 were deleted before Phase 7 (`plan.md`, course correction before Phase 7); Day 36's number came back when Day 33 was split (same section).
 
 Expect them to change. Day 19 in particular (partial failure and fallbacks) is a design
 decision the team must agree on before anyone writes code.
