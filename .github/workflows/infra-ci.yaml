@@ -1,5 +1,6 @@
 # Infra checks: format, validate, plan with fake credentials, LocalStack lock test and apply,
-# and secret sweep. No AWS credentials, no job that applies to AWS.
+# secret sweep, and bus checks (comparing Terraform against compose LocalStack).
+# No AWS credentials, no job that applies to AWS.
 
 name: Infra checks
 
@@ -200,9 +201,15 @@ jobs:
           terraform -chdir=infra/terraform/localstack apply -auto-approve -input=false -no-color | tee "$RUNNER_TEMP/second-apply.log"
           grep -q "No changes." "$RUNNER_TEMP/second-apply.log"
 
+      - name: compose LocalStack
+        run: |
+          docker compose -p infra-ci --env-file .env.example up -d --wait localstack
+          echo "COMPOSE_LOCALSTACK=http://$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' infra-ci-localstack-1):4566" >> "$GITHUB_ENV"
+
       - name: infra-checks.py
         run: |
           python scripts/infra-checks.py \
             --bootstrap-plan "$RUNNER_TEMP/bootstrap-plan.json" \
             --main-plan "$RUNNER_TEMP/main-plan.json" \
-            --localstack http://localhost:4566
+            --localstack http://localhost:4566 \
+            --compose-localstack "$COMPOSE_LOCALSTACK"
