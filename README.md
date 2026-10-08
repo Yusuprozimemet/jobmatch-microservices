@@ -14,12 +14,15 @@ and the constraints and approve every change; Claude drafts and audits the speci
 
 Days are numbered by their place in the plan, not by date. Days added later took new numbers
 and ran where the plan needed them: Days 38–40 before Day 17, Day 41 before Day 21, and Day 42
-before Day 32. The
-[phase table](#the-migration-plan) gives the order they ran in.
+before Day 32. The [phase table](#the-migration-plan) gives the order they ran in.
 
 > **This repository is an engineering experiment.** Its migration metrics are experimental
 > diagnostic signals, not optimization targets or standard measures of quality.
 
+> **Where it stands (Day 33):** Phase 7, ECS on Fargate with Terraform, is under way. The
+> monolith is gone; five services run in Docker Compose behind the gateway, and none is deployed
+> to AWS yet. See the [known limits](#known-limits).
+>
 > **Status:** in progress. The [migration dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/) shows the current day
 > and the next step; it is rebuilt from the repository after every merge. The full record, day by
 > day, is the [lab notebook](docs/lab-notebook.md); the short version is in
@@ -217,6 +220,23 @@ Terraform for the data stores, task roles and secrets, then one deployment and
 [`plan.md`](plan.md): no self-run Postgres and no Kubernetes, no separate profile-service, no
 managed API gateway, and one IaC tool, not Terraform and Pulumi both.
 
+### Known limits
+
+What a production reader should know before trusting the system, as of Day 33:
+
+- **Rate limiting is in memory.** The gateway limits the credential routes per client (Day 15),
+  in its own memory: correct for one gateway replica; more than one needs a shared store.
+- **Account deletion is eventual.** identity-service records `user.deleted` in a transactional
+  outbox, and SNS/SQS carries it to matching- and application-service. Their copies of the
+  user's data go shortly after the request, not inside it.
+- **Nothing runs on AWS yet.** DynamoDB and SNS/SQS are local stand-ins, and Day 32's Terraform
+  has been planned without an account and applied only to LocalStack.
+- **Secrets are local placeholders.** Day 33 makes every key and password load from the
+  environment, so ECS can pass them in from Secrets Manager; until Phase 7 deploys, the only
+  secrets are `.env.example`'s.
+- **Phase 6 is deferred, and may be cut.** The app has no uploads or CV parsing yet for it to
+  move, and mail is already sent off the request thread; compose passes no mail settings.
+
 ## Findings so far
 
 Recorded as they happen, including the ones that make the method look worse. The evidence for
@@ -250,7 +270,8 @@ Verdicts on each hypothesis are written when the last phase closes, in the lab n
 ## Running it
 
 You need Docker (with Compose) and git, nothing else: every service builds inside its own image.
-Copy the environment file, bring up the stack, and open [http://localhost:3000](http://localhost:3000):
+Copy the environment file, bring up the stack, and open [http://localhost:3000](http://localhost:3000) (on
+Windows, clone with `git clone -c core.longpaths=true`: some paths pass 260 characters):
 
 ```bash
 git clone https://github.com/Yusuprozimemet/jobmatch-microservices.git && cd jobmatch-microservices
