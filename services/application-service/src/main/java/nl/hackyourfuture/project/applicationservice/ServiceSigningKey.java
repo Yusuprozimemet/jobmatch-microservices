@@ -26,9 +26,10 @@ import java.util.Base64;
  * itself to another service, where identity's user key proves a user. A separate key, not the
  * monolith's service key, so the two rotate apart.
  *
- * <p>The key is read from the PEM file {@code SERVICE_JWT_PRIVATE_KEY_FILE} names, with the same
- * checks as the identity's user key: never generated at startup, only loaded from a file, and the
- * application does not start without a usable one.
+ * <p>The key is read from the PEM file {@code SERVICE_JWT_PRIVATE_KEY_FILE} names, or from the PEM
+ * in {@code SERVICE_JWT_PRIVATE_KEY} itself: ECS hands a secret to a task as a variable, not a file
+ * (Day 33). Exactly one of the two is set. The checks are the identity's user key's: never
+ * generated at startup, and the application does not start without a usable one.
  *
  * <p>The key id is the public key's RFC 7638 thumbprint, so it cannot drift from the key.
  *
@@ -40,12 +41,14 @@ public class ServiceSigningKey {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceSigningKey.class);
     private static final String VARIABLE = "SERVICE_JWT_PRIVATE_KEY_FILE";
+    private static final String CONTENT_VARIABLE = "SERVICE_JWT_PRIVATE_KEY";
     private static final int MIN_BITS = 2048;
 
     private final RSAKey key;
 
-    public ServiceSigningKey(@Value("${app.service-jwt.private-key-file:}") String file) {
-        this.key = read(VARIABLE, file);
+    public ServiceSigningKey(@Value("${app.service-jwt.private-key-file:}") String file,
+                             @Value("${app.service-jwt.private-key:}") String content) {
+        this.key = read(VARIABLE, file, CONTENT_VARIABLE, content);
         LOGGER.info("Signing service tokens with key {}", key.getKeyID());
     }
 
@@ -65,28 +68,38 @@ public class ServiceSigningKey {
     }
 
     /**
-     * The key in the PEM file {@code variable} names, after every check above; each failure names
-     * the variable. How the user key (identity's {@code SigningKey}) is read too, so both keys are held
-     * to one standard.
+     * The key in the PEM file {@code variable} names, or in {@code contentVariable} itself, after
+     * every check above; each failure names the variable, and none repeats the content. How the user
+     * key (identity's {@code SigningKey}) is read too, so both keys are held to one standard.
      */
-    public static RSAKey read(String variable, String file) {
-        if (file == null || file.isBlank()) {
-            throw fail(variable, "is not set. Point it at an RSA private key (PEM, PKCS#8), for example one "
-                    + "written by scripts/jwt-key.sh");
+    public static RSAKey read(String variable, String file, String contentVariable, String content) {
+        boolean hasFile = file != null && !file.isBlank();
+        boolean hasContent = content != null && !content.isBlank();
+        if (hasFile && hasContent) {
+            throw fail(variable + " and " + contentVariable + " are both set. Set only one");
         }
-        return load(variable, Path.of(file));
-    }
-
-    private static RSAKey load(String variable, Path file) {
-        String pem;
+        if (!hasFile && !hasContent) {
+            throw fail("Neither " + variable + " nor " + contentVariable + " is set. Point " + variable
+                    + " at an RSA private key (PEM, PKCS#8), for example one written by scripts/jwt-key.sh, "
+                    + "or put the PEM itself in " + contentVariable);
+        }
+        if (hasContent) {
+            return load(contentVariable, content, "holds", "a value");
+        }
+        Path path = Path.of(file);
         try {
-            pem = Files.readString(file, StandardCharsets.US_ASCII);
+            return load(variable, Files.readString(path, StandardCharsets.US_ASCII), "points at", path.toString());
         } catch (IOException e) {
             throw fail(variable, "points at " + file + ", which cannot be read: " + e);
         }
-        RSAPrivateCrtKey privateKey = parse(variable, pem, file);
+    }
+
+    /** {@code variable} {@code verb} {@code source}: "points at /run/key.pem", or "holds a value". */
+    private static RSAKey load(String variable, String pem, String verb, String source) {
+        String where = verb + " " + source;
+        RSAPrivateCrtKey privateKey = parse(variable, pem, where);
         if (privateKey.getModulus().bitLength() < MIN_BITS) {
-            throw fail(variable, "points at a " + privateKey.getModulus().bitLength() + "-bit key; "
+            throw fail(variable, verb + " a " + privateKey.getModulus().bitLength() + "-bit key; "
                     + MIN_BITS + " bits is the minimum");
         }
         try {
@@ -100,17 +113,17 @@ public class ServiceSigningKey {
                     .keyID(unnamed.computeThumbprint().toString())
                     .build();
         } catch (GeneralSecurityException | JOSEException e) {
-            throw fail(variable, "points at " + file + ", whose public key cannot be derived: " + e);
+            throw fail(variable, where + ", whose public key cannot be derived: " + e);
         }
     }
 
-    private static RSAPrivateCrtKey parse(String variable, String pem, Path file) {
+    private static RSAPrivateCrtKey parse(String variable, String pem, String where) {
         String begin = "-----BEGIN PRIVATE KEY-----";
         String end = "-----END PRIVATE KEY-----";
         int from = pem.indexOf(begin);
         int to = pem.indexOf(end);
         if (from < 0 || to < from) {
-            throw fail(variable, "points at " + file + ", which is not a PKCS#8 PEM private key "
+            throw fail(variable, where + ", which is not a PKCS#8 PEM private key "
                     + "(\"" + begin + "\")");
         }
         try {
@@ -120,14 +133,18 @@ public class ServiceSigningKey {
                 return rsa;
             }
         } catch (IllegalArgumentException | GeneralSecurityException e) {
-            throw fail(variable, "points at " + file + ", which is not an RSA private key: " + e.getMessage());
+            throw fail(variable, where + ", which is not an RSA private key: " + e.getMessage());
         }
-        throw fail(variable, "points at " + file + ", an RSA key without the parameters needed to derive "
+        throw fail(variable, where + ", an RSA key without the parameters needed to derive "
                 + "its public key");
     }
 
     private static IllegalStateException fail(String variable, String problem) {
-        return new IllegalStateException(variable + " " + problem + ". Tokens cannot be signed "
+        return fail(variable + " " + problem);
+    }
+
+    private static IllegalStateException fail(String problem) {
+        return new IllegalStateException(problem + ". Tokens cannot be signed "
                 + "without it, and the application never generates a key of its own.");
     }
 }

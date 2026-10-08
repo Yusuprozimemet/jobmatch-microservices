@@ -28,6 +28,7 @@ app:
   # no default; it does not start without one.
   service-jwt:
     private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
+    private-key: ${SERVICE_JWT_PRIVATE_KEY:}
   # The score store (Day 22). The endpoint is blank on AWS and the emulator's URL elsewhere;
   # create-table is for compose and tests (production's table is Terraform's).
   scores:

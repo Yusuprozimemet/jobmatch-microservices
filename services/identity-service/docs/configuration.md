@@ -110,6 +110,7 @@ job-service's settings (Day 17), as compose sets them:
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `jobs_db` | Its own database, holding the analytics mart (Day 20); compose passes `JOBS_DB_NAME` |
 | `DB_JOBS_USER` / `DB_JOBS_PASSWORD` | `jobs_user` / `password` | The read-only role ([§6](#6-the-database-schemas-and-roles)); compose passes `JOBS_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-job-service`. **Required**; compose's `jwt-key` service writes it |
+| `SERVICE_JWT_PRIVATE_KEY` | none | The same key's PEM itself, in place of `SERVICE_JWT_PRIVATE_KEY_FILE` (ECS passes secrets as variables). Set exactly one of the two; with both or neither it does not start |
 | `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` / `..._0_KEYSETURL` | none | The callers it trusts on `/internal/**`, none by default; compose lists matching-service and application-service, as the backend's ([auth.md](auth.md#service-tokens-and-internal)) |
 | `INTERNAL_APPLICATIONS_URL` | empty | Where it asks for saved counts (`/internal/saved-counts`): application-service, `http://application-service:8080` in compose (Day 25). Empty would mean itself, which has no such route |
 | `MANAGEMENT_PORT` | `9090` | Actuator: health and `/actuator/prometheus`, inside the network only |
@@ -121,6 +122,7 @@ matching-service's settings (Day 21), in its
 | Variable | Default | |
 | --- | --- | --- |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-matching-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
+| `SERVICE_JWT_PRIVATE_KEY` | none | The same key's PEM itself, in place of `SERVICE_JWT_PRIVATE_KEY_FILE` (ECS passes secrets as variables). Set exactly one of the two; with both or neither it does not start |
 | `INTERNAL_IDENTITY_URL` | none | Where it asks whether a user exists (`/internal/users/{id}`) and for their profile (`/internal/profiles/{userId}`): identity-service, `http://identity-service:8080` in compose. **Required**: it does not start without it |
 | `INTERNAL_JOBS_URL` | none | Where it asks for the shortlist (`/internal/postings/shortlist`): job-service, `http://job-service:8080` in compose. **Required** |
 | `IDENTITY_JWKS_URL` | `INTERNAL_IDENTITY_URL` + `/.well-known/jwks.json` | The user key set it checks tokens against |
@@ -152,6 +154,7 @@ application-service's settings (Day 25), in its
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | `localhost`, `5432`, `apps_db` | Its own database; compose passes `APPS_DB_NAME` |
 | `DB_APPLICATIONS_USER` / `DB_APPLICATIONS_PASSWORD` | `applications_user` / `password` | The only role that connects to `apps_db` ([§6](#6-the-database-schemas-and-roles)); compose passes `APPLICATIONS_DB_PASSWORD` |
 | `SERVICE_JWT_PRIVATE_KEY_FILE` | none | Its own key for service tokens, issuer `jobmatch-application-service`. **Required**; compose's `jwt-key` service writes it. The backend and job-service trust it |
+| `SERVICE_JWT_PRIVATE_KEY` | none | The same key's PEM itself, in place of `SERVICE_JWT_PRIVATE_KEY_FILE` (ECS passes secrets as variables). Set exactly one of the two; with both or neither it does not start |
 | `INTERNAL_IDENTITY_URL` | empty | Where it asks whether a user exists (`/internal/users/{id}`): identity-service, `http://identity-service:8080` in compose |
 | `INTERNAL_JOBS_URL` | empty | Where it fetches posting details for the saved list (`/internal/postings/batch`): job-service, `http://job-service:8080` in compose |
 | `JOB_SERVICE_KEY_SET_URL` | empty | job-service's service key set, so it may call `/internal/saved-counts` |

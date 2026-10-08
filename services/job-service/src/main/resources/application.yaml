@@ -20,6 +20,7 @@ app:
   # without it, it does not start. Compose writes it with scripts/jwt-key.sh (Track C1).
   service-jwt:
     private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
+    private-key: ${SERVICE_JWT_PRIVATE_KEY:}
 
   datasource:
     # jobs_user only reads (Day 11, Day 38).

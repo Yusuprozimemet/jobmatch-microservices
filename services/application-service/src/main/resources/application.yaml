@@ -49,6 +49,7 @@ app:
   # no default; it does not start without one.
   service-jwt:
     private-key-file: ${SERVICE_JWT_PRIVATE_KEY_FILE:}
+    private-key: ${SERVICE_JWT_PRIVATE_KEY:}
   # The user.deleted consumer (Day 27, moved here on Day 25). Off by default: compose turns it on
   # with the queue it reads (Track E2); the harness's container reads a queue of its own.
   events:
