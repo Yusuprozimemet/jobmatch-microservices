@@ -1,6 +1,6 @@
 {
-  "title": "JobMatch backend",
-  "uid": "jobmatch-backend",
+  "title": "JobMatch",
+  "uid": "jobmatch",
   "tags": ["jobmatch"],
   "timezone": "browser",
   "schemaVersion": 39,
