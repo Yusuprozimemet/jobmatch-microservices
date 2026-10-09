@@ -5,7 +5,8 @@ With --localstack, also checks applied state and resources against specification
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
 C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7 (queue policies
 in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
-repositories), C36.2 (ECS cluster and services), C36.3 (secrets) and C36.4 (task roles).
+repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles) and
+C36.7 (health checks).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1283,6 +1284,47 @@ def check_c36_4(plan: dict) -> list[str]:
     return failures
 
 
+def config_expressions(plan: dict, address: str) -> tuple[tuple, dict]:
+    """The module path and the expressions of the configuration resource at a full address
+    (module.network.aws_security_group.tasks), or of a module call (module.service)."""
+    path, module, parts = (), plan["configuration"]["root_module"], address.split(".")
+    while parts[0] == "module" and len(parts) > 2:
+        path += (parts[1],)
+        module = module["module_calls"][parts[1]]["module"]
+        parts = parts[2:]
+    if parts[0] == "module":
+        return path, module["module_calls"][parts[1]].get("expressions", {})
+    resource = next((r for r in module.get("resources", []) if r["address"] == ".".join(parts)), {})
+    return path, resource.get("expressions", {})
+
+
+def config_refs(plan: dict, address: str, attr: str) -> list[str]:
+    """The references of attr as written in the configuration block at a full address."""
+    return config_expressions(plan, address)[1].get(attr, {}).get("references", [])
+
+
+def check_c36_7(plan: dict) -> list[str]:
+    """Check the health checks: each JVM service probes readiness on the management port, the frontend
+    has none (its target group checks "/"), and the task definitions write the check into the container."""
+    failures = []
+
+    services = services_output(plan)
+    if services is None:
+        return ["C36.7 no services output"]
+    for name in sorted(C36_SERVICES - {"frontend"}):
+        command = (services.get(name, {}).get("health_check") or {}).get("command") or []
+        joined = " ".join(command)
+        if not command or command[0] != "CMD" or "/dev/tcp/127.0.0.1/9090" not in joined or "/actuator/health/readiness" not in joined:
+            failures.append(f"C36.7 {name}: health_check {command}, want CMD running the readiness probe on 9090")
+    if services.get("frontend", {}).get("health_check") is not None:
+        failures.append("C36.7 frontend: health_check set, want none (its target group checks /)")
+
+    if not refers_to(config_refs(plan, "module.service.aws_ecs_task_definition.service", "container_definitions"), "var.service.health_check"):
+        failures.append("C36.7 module service: container_definitions does not reference var.service.health_check")
+
+    return failures
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate Terraform infrastructure against criteria"
@@ -1350,6 +1392,7 @@ def main():
         failures.extend(check_c36_2(main_plan))
         failures.extend(check_c36_3(main_plan))
         failures.extend(check_c36_4(main_plan))
+        failures.extend(check_c36_7(main_plan))
         checks_run.append("ECS")
 
     # C32.5: Secret sweep on bootstrap plan
