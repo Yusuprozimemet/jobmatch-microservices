@@ -4,7 +4,8 @@ Reads plan JSON (terraform show -json) and validates infrastructure criteria.
 With --localstack, also checks applied state and resources against specifications.
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
 C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7 (queue policies
-in the LocalStack state), C32.8 (alarms), and C32.9 (score table on LocalStack).
+in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
+repositories), and C36.2 (ECS cluster and services).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1021,6 +1022,107 @@ def check_c32_9(endpoint: str, repo_root: Path) -> list[str]:
     return failures
 
 
+C36_SERVICES = {"identity-service", "job-service", "matching-service", "application-service", "api-gateway", "frontend"}
+C36_IMAGES = C36_SERVICES | {"db-setup"}
+
+
+def check_c36_1(plan: dict) -> list[str]:
+    """Check the ECR repositories: one per image, named jobmatch/<image>, emptied by destroy."""
+    failures = []
+
+    repos = [r for r in resources(plan) if r["type"] == "aws_ecr_repository"]
+    if not repos:
+        return ["C36.1 no aws_ecr_repository in the plan"]
+
+    if len(repos) != len(C36_IMAGES):
+        failures.append(f"C36.1 expected exactly {len(C36_IMAGES)} aws_ecr_repository, got {len(repos)}")
+
+    names = {r["values"].get("name") for r in repos}
+    want = {"jobmatch/" + i for i in C36_IMAGES}
+    for name in sorted(want - names):
+        failures.append(f"C36.1 repository {name}: missing")
+    for name in sorted(names - want, key=str):
+        failures.append(f"C36.1 repository {name}: extra, want only {sorted(want)}")
+
+    for repo in repos:
+        if repo["values"].get("force_delete") is not True:
+            failures.append(f"C36.1 {repo['address']}: force_delete {repo['values'].get('force_delete')}, want true")
+
+    return failures
+
+
+def check_c36_2(plan: dict) -> list[str]:
+    """Check the ECS cluster and services: Fargate on the public subnets, task definitions, and the
+    services output and module input that local.services feeds."""
+    failures = []
+
+    clusters = [r for r in resources(plan) if r["type"] == "aws_ecs_cluster"]
+    if len(clusters) != 1:
+        failures.append(f"C36.2 expected exactly 1 aws_ecs_cluster, got {len(clusters)}")
+
+    services = [r for r in resources(plan) if r["type"] == "aws_ecs_service"]
+    if not services:
+        failures.append("C36.2 no aws_ecs_service in the plan")
+        return failures
+
+    names = set()
+    for service in services:
+        address, values = service["address"], service["values"]
+        names.add(values.get("name"))
+        if not address.startswith("module.service["):
+            failures.append(f"C36.2 {address}: not in module.service")
+        if values.get("launch_type") != "FARGATE":
+            failures.append(f"C36.2 {address}: launch_type {values.get('launch_type')}, want FARGATE")
+        network = (values.get("network_configuration") or [{}])[0]
+        if network.get("assign_public_ip") is not True:
+            failures.append(f"C36.2 {address}: assign_public_ip {network.get('assign_public_ip')}, want true")
+
+    for name in sorted(C36_SERVICES - names):
+        failures.append(f"C36.2 service {name}: missing")
+    for name in sorted(names - C36_SERVICES, key=str):
+        failures.append(f"C36.2 service {name}: extra, want only {sorted(C36_SERVICES)}")
+    if len(services) != len(C36_SERVICES):
+        failures.append(f"C36.2 expected exactly {len(C36_SERVICES)} aws_ecs_service, got {len(services)}")
+
+    # Subnets and security groups are unknown in the plan: read their references from the configuration.
+    config = [r for p, r in config_with_path(plan) if p == ("service",) and r["type"] == "aws_ecs_service"]
+    if not config:
+        failures.append("C36.2 module.service aws_ecs_service not in the configuration")
+    else:
+        network = config[0].get("expressions", {}).get("network_configuration", [{}])[0]
+        subnets = resolve(plan, ("service",), network.get("subnets", {}).get("references", []))
+        groups = resolve(plan, ("service",), network.get("security_groups", {}).get("references", []))
+        if subnets != {"module.network.aws_subnet.public"}:
+            failures.append(f"C36.2 aws_ecs_service subnets {sorted(subnets)}, want the public subnets")
+        if groups != {"module.network.aws_security_group.tasks"}:
+            failures.append(f"C36.2 aws_ecs_service security groups {sorted(groups)}, want the tasks security group")
+
+    task_defs = [r for r in resources(plan) if r["type"] == "aws_ecs_task_definition"
+                 and r["address"].startswith("module.service[")]
+    if len(task_defs) != len(C36_SERVICES):
+        failures.append(f"C36.2 expected {len(C36_SERVICES)} aws_ecs_task_definition in module.service, got {len(task_defs)}")
+    for task_def in task_defs:
+        values = task_def["values"]
+        if values.get("requires_compatibilities") != ["FARGATE"]:
+            failures.append(f"C36.2 {task_def['address']}: requires_compatibilities {values.get('requires_compatibilities')}, want FARGATE")
+        if values.get("network_mode") != "awsvpc":
+            failures.append(f"C36.2 {task_def['address']}: network_mode {values.get('network_mode')}, want awsvpc")
+
+    outputs = plan.get("planned_values", {}).get("outputs", {})
+    if "services" not in outputs:
+        failures.append("C36.2 no services output")
+    elif set(outputs["services"].get("value", {})) != C36_SERVICES:
+        failures.append(f"C36.2 services output keys {sorted(outputs['services'].get('value', {}))}, want {sorted(C36_SERVICES)}")
+
+    module_call = plan.get("configuration", {}).get("root_module", {}).get("module_calls", {}).get("service")
+    if not module_call:
+        failures.append("C36.2 module service not in the configuration")
+    elif "local.services" not in module_call.get("for_each_expression", {}).get("references", []):
+        failures.append("C36.2 module service: for_each does not reference local.services")
+
+    return failures
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate Terraform infrastructure against criteria"
@@ -1081,6 +1183,12 @@ def main():
     if args.main_plan and main_plan:
         failures.extend(check_c32_8(main_plan))
         checks_run.append("alarms")
+
+    # C36.1, C36.2: Main plan ECR and ECS checks
+    if args.main_plan and main_plan:
+        failures.extend(check_c36_1(main_plan))
+        failures.extend(check_c36_2(main_plan))
+        checks_run.append("ECS")
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
