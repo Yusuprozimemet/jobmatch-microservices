@@ -7,7 +7,8 @@ C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7
 in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
 repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles),
 C36.5 (ALB and certificate), C36.6 (security groups), C36.7 (health checks), C36.8 (Service
-Connect and the compose variables) and C36.9 (the service variables).
+Connect and the compose variables), C36.9 (the service variables) and C36.10
+(the one-off tasks).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1040,6 +1041,8 @@ C36_TASK_POLICY_RESOURCES = {
     "matching-service": {"scores-table", "matching-user-deleted"},
     "application-service": {"applications-user-deleted"},
 }
+# The one-off tasks in locals.tf: two migrate tasks and db-setup. None has a service.
+C36_TASKS = {"identity-service-migrate", "application-service-migrate", "db-setup"}
 
 
 # Compose variables that have no services entry, each with the reason it is left out.
@@ -1156,6 +1159,11 @@ def services_output(plan: dict) -> dict | None:
     return plan.get("planned_values", {}).get("outputs", {}).get("services", {}).get("value")
 
 
+def tasks_output(plan: dict) -> dict | None:
+    """The tasks output's value (each one-off task's declaration from locals.tf), or None if absent."""
+    return plan.get("planned_values", {}).get("outputs", {}).get("tasks", {}).get("value")
+
+
 def refers_to(references: list[str], address: str) -> bool:
     """True if a configuration reference is the resource at address, or one of its attributes."""
     return any(ref.split("[")[0] == address or ref.split("[")[0].startswith(address + ".") for ref in references)
@@ -1196,8 +1204,9 @@ def check_c36_3(plan: dict) -> list[str]:
             failures.append(f"C36.3 jobmatch/db-password-{role}: db-setup needs it, not in the plan")
 
     secret_env = re.compile(r"PASSWORD|SECRET|PRIVATE_KEY|ACCESS_KEY")
-    for name in sorted(services):
-        for env, value in services[name].get("environment", {}).items():
+    declared = {**services, **(tasks_output(plan) or {})}
+    for name in sorted(declared):
+        for env, value in declared[name].get("environment", {}).items():
             if secret_env.search(env):
                 failures.append(f"C36.3 {name}: environment {env} looks like a secret, want none")
             if "-----BEGIN" in str(value):
@@ -1626,6 +1635,88 @@ def check_c36_9(plan: dict) -> list[str]:
     return failures
 
 
+def check_c36_10(plan: dict, repo_root: Path) -> list[str]:
+    """Check the one-off tasks: three task definitions in module.task and no service for any of them,
+    each migrate on its service's image with MIGRATE_ONLY, db-setup on its image with the master
+    secret and every role's password, the module's master secret read from RDS, the Dockerfile's
+    entrypoint, and the workflow that builds the image and runs its --help."""
+    import yaml
+
+    failures = []
+
+    tasks = tasks_output(plan)
+    if tasks is None:
+        return ["C36.10 no tasks output"]
+    if set(tasks) != C36_TASKS:
+        failures.append(f"C36.10 tasks output {sorted(tasks)}, want {sorted(C36_TASKS)}")
+
+    defs = [r for r in resources(plan) if r["type"] == "aws_ecs_task_definition" and r["address"].startswith("module.task[")]
+    if len(defs) != len(C36_TASKS):
+        failures.append(f"C36.10 expected {len(C36_TASKS)} aws_ecs_task_definition in module.task, got {len(defs)}")
+    planned = {r["address"] for r in defs}
+    for name in sorted(C36_TASKS):
+        address = f'module.task["{name}"].aws_ecs_task_definition.task'
+        if address not in planned:
+            failures.append(f"C36.10 {address}: missing")
+
+    for r in resources(plan):
+        if r["type"] == "aws_ecs_service" and (r["address"].startswith("module.task[") or r["values"].get("name") in C36_TASKS):
+            failures.append(f"C36.10 {r['address']}: a service for a one-off task, want none")
+
+    for name in sorted(C36_TASKS - {"db-setup"}):
+        service = name.removesuffix("-migrate")
+        task = tasks.get(name, {})
+        env = task.get("environment", {})
+        if task.get("image") != service:
+            failures.append(f"C36.10 {name} image {task.get('image')}, want {service}, its service's image")
+        if env.get("MIGRATE_ONLY") != "true":
+            failures.append(f"C36.10 {name} MIGRATE_ONLY {env.get('MIGRATE_ONLY')}, want true")
+
+    setup = tasks.get("db-setup", {})
+    secrets = setup.get("secrets", {})
+    if setup.get("image") != "db-setup":
+        failures.append(f"C36.10 db-setup image {setup.get('image')}, want db-setup")
+    if setup.get("command") != ["--passwords-from-env"]:
+        failures.append(f"C36.10 db-setup command {setup.get('command')}, want --passwords-from-env")
+    if secrets.get("POSTGRES_PASSWORD") != "rds-master:password::":
+        failures.append(f"C36.10 db-setup POSTGRES_PASSWORD {secrets.get('POSTGRES_PASSWORD')}, want rds-master:password::")
+    for role in C36_DB_ROLES:
+        env = f"DB_PASSWORD_{role.upper()}"
+        if secrets.get(env) != f"db-password-{role}":
+            failures.append(f"C36.10 db-setup {env} {secrets.get(env)}, want db-password-{role}")
+
+    # The master secret is RDS's own, so the module's secret_arns_by_name must read it from the database module.
+    module_call = plan.get("configuration", {}).get("root_module", {}).get("module_calls", {}).get("task")
+    if not module_call:
+        failures.append("C36.10 module task not in the configuration")
+    else:
+        secret_refs = module_call.get("expressions", {}).get("secret_arns_by_name", {}).get("references", [])
+        if not refers_to(secret_refs, "module.database.master_user_secret_arn"):
+            failures.append("C36.10 module task: secret_arns_by_name does not reference module.database.master_user_secret_arn")
+
+    dockerfile = repo_root / "scripts" / "db-setup.Dockerfile"
+    if not dockerfile.is_file():
+        failures.append("C36.10 scripts/db-setup.Dockerfile: missing")
+    elif not re.search(r'^ENTRYPOINT \[.*db-setup\.py"\]\s*$', dockerfile.read_text(encoding="utf-8"), re.M):
+        failures.append("C36.10 scripts/db-setup.Dockerfile: ENTRYPOINT does not run db-setup.py")
+
+    workflow_path = repo_root / ".github" / "workflows" / "db-setup-tests.yml"
+    if not workflow_path.is_file():
+        return failures + ["C36.10 .github/workflows/db-setup-tests.yml: missing"]
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    # YAML 1.1 reads the bare key "on" as True.
+    triggers = workflow.get("on") or workflow.get(True) or {}
+    runs = [step.get("run", "") for job in workflow.get("jobs", {}).values() for step in job.get("steps", [])]
+    if not any("-f scripts/db-setup.Dockerfile" in run for run in runs):
+        failures.append("C36.10 db-setup-tests.yml: no step builds scripts/db-setup.Dockerfile")
+    if not any(run.rstrip().endswith("--help") for run in runs):
+        failures.append("C36.10 db-setup-tests.yml: no step runs --help")
+    if "scripts/db-setup.Dockerfile" not in (triggers.get("pull_request") or {}).get("paths", []):
+        failures.append("C36.10 db-setup-tests.yml: pull_request paths lack scripts/db-setup.Dockerfile")
+
+    return failures
+
+
 def criterion_key(criterion: str) -> tuple[int, ...]:
     """Sort key for criterion IDs: C32.10 after C32.9."""
     return tuple(int(part) for part in criterion[1:].split("."))
@@ -1709,8 +1800,9 @@ def main():
         failures.extend(check_c36_7(main_plan))
         failures.extend(check_c36_8(main_plan, repo_root))
         failures.extend(check_c36_9(main_plan))
+        failures.extend(check_c36_10(main_plan, repo_root))
         checks_run.append("ECS")
-        criteria_ran.extend(f"C36.{n}" for n in range(1, 10))
+        criteria_ran.extend(f"C36.{n}" for n in range(1, 11))
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:

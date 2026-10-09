@@ -46,3 +46,22 @@ module "service" {
     applications-user-deleted-url = module.bus.queue_urls["applications-user-deleted"]
   }
 }
+
+# The one-off tasks run before the services (Day 35, H36.3), so they have no aws_ecs_service. The
+# RDS master secret is not in aws_secretsmanager_secret.secret: RDS creates and owns it.
+module "task" {
+  for_each = local.tasks
+  source   = "./modules/task"
+
+  name           = each.key
+  task           = each.value
+  image          = "${aws_ecr_repository.image[each.value.image].repository_url}:${var.image_tag}"
+  repository_arn = aws_ecr_repository.image[each.value.image].arn
+  region         = var.region
+
+  secret_arns_by_name = merge({ for name, secret in aws_secretsmanager_secret.secret : name => secret.arn }, { rds-master = module.database.master_user_secret_arn })
+
+  environment_values = {
+    database-address = module.database.address
+  }
+}
