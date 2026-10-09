@@ -132,6 +132,19 @@
     <div class="scroll-x" id="heat"></div>
   </section>
 
+  <section class="panel" id="infra">
+    <div class="panel-head">
+      <h2>Infrastructure, as CI last checked it</h2>
+      <p>infra-ci plans the Terraform without an AWS account, applies the bus and score table to LocalStack, and checks the criteria of Days 32 and 36 on every merge that touches them. This is its last run on main: the criteria, what the plan would create, and an estimate of what it would cost an hour to run. Nothing here reads the AWS account; the deployment itself is Day 35's.</p>
+    </div>
+    <div id="infra-head"></div>
+    <div class="chips" id="infra-criteria"></div>
+    <div class="chips" id="infra-steps"></div>
+    <div class="scroll-x" id="infra-resources"></div>
+    <div class="scroll-x" id="infra-cost"></div>
+    <div class="chips" id="infra-runs"></div>
+  </section>
+
   <section class="panel" id="tokens">
     <div class="panel-head">
       <h2>Tokens spent</h2>

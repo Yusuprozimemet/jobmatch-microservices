@@ -67,6 +67,8 @@ section.panel { background: var(--surface); border: 1px solid var(--ring); borde
 .panel-head { display: grid; gap: 6px; }
 .panel-head p { color: var(--ink-2); max-width: 72ch; font-size: 14px; }
 .chip { font: 500 11.5px var(--mono); padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.run-sq { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 
 .tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); color: var(--ink); border: 1px solid var(--ring); box-shadow: 0 6px 24px rgba(0,0,0,.14); border-radius: 8px; padding: 9px 11px; font-size: 12.5px; max-width: 300px; line-height: 1.45; }
 .tip b { font-weight: 600; }
