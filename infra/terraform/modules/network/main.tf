@@ -59,7 +59,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# No NAT gateway: about $35 a month before traffic. Day 33's tasks run in the public subnets
+# No NAT gateway: about $35 a month before traffic. The ECS tasks run in the public subnets
 # with a public IP; the private subnets hold only the database and need no way out.
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
