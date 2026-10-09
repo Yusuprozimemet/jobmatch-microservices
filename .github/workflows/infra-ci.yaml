@@ -77,7 +77,7 @@ jobs:
         run: python scripts/test_infra_summary.py
 
       - name: Install Python dependencies
-        run: pip install boto3 awscli-local
+        run: pip install boto3 awscli-local pyyaml
 
       - name: fmt
         id: fmt

@@ -6,12 +6,14 @@ Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket matc
 C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7 (queue policies
 in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
 repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles),
-C36.5 (ALB and certificate), C36.6 (security groups) and C36.7 (health checks).
+C36.5 (ALB and certificate), C36.6 (security groups), C36.7 (health checks), C36.8 (Service
+Connect and the compose variables) and C36.9 (the service variables).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
 
 import argparse
+import ipaddress
 import json
 import re
 import sys
@@ -1040,6 +1042,18 @@ C36_TASK_POLICY_RESOURCES = {
 }
 
 
+# Compose variables that have no services entry, each with the reason it is left out.
+C36_COMPOSE_ONLY = {
+    r"_FILE$": "the key files; the content variables replace them",
+    r"^EVENTS_S[NQ]S_(ENDPOINT|ACCESS_KEY|SECRET_KEY)$": "the emulator's endpoints and keys; the topic and queue URLs replace them",
+    r"^SCORES_DYNAMODB_ENDPOINT$": "the emulator's endpoint; the task role reaches the table",
+    r"^AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)$": "the emulator's dummy keys; the task role replaces them",
+    r"^SCORES_CREATE_TABLE$": "Terraform creates the table",
+    r"^TRACING_EXPORT_ENABLED$": "Day 34's collector, H36.6",
+    r"^OTEL_TRACES_ENDPOINT$": "Day 34's collector, H36.6",
+}
+
+
 def check_c36_1(plan: dict) -> list[str]:
     """Check the ECR repositories: one per image, named jobmatch/<image>, emptied by destroy."""
     failures = []
@@ -1475,6 +1489,143 @@ def check_c36_7(plan: dict) -> list[str]:
     return failures
 
 
+def check_c36_8(plan: dict, repo_root: Path) -> list[str]:
+    """Check Service Connect: one namespace, each JVM service registered under its compose name and
+    port, the module wired to the namespace and the environment values, every internal URL on a
+    registered name and port, and every variable compose sets for the six services declared in
+    services or on C36_COMPOSE_ONLY."""
+    import yaml
+
+    failures = []
+
+    namespaces = [r for r in resources(plan) if r["type"] == "aws_service_discovery_http_namespace"]
+    if len(namespaces) != 1:
+        failures.append(f"C36.8 expected exactly 1 aws_service_discovery_http_namespace, got {len(namespaces)}")
+
+    services = services_output(plan)
+    if services is None:
+        return failures + ["C36.8 no services output"]
+
+    planned = {r["address"]: r["values"] for r in resources(plan)}
+    registered = {}
+    for name in sorted(C36_SERVICES - {"frontend"}):
+        address = f'module.service["{name}"].aws_ecs_service.service'
+        port = services.get(name, {}).get("port")
+        if address not in planned:
+            failures.append(f"C36.8 {address}: missing")
+            continue
+        config = (planned[address].get("service_connect_configuration") or [{}])[0]
+        if config.get("enabled") is not True:
+            failures.append(f"C36.8 {address}: service_connect_configuration enabled {config.get('enabled')}, want true")
+        entries = config.get("service") or []
+        if len(entries) != 1:
+            failures.append(f"C36.8 {address}: {len(entries)} service blocks in service_connect_configuration, want 1")
+            continue
+        entry = entries[0]
+        alias = (entry.get("client_alias") or [{}])[0]
+        if entry.get("port_name") != name or entry.get("discovery_name") != name or alias.get("dns_name") != name:
+            failures.append(f"C36.8 {address}: port_name {entry.get('port_name')}, discovery_name {entry.get('discovery_name')}, dns_name {alias.get('dns_name')}, want {name}")
+        if alias.get("port") != port:
+            failures.append(f"C36.8 {address}: client_alias port {alias.get('port')}, want {port}")
+        registered[name] = port
+
+    # The frontend calls the gateway by its compose name, so it is a client: enabled, registers nothing.
+    frontend = planned.get('module.service["frontend"].aws_ecs_service.service')
+    if frontend is None:
+        failures.append('C36.8 module.service["frontend"].aws_ecs_service.service: missing')
+    else:
+        config = (frontend.get("service_connect_configuration") or [{}])[0]
+        if config.get("enabled") is not True or config.get("service"):
+            failures.append(f"C36.8 frontend: service_connect_configuration enabled {config.get('enabled')}, {len(config.get('service') or [])} service blocks, want enabled with none")
+
+    # The namespace ARN is unknown in the plan: read its reference from the module call.
+    if not refers_to(config_refs(plan, "module.service", "namespace_arn"), "aws_service_discovery_http_namespace.main"):
+        failures.append("C36.8 module service: namespace_arn does not reference aws_service_discovery_http_namespace.main")
+    if not refers_to(config_refs(plan, "module.service.aws_ecs_task_definition.service", "container_definitions"), "var.environment_values"):
+        failures.append("C36.8 module service: container_definitions does not reference var.environment_values")
+
+    urls = 0
+    for name in sorted(services):
+        for env, value in services[name].get("environment", {}).items():
+            if not re.search(r"_SERVICE_URL$|^INTERNAL_.*_URL$|^JOB_SERVICE_KEY_SET_URL$|^BACKEND_API_URL$|_KEYSETURL$", env):
+                continue
+            urls += 1
+            match = re.fullmatch(r"http://([^:/]+):(\d+)(/\S*)?", value)
+            if not match or match.group(1) not in registered or int(match.group(2)) != registered[match.group(1)]:
+                failures.append(f"C36.8 {name} {env}: {value}, want http://<registered name>:<its port>[/path]")
+    if urls == 0:
+        failures.append("C36.8 no internal URL in services")
+
+    compose = yaml.safe_load((repo_root / "docker-compose.yml").read_text(encoding="utf-8"))
+    for name in sorted(C36_SERVICES):
+        if name not in compose.get("services", {}):
+            failures.append(f"C36.8 {name}: not in docker-compose.yml")
+            continue
+        compose_env = compose["services"][name].get("environment", {})
+        names = [item.split("=", 1)[0] for item in compose_env] if isinstance(compose_env, list) else list(compose_env)
+        declared = {key for field in ("environment", "environment_from", "secrets") for key in services.get(name, {}).get(field, {})}
+        for env in names:
+            if env not in declared and not any(re.search(pattern, env) for pattern in C36_COMPOSE_ONLY):
+                failures.append(f"C36.8 {name}: compose sets {env}, not in its services entry or C36_COMPOSE_ONLY")
+
+    return failures
+
+
+def check_c36_9(plan: dict) -> list[str]:
+    """Check the variables that differ from compose: identity's cookie and links are on the domain,
+    the migrations run only as one-off tasks, matching does not create the table and sets its profile
+    cache window, and the gateway's trusted proxies match an address in each public subnet and in no
+    private one."""
+    failures = []
+
+    services = services_output(plan)
+    if services is None:
+        return ["C36.9 no services output"]
+
+    identity = services.get("identity-service", {}).get("environment", {})
+    domain = plan.get("variables", {}).get("domain", {}).get("value")
+    if domain is None:
+        failures.append("C36.9 no domain variable in the plan")
+    elif identity.get("APP_BASE_URL") != f"https://{domain}":
+        failures.append(f"C36.9 identity-service APP_BASE_URL {identity.get('APP_BASE_URL')}, want https://{domain}")
+    if identity.get("SESSION_COOKIE_SECURE") != "true":
+        failures.append(f"C36.9 identity-service SESSION_COOKIE_SECURE {identity.get('SESSION_COOKIE_SECURE')}, want true")
+    redirect = identity.get("GOOGLE_REDIRECT_URI")
+    if redirect is not None and not redirect.startswith(identity.get("APP_BASE_URL", "") + "/"):
+        failures.append(f"C36.9 identity-service GOOGLE_REDIRECT_URI {redirect}, want unset or under APP_BASE_URL")
+
+    for name in ("identity-service", "application-service"):
+        value = services.get(name, {}).get("environment", {}).get("MIGRATE_ON_START")
+        if value != "false":
+            failures.append(f"C36.9 {name} MIGRATE_ON_START {value}, want false")
+
+    matching = services.get("matching-service", {}).get("environment", {})
+    if "SCORES_CREATE_TABLE" in matching:
+        failures.append("C36.9 matching-service: SCORES_CREATE_TABLE set, want unset (Terraform creates the table)")
+    if not matching.get("PROFILE_CACHE_WINDOW"):
+        failures.append(f"C36.9 matching-service PROFILE_CACHE_WINDOW {matching.get('PROFILE_CACHE_WINDOW')}, want a value")
+
+    trusted = services.get("api-gateway", {}).get("environment", {}).get("GATEWAY_TRUSTED_PROXIES")
+    if not trusted:
+        return failures + ["C36.9 api-gateway: GATEWAY_TRUSTED_PROXIES not set"]
+    public = [r["values"]["cidr_block"] for r in resources(plan) if r["address"].startswith("module.network.aws_subnet.public[")]
+    private = [r["values"]["cidr_block"] for r in resources(plan) if r["address"].startswith("module.network.aws_subnet.private[")]
+    if not public or not private:
+        return failures + [f"C36.9 planned subnets: {len(public)} public and {len(private)} private, want at least one of each"]
+
+    # Ten past a subnet's network address is inside it, whatever the subnet's size.
+    for cidr in public:
+        address = str(ipaddress.ip_network(cidr).network_address + 10)
+        if not re.fullmatch(trusted, address):
+            failures.append(f"C36.9 GATEWAY_TRUSTED_PROXIES does not match {address} in public subnet {cidr}")
+    for cidr in private:
+        address = str(ipaddress.ip_network(cidr).network_address + 10)
+        if re.fullmatch(trusted, address):
+            failures.append(f"C36.9 GATEWAY_TRUSTED_PROXIES matches {address} in private subnet {cidr}")
+
+    return failures
+
+
 def criterion_key(criterion: str) -> tuple[int, ...]:
     """Sort key for criterion IDs: C32.10 after C32.9."""
     return tuple(int(part) for part in criterion[1:].split("."))
@@ -1556,8 +1707,10 @@ def main():
         failures.extend(check_c36_5(main_plan))
         failures.extend(check_c36_6(main_plan))
         failures.extend(check_c36_7(main_plan))
+        failures.extend(check_c36_8(main_plan, repo_root))
+        failures.extend(check_c36_9(main_plan))
         checks_run.append("ECS")
-        criteria_ran.extend(f"C36.{n}" for n in range(1, 8))
+        criteria_ran.extend(f"C36.{n}" for n in range(1, 10))
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
