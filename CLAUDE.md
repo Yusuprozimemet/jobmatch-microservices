@@ -80,8 +80,8 @@ Their findings are advice to the maintainer. What becomes a PR is the maintainer
 
 ## The implementer
 
-`.claude/agents/implementer.md`, on Haiku: the maintainer's choice, so that code is written by a
-smaller model and everything else stays with the main session. For each track, the main session
+`.claude/agents/implementer.md`, on Haiku 5.5 (Haiku 4.5 up to Day 33): the maintainer's
+choice, so that code is written by a smaller model and everything else stays with the main session. For each track, the main session
 writes the brief (files, changes, tests), sends it, and then does what the implementer does not:
 reviews the diff, runs the full checks in "Before pushing", breaks the code on purpose, commits,
 and writes the PR. Specs, audits, spec-change PRs and closing PRs stay with the main session. The
