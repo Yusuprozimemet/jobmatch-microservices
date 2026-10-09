@@ -85,6 +85,59 @@ resource "aws_security_group" "tasks" {
   }
 }
 
+resource "aws_security_group" "alb" {
+  name        = "${var.name}-alb"
+  description = "Security group for the public ALB"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.name}-alb"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  security_group_id = aws_security_group.alb.id
+
+  description = "HTTP from anywhere, redirected to HTTPS"
+  from_port   = 80
+  to_port     = 80
+  ip_protocol = "tcp"
+  cidr_ipv4   = "0.0.0.0/0"
+
+  tags = {
+    Name = "${var.name}-alb-http"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_https" {
+  security_group_id = aws_security_group.alb.id
+
+  description = "HTTPS from anywhere"
+  from_port   = 443
+  to_port     = 443
+  ip_protocol = "tcp"
+  cidr_ipv4   = "0.0.0.0/0"
+
+  tags = {
+    Name = "${var.name}-alb-https"
+  }
+}
+
+# The ALB talks only to the frontend, so its egress names the tasks group and port 3000.
+resource "aws_vpc_security_group_egress_rule" "alb_to_tasks" {
+  security_group_id = aws_security_group.alb.id
+
+  description                  = "Frontend port on the tasks"
+  from_port                    = 3000
+  to_port                      = 3000
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = aws_security_group.tasks.id
+
+  tags = {
+    Name = "${var.name}-alb-to-tasks"
+  }
+}
+
 resource "aws_vpc_security_group_egress_rule" "tasks" {
   security_group_id = aws_security_group.tasks.id
 
@@ -94,6 +147,33 @@ resource "aws_vpc_security_group_egress_rule" "tasks" {
 
   tags = {
     Name = "${var.name}-tasks-egress-all"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "tasks_from_alb" {
+  security_group_id = aws_security_group.tasks.id
+
+  description                  = "Frontend port from the ALB"
+  from_port                    = 3000
+  to_port                      = 3000
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = aws_security_group.alb.id
+
+  tags = {
+    Name = "${var.name}-tasks-from-alb"
+  }
+}
+
+# The services call one another, so the tasks admit every port from each other.
+resource "aws_vpc_security_group_ingress_rule" "tasks_from_tasks" {
+  security_group_id = aws_security_group.tasks.id
+
+  description                  = "All ports from the tasks"
+  ip_protocol                  = "-1"
+  referenced_security_group_id = aws_security_group.tasks.id
+
+  tags = {
+    Name = "${var.name}-tasks-from-tasks"
   }
 }
 

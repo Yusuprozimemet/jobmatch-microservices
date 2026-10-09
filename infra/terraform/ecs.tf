@@ -17,6 +17,10 @@ module "service" {
   security_group_ids = [module.network.tasks_security_group_id]
   region             = var.region
 
+  # Through the listener, so the service waits until the target group is attached to the ALB:
+  # ECS rejects a target group with no load balancer.
+  target_group_arns = each.key == "frontend" ? [aws_lb_listener.https.default_action[0].target_group_arn] : []
+
   # The ARN behind each key that a service's task_policy names.
   policy_resources = {
     user-deleted-topic        = module.bus.topic_arn
