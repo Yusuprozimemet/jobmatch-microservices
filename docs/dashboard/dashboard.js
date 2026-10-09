@@ -805,7 +805,29 @@ function drawTokens() {
     }).join("") + "</tbody>";
 }
 
-drawNow(); drawWork(); drawPerDay(); drawVerification(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
+// The last infra-ci summary on main (scripts/infra-summary.py), and each infra-ci run on main.
+function drawInfra() {
+  const I = DATA.infra || { runs: [], latest: null }, L = I.latest, S = L ? L.summary : {};
+  const tone = s => ({ pass: "var(--close)", success: "var(--close)", fail: "var(--fail)", failure: "var(--fail)" })[s] || "var(--muted)";
+  const chip = (name, state) => `<span class="chip" style="color:${tone(state)}">${esc(name)} · ${esc(state)}</span>`;
+  document.getElementById("infra-head").innerHTML = L
+    ? `<p>The latest run on main is <a href="${esc(L.url)}"><code>${esc(L.sha)}</code></a> from ${esc(L.date)}: <span class="chip" style="color:${tone(L.conclusion)}">${esc(L.conclusion || "running")}</span></p>`
+    : '<p class="load-error">No infra-ci summary on main yet: it appears after the next merge that touches infra/.</p>';
+  document.getElementById("infra-criteria").innerHTML = Object.entries(S.criteria || {}).map(([c, s]) => chip(c, s)).join("");
+  document.getElementById("infra-steps").innerHTML = Object.entries(S.steps || {}).map(([n, s]) => chip(n, s)).join("");
+  const resources = Object.entries(S.resources || {}).sort((a, b) => b[1] - a[1]);
+  document.getElementById("infra-resources").innerHTML = resources.length
+    ? `<table><thead><tr><th>Service</th><th>Created</th></tr></thead><tbody>${resources.map(([s, n]) => `<tr><td>${esc(s)}</td><td class="num">${n}</td></tr>`).join("")}</tbody></table>`
+    : "";
+  const cost = S.cost;
+  document.getElementById("infra-cost").innerHTML = cost
+    ? `<table><thead><tr><th>Item</th><th>Count</th><th>$ per hour</th></tr></thead><tbody>${cost.items.map(i => `<tr><td>${esc(i.name)}</td><td class="num">${i.count}</td><td class="num">${i.per_hour == null ? "–" : fmt(i.per_hour, 4)}</td></tr>`).join("")}<tr><th>Total</th><td></td><td class="num">$${fmt(cost.per_hour, 3)}</td></tr></tbody></table><p style="font-size:13px;color:var(--muted)">${esc(cost.note)}, ${esc(cost.region)}. A class with no price is listed with no rate and left out of the total.</p>`
+    : "";
+  document.getElementById("infra-runs").innerHTML = I.runs.slice().reverse().map(r =>
+    `<a class="run-sq" href="${esc(r.url)}" style="background:${tone(r.conclusion)}" title="${esc(`${r.sha} ${r.date} ${r.conclusion || "running"}`)}"></a>`).join("");
+}
+
+drawNow(); drawWork(); drawPerDay(); drawVerification(); drawInfra(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
 }
 
 function start() {

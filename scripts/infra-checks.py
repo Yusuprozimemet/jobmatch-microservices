@@ -1475,6 +1475,11 @@ def check_c36_7(plan: dict) -> list[str]:
     return failures
 
 
+def criterion_key(criterion: str) -> tuple[int, ...]:
+    """Sort key for criterion IDs: C32.10 after C32.9."""
+    return tuple(int(part) for part in criterion[1:].split("."))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate Terraform infrastructure against criteria"
@@ -1483,6 +1488,7 @@ def main():
     parser.add_argument("--main-plan", help="Path to main root plan JSON")
     parser.add_argument("--localstack", help="LocalStack endpoint URL (e.g., http://localhost:4566)")
     parser.add_argument("--compose-localstack", help="Compose LocalStack endpoint URL")
+    parser.add_argument("--summary", help="Write the criteria that ran and failed to this path as JSON")
 
     args = parser.parse_args()
 
@@ -1491,12 +1497,14 @@ def main():
     bootstrap_plan: dict | None = None
     main_plan: dict | None = None
 
-    # Track which checks ran
+    # Track which checks ran, and the criteria they cover
     checks_run = []
+    criteria_ran = []
 
     # C32.2: Bootstrap plan checks
     if args.bootstrap_plan:
         checks_run.append("bootstrap plan")
+        criteria_ran.append("C32.2")
         try:
             with open(args.bootstrap_plan, "r", encoding="utf-8") as f:
                 bootstrap_plan = json.load(f)
@@ -1525,16 +1533,19 @@ def main():
         bootstrap_plan
     ))
     checks_run.append("backends")
+    criteria_ran.append("C32.3")
 
     # C32.4: Main plan network and database checks
     if args.main_plan and main_plan:
         failures.extend(check_c32_4(main_plan))
         checks_run.append("database")
+        criteria_ran.append("C32.4")
 
     # C32.8: Main plan alarm checks
     if args.main_plan and main_plan:
         failures.extend(check_c32_8(main_plan))
         checks_run.append("alarms")
+        criteria_ran.append("C32.8")
 
     # C36.1, C36.2: Main plan ECR and ECS checks
     if args.main_plan and main_plan:
@@ -1546,14 +1557,17 @@ def main():
         failures.extend(check_c36_6(main_plan))
         failures.extend(check_c36_7(main_plan))
         checks_run.append("ECS")
+        criteria_ran.extend(f"C36.{n}" for n in range(1, 8))
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
         failures.extend(check_c32_5_sweep(bootstrap_plan, "bootstrap-plan"))
+        criteria_ran.append("C32.5")
 
     # C32.5: Secret sweep on main plan
     if args.main_plan and main_plan:
         failures.extend(check_c32_5_sweep(main_plan, "main-plan"))
+        criteria_ran.append("C32.5")
 
     # C32.5: Secret sweep on LocalStack state
     localstack_state = None
@@ -1589,9 +1603,11 @@ def main():
                         state_content = response["Body"].read().decode("utf-8")
                         localstack_state = json.loads(state_content)
                         failures.extend(check_c32_5_sweep(localstack_state, f"state s3://{bucket}/{key}"))
+                        criteria_ran.append("C32.5")
 
                         # C32.7: Check queue policies in state
                         failures.extend(check_c32_7_state(localstack_state, "terraform"))
+                        criteria_ran.append("C32.7")
                     except s3_client.exceptions.NoSuchKey:
                         failures.append(f"C32.5 state s3://{bucket}/{key}: object not found")
                     except Exception as e:
@@ -1600,13 +1616,22 @@ def main():
         # C32.9: the score table on LocalStack
         failures.extend(check_c32_9(args.localstack, repo_root))
         checks_run.append("score table")
+        criteria_ran.append("C32.9")
 
     # C32.6: Check bus resources match between Terraform and compose LocalStack
     if args.localstack and args.compose_localstack:
         failures.extend(check_c32_6(args.localstack, args.compose_localstack, repo_root))
         checks_run.append("bus")
+        criteria_ran.append("C32.6")
     elif args.localstack and not args.compose_localstack:
         failures.append("C32.6 --compose-localstack not given")
+
+    # The summary (scripts/infra-summary.py) reads these before the exit below
+    if args.summary:
+        failed = sorted({m.group(1) for f in failures if (m := re.match(r"^(C\d+\.\d+)", f))}, key=criterion_key)
+        ran = sorted(set(criteria_ran), key=criterion_key)
+        with open(args.summary, "w", encoding="utf-8") as f:
+            json.dump({"ran": ran, "failed": failed}, f)
 
     # Print results
     if failures:

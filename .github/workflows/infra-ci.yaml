@@ -10,6 +10,8 @@ on:
       - "infra/**"
       - "scripts/bus-init/**"
       - "scripts/infra-checks.py"
+      - "scripts/infra-summary.py"
+      - "scripts/test_infra_summary.py"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/matching-service/src/main/resources/application.yaml"
@@ -22,6 +24,8 @@ on:
       - "infra/**"
       - "scripts/bus-init/**"
       - "scripts/infra-checks.py"
+      - "scripts/infra-summary.py"
+      - "scripts/test_infra_summary.py"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/matching-service/src/main/resources/application.yaml"
@@ -69,13 +73,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Test the infra summary
+        run: python scripts/test_infra_summary.py
+
       - name: Install Python dependencies
         run: pip install boto3 awscli-local
 
       - name: fmt
+        id: fmt
         run: terraform fmt -check -recursive infra/terraform
 
       - name: validate
+        id: validate
         run: |
           for root in infra/terraform/bootstrap infra/terraform infra/terraform/localstack; do
             terraform -chdir="$root" init -backend=false -input=false
@@ -83,6 +92,7 @@ jobs:
           done
 
       - name: plan without an account
+        id: plan
         run: |
           # Bootstrap plan
           cat > infra/terraform/bootstrap/ci_override.tf << 'EOF'
@@ -122,6 +132,7 @@ jobs:
           terraform -chdir=infra/terraform/localstack init -input=false
 
       - name: lock test
+        id: lock
         run: |
           # C32.3: Verify state locking prevents concurrent plans while apply waits for input.
           set +e
@@ -193,9 +204,11 @@ jobs:
           terraform -chdir=infra/terraform/localstack plan -lock-timeout=0s -input=false > /dev/null
 
       - name: apply on LocalStack
+        id: apply
         run: terraform -chdir=infra/terraform/localstack apply -auto-approve -input=false
 
       - name: second apply makes no changes
+        id: second-apply
         run: |
           set -o pipefail
           # C32.10: a second apply with nothing changed must print "No changes."
@@ -208,9 +221,35 @@ jobs:
           echo "COMPOSE_LOCALSTACK=http://$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' infra-ci-localstack-1):4566" >> "$GITHUB_ENV"
 
       - name: infra-checks.py
+        id: infra-checks
         run: |
           python scripts/infra-checks.py \
             --bootstrap-plan "$RUNNER_TEMP/bootstrap-plan.json" \
             --main-plan "$RUNNER_TEMP/main-plan.json" \
             --localstack http://localhost:4566 \
-            --compose-localstack "$COMPOSE_LOCALSTACK"
+            --compose-localstack "$COMPOSE_LOCALSTACK" \
+            --summary "$RUNNER_TEMP/infra-checks.json"
+
+      # The dashboard's Infrastructure panel reads this artifact (scripts/spec-drift.py, infra()).
+      - name: infra summary
+        if: always() && github.event_name == 'push'
+        run: |
+          python scripts/infra-summary.py \
+            --main-plan "$RUNNER_TEMP/main-plan.json" \
+            --checks "$RUNNER_TEMP/infra-checks.json" \
+            --step fmt=${{ steps.fmt.outcome }} \
+            --step validate=${{ steps.validate.outcome }} \
+            --step plan=${{ steps.plan.outcome }} \
+            --step lock=${{ steps.lock.outcome }} \
+            --step apply=${{ steps.apply.outcome }} \
+            --step second-apply=${{ steps.second-apply.outcome }} \
+            --step infra-checks=${{ steps.infra-checks.outcome }} \
+            --out "$RUNNER_TEMP/infra-summary.json"
+
+      - name: upload infra summary
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-summary
+          path: ${{ runner.temp }}/infra-summary.json
+          retention-days: 90

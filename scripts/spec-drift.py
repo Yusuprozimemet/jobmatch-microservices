@@ -36,6 +36,7 @@ import posixpath
 import re
 import shlex
 import subprocess
+import tempfile
 
 import numpy as np
 
@@ -934,6 +935,45 @@ def token_usage():
         return json.load(f)
 
 
+INFRA_TRIES = 5
+
+
+def infra_summary(run_id):
+    """One infra-ci run's summary (scripts/infra-summary.py), or None if its artifact does not download."""
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            run("gh", "run", "download", str(run_id), "-n", "infra-summary", "-D", tmp)
+            with open(os.path.join(tmp, "infra-summary.json"), encoding="utf-8") as f:
+                return json.load(f)
+        except (subprocess.CalledProcessError, OSError, ValueError):
+            return None
+
+
+def infra():
+    """infra-ci's runs on main, and the summary of the newest completed run whose artifact downloads
+    (artifacts expire, so an old run may have none)."""
+    try:
+        listed = json.loads(run("gh", "run", "list", "--workflow", "infra-ci.yaml", "--branch", "main",
+                                "--event", "push", "--limit", "30",
+                                "--json", "databaseId,headSha,conclusion,createdAt,url"))
+    except subprocess.CalledProcessError:
+        return dict(runs=[], latest=None)
+    runs = [dict(sha=r["headSha"][:7], conclusion=r["conclusion"], date=r["createdAt"][:10], url=r["url"])
+            for r in listed]
+    latest, tries = None, 0
+    for i, r in enumerate(listed):
+        if not r["conclusion"]:
+            continue  # still running
+        if tries == INFRA_TRIES:
+            break
+        tries += 1
+        summary = infra_summary(r["databaseId"])
+        if summary is not None:
+            latest = dict(runs[i], summary=summary)
+            break
+    return dict(runs=runs, latest=latest)
+
+
 def fill(page, data, name):
     # A PR title is written by whoever opens the PR; "</script>" in one must not end the data line.
     data = data.replace("</", "<\\/")
@@ -1036,6 +1076,7 @@ def main():
                                hand_offs=hand_offs(days, order, snaps[-1]["sha"], blobs),
                                vocab_size=vocab, tokens=token_usage(),
                                verification=verification(prs, runs),
+                               infra=infra(),
                                conclusion=conclusion(blobs.read(snaps[-1]["sha"], "docs/lab-notebook.md")),
                                meta=dict(caveats=CAVEATS, provenance=provenance())),
                           separators=(",", ":"))

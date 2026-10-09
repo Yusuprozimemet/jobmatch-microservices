@@ -7,6 +7,7 @@ git and numpy.
     python scripts/test_spec_drift.py
 """
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -193,6 +194,28 @@ class SpecDriftTest(unittest.TestCase):
                 sd.gh_list(3, "pr", "list")
         finally:
             sd.run = real
+
+    def test_an_infra_run_whose_artifact_does_not_download_is_skipped(self):
+        def fake(*args):
+            if args[2] == "list":
+                return json.dumps([dict(databaseId=2, headSha="b" * 40, conclusion="failure",
+                                        createdAt="2026-10-08T10:00:00Z", url="u2"),
+                                   dict(databaseId=1, headSha="a" * 40, conclusion="success",
+                                        createdAt="2026-10-07T10:00:00Z", url="u1")])
+            if args[3] == "2":
+                raise subprocess.CalledProcessError(1, args)
+            with open(os.path.join(args[-1], "infra-summary.json"), "w", encoding="utf-8") as f:
+                json.dump({"criteria": {"C32.2": "pass"}}, f)
+            return ""
+        real = sd.run
+        try:
+            sd.run = fake
+            got = sd.infra()
+        finally:
+            sd.run = real
+        self.assertEqual([r["sha"] for r in got["runs"]], ["bbbbbbb", "aaaaaaa"])
+        self.assertEqual(got["latest"], dict(sha="aaaaaaa", conclusion="success", date="2026-10-07", url="u1",
+                                             summary={"criteria": {"C32.2": "pass"}}))
 
     def test_the_data_names_the_commit_versions_and_draws_that_made_it(self):
         p = sd.provenance()
