@@ -207,3 +207,74 @@ locals {
     start_period = 60
   }
 }
+
+# The one-off tasks, declared as the services are and read the same way. Each runs once, before the
+# services start (Day 35, H36.3), and has no service. A migrate task runs its service's image with
+# MIGRATE_ONLY, which stops after the migrations.
+locals {
+  tasks = {
+    identity-service-migrate = {
+      image  = "identity-service"
+      cpu    = 512
+      memory = 1024
+
+      environment = {
+        DB_PORT          = "5432"
+        DB_NAME          = "identity_db"
+        DB_USER          = "app_user"
+        DB_IDENTITY_USER = "identity_user"
+        MIGRATE_ONLY     = "true"
+      }
+
+      environment_from = {
+        DB_HOST = "database-address"
+      }
+
+      secrets = {
+        DB_PASSWORD          = "db-password-app_user"
+        DB_IDENTITY_PASSWORD = "db-password-identity_user"
+      }
+    }
+
+    application-service-migrate = {
+      image  = "application-service"
+      cpu    = 512
+      memory = 1024
+
+      environment = {
+        DB_PORT              = "5432"
+        DB_NAME              = "apps_db"
+        DB_APPLICATIONS_USER = "applications_user"
+        MIGRATE_ONLY         = "true"
+      }
+
+      environment_from = {
+        DB_HOST = "database-address"
+      }
+
+      secrets = {
+        DB_APPLICATIONS_PASSWORD = "db-password-applications_user"
+      }
+    }
+
+    # Each role's password comes from its own secret, not the command line (--passwords-from-env).
+    db-setup = {
+      image   = "db-setup"
+      cpu     = 256
+      memory  = 512
+      command = ["--passwords-from-env"]
+
+      environment = {
+        POSTGRES_PORT = "5432"
+        POSTGRES_USER = "jobmatch_admin"
+      }
+
+      environment_from = {
+        POSTGRES_HOST = "database-address"
+      }
+
+      # The master's password is one key of the RDS-managed secret, not a secret Terraform creates.
+      secrets = merge({ POSTGRES_PASSWORD = "rds-master:password::" }, { for role in local.db_roles : "DB_PASSWORD_${upper(role)}" => "db-password-${role}" })
+    }
+  }
+}

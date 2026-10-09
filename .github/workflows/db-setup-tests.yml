@@ -3,11 +3,13 @@ name: db-setup.py runs twice and matches its pin
 # No other job runs scripts/db-setup.py, so a change to the roles and grants it creates
 # could merge unseen. scripts/test_db_setup.py runs it twice against a fresh Postgres:
 # the second run must change nothing, and the result must equal the pin in the test.
+# The same script is the image the db-setup task runs (Day 36), so that image must build and print its help.
 
 on:
   pull_request:
     paths:
       - scripts/db-setup.py
+      - scripts/db-setup.Dockerfile
       - scripts/test_db_setup.py
       - .github/workflows/db-setup-tests.yml
   push:
@@ -15,6 +17,7 @@ on:
       - main
     paths:
       - scripts/db-setup.py
+      - scripts/db-setup.Dockerfile
       - scripts/test_db_setup.py
       - .github/workflows/db-setup-tests.yml
 
@@ -51,3 +54,5 @@ jobs:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ${{ format('dbsetup-{0}-{1}', github.run_id, github.run_attempt) }}
+      - run: docker build -t jobmatch-db-setup:ci -f scripts/db-setup.Dockerfile scripts
+      - run: docker run --rm jobmatch-db-setup:ci --help
