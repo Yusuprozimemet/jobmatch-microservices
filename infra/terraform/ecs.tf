@@ -15,6 +15,7 @@ module "service" {
   name               = each.key
   service            = each.value
   cluster_id         = aws_ecs_cluster.main.id
+  cluster_name       = aws_ecs_cluster.main.name
   image              = "${aws_ecr_repository.image[each.key].repository_url}:${var.image_tag}"
   repository_arn     = aws_ecr_repository.image[each.key].arn
   secret_arns        = { for env, name in each.value.secrets : env => aws_secretsmanager_secret.secret[name].arn }

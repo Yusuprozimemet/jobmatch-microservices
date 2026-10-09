@@ -87,6 +87,34 @@ resource "aws_ecs_service" "service" {
   }
 }
 
+# Only a service with scaling set gets a target: the gateway keeps its one task.
+resource "aws_appautoscaling_target" "service" {
+  count = var.service.scaling == null ? 0 : 1
+
+  min_capacity       = var.service.scaling.min_capacity
+  max_capacity       = var.service.scaling.max_capacity
+  resource_id        = "service/${var.cluster_name}/${aws_ecs_service.service.name}"
+  service_namespace  = "ecs"
+  scalable_dimension = "ecs:service:DesiredCount"
+}
+
+resource "aws_appautoscaling_policy" "service" {
+  count = var.service.scaling == null ? 0 : 1
+
+  name               = "jobmatch-${var.name}-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.service[0].resource_id
+  service_namespace  = aws_appautoscaling_target.service[0].service_namespace
+  scalable_dimension = aws_appautoscaling_target.service[0].scalable_dimension
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = var.service.scaling.cpu_target
+  }
+}
+
 # Every task gets both roles; the task role has no policy unless its service names one.
 data "aws_iam_policy_document" "assume" {
   statement {
