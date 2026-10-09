@@ -1780,6 +1780,59 @@ C34_OTEL_DEFAULTS = {
 }
 
 
+def check_c34_1(repo_root: Path) -> list[str]:
+    """Check each JVM service's Dockerfile names its spans after the service, and the Grafana dashboard's uid."""
+    failures = []
+    env_line = re.compile(r"^\s*ENV\s+OTEL_SERVICE_NAME[= ](\S+)\s*$")
+
+    for service in C34_JVM_SERVICES:
+        rel = f"services/{service}/Dockerfile"
+        path = repo_root / rel
+        if not path.is_file():
+            failures.append(f"C34.1 {rel}: missing")
+            continue
+
+        # Comments are skipped, so a commented-out ENV does not count as set.
+        found = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            match = env_line.match(line)
+            if match:
+                found.append(match.group(1))
+        want = f"jobmatch-{service}"
+        if len(found) != 1:
+            failures.append(f"C34.1 {rel}: {len(found)} ENV OTEL_SERVICE_NAME lines, want 1")
+        elif found[0] != want:
+            failures.append(f"C34.1 {rel}: OTEL_SERVICE_NAME is {found[0]}, want {want}")
+
+    # The retired trace name must be gone from the Dockerfiles and from the observability files.
+    # observability/ is asserted non-empty first, so the search cannot pass on nothing.
+    obs = repo_root / "observability"
+    obs_files = sorted(p for p in obs.rglob("*") if p.is_file()) if obs.is_dir() else []
+    if not obs_files:
+        failures.append("C34.1 observability/: missing or empty")
+    service_dockerfiles = [repo_root / "services" / service / "Dockerfile" for service in C34_JVM_SERVICES]
+    for path in service_dockerfiles + obs_files:
+        if path.is_file() and "jobmatch-backend" in path.read_text(encoding="utf-8"):
+            failures.append(f"C34.1 {path.relative_to(repo_root).as_posix()}: contains the retired trace name")
+
+    # The uid is the dashboard's address in Grafana, /d/<uid>: it names the whole deployment now.
+    dashboard = repo_root / "observability" / "grafana" / "jobmatch.json"
+    if not dashboard.is_file():
+        failures.append("C34.1 observability/grafana/jobmatch.json: missing")
+    else:
+        try:
+            uid = json.loads(dashboard.read_text(encoding="utf-8")).get("uid")
+        except json.JSONDecodeError as e:
+            failures.append(f"C34.1 observability/grafana/jobmatch.json: not valid JSON: {e}")
+        else:
+            if uid != "jobmatch":
+                failures.append(f"C34.1 observability/grafana/jobmatch.json: uid is {uid}, want jobmatch")
+
+    return failures
+
+
 def check_c34_8(repo_root: Path) -> list[str]:
     """Check each JVM service's application.yaml telemetry defaults, and that compose sends traces to Tempo."""
     import yaml
@@ -1895,6 +1948,11 @@ def main():
     ))
     checks_run.append("backends")
     criteria_ran.append("C32.3")
+
+    # C34.1: the five JVM services' trace names, and the Grafana dashboard's uid (no plan needed)
+    failures.extend(check_c34_1(repo_root))
+    checks_run.append("trace names")
+    criteria_ran.append("C34.1")
 
     # C34.8: the telemetry defaults of the five JVM services, and compose's traces endpoint (no plan needed)
     failures.extend(check_c34_8(repo_root))

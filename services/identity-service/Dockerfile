@@ -45,6 +45,6 @@ ENV SPRING_PROFILES_DEFAULT=prod
 # spans; with it removed, the same request yields `GET /api/jobs` with those calls beneath
 # it. Traces now come from spring-boot-starter-opentelemetry, configured in
 # application.yaml. Revisit when the agent supports this stack.
-ENV OTEL_SERVICE_NAME=jobmatch-backend
+ENV OTEL_SERVICE_NAME=jobmatch-identity-service
 
 CMD ["java", "-jar", "app.jar"]
