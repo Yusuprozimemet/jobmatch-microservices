@@ -26,9 +26,12 @@ permissions:
   pages: write
   id-token: write
 
+# Queued, not cancelled: a merge that touches infra starts two runs a few minutes apart (push,
+# then infra-ci's workflow_run), and cancelling the first showed a red X on every such merge.
+# Queued, the later one still publishes last, so the page keeps the newer infra summary.
 concurrency:
   group: dashboard
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
