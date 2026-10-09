@@ -7,8 +7,8 @@ C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7
 in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
 repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles),
 C36.5 (ALB and certificate), C36.6 (security groups), C36.7 (health checks), C36.8 (Service
-Connect and the compose variables), C36.9 (the service variables) and C36.10
-(the one-off tasks).
+Connect and the compose variables), C36.9 (the service variables), C36.10 (the one-off tasks) and
+C36.11 (the scaling).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1717,6 +1717,58 @@ def check_c36_10(plan: dict, repo_root: Path) -> list[str]:
     return failures
 
 
+def check_c36_11(plan: dict) -> list[str]:
+    """Check the scaling: the gateway's service has one task and no target, matching has the one target
+    with a target-tracking policy on CPU, and the services output says the same."""
+    failures = []
+
+    gateway = 'module.service["api-gateway"].aws_ecs_service.service'
+    service = next((r for r in resources(plan) if r["address"] == gateway), None)
+    if service is None:
+        failures.append(f"C36.11 {gateway}: missing")
+    elif service["values"].get("desired_count") != 1:
+        failures.append(f"C36.11 {gateway} desired_count {service['values'].get('desired_count')}, want 1")
+
+    targets = [r for r in resources(plan) if r["type"] == "aws_appautoscaling_target"]
+    if len(targets) != 1:
+        failures.append(f"C36.11 expected exactly 1 aws_appautoscaling_target, got {len(targets)}")
+    if any(r["address"].startswith('module.service["api-gateway"].') for r in targets):
+        failures.append('C36.11 aws_appautoscaling_target under module.service["api-gateway"], want none: one task')
+    matching = [r for r in targets if r["address"].startswith('module.service["matching-service"].')]
+    if not matching:
+        failures.append('C36.11 no aws_appautoscaling_target under module.service["matching-service"]')
+    for target in matching:
+        values = target["values"]
+        if values.get("service_namespace") != "ecs" or values.get("scalable_dimension") != "ecs:service:DesiredCount":
+            failures.append(f"C36.11 {target['address']}: service_namespace {values.get('service_namespace')}, "
+                            f"scalable_dimension {values.get('scalable_dimension')}, want ecs and ecs:service:DesiredCount")
+
+    policies = [r for r in resources(plan) if r["type"] == "aws_appautoscaling_policy"]
+    if len(policies) != 1:
+        failures.append(f"C36.11 expected exactly 1 aws_appautoscaling_policy, got {len(policies)}")
+    for policy in policies:
+        values = policy["values"]
+        configured = (values.get("target_tracking_scaling_policy_configuration") or [{}])[0]
+        metric = (configured.get("predefined_metric_specification") or [{}])[0].get("predefined_metric_type")
+        if not policy["address"].startswith('module.service["matching-service"].'):
+            failures.append(f"C36.11 {policy['address']}: want the policy on matching-service")
+        if values.get("policy_type") != "TargetTrackingScaling":
+            failures.append(f"C36.11 {policy['address']} policy_type {values.get('policy_type')}, want TargetTrackingScaling")
+        if metric != "ECSServiceAverageCPUUtilization":
+            failures.append(f"C36.11 {policy['address']} metric {metric}, want ECSServiceAverageCPUUtilization")
+
+    services = services_output(plan)
+    if services is None:
+        failures.append("C36.11 no services output")
+    else:
+        if services.get("api-gateway", {}).get("scaling") is not None:
+            failures.append("C36.11 api-gateway scaling is set, want none: one task")
+        if not services.get("matching-service", {}).get("scaling"):
+            failures.append("C36.11 matching-service scaling is not set, want min, max and cpu_target")
+
+    return failures
+
+
 def criterion_key(criterion: str) -> tuple[int, ...]:
     """Sort key for criterion IDs: C32.10 after C32.9."""
     return tuple(int(part) for part in criterion[1:].split("."))
@@ -1801,8 +1853,9 @@ def main():
         failures.extend(check_c36_8(main_plan, repo_root))
         failures.extend(check_c36_9(main_plan))
         failures.extend(check_c36_10(main_plan, repo_root))
+        failures.extend(check_c36_11(main_plan))
         checks_run.append("ECS")
-        criteria_ran.extend(f"C36.{n}" for n in range(1, 11))
+        criteria_ran.extend(f"C36.{n}" for n in range(1, 12))
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:

@@ -99,6 +99,9 @@ locals {
         PROFILE_CACHE_WINDOW = "10s"
       }
 
+      # Scales on CPU. Its profile cache is per task, so PROFILE_CACHE_WINDOW bounds how stale a task is.
+      scaling = { min_capacity = 1, max_capacity = 3, cpu_target = 70 }
+
       environment_from = {
         EVENTS_USER_DELETED_QUEUE_URL = "matching-user-deleted-url"
       }
@@ -159,6 +162,7 @@ locals {
     }
 
     api-gateway = {
+      # One task: RateLimit counts in memory, and plan.md keeps one gateway task.
       port          = 8081
       cpu           = 512
       memory        = 1024

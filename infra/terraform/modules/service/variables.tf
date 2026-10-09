@@ -24,10 +24,20 @@ variable "service" {
       retries      = number
       start_period = number
     }))
+
+    scaling = optional(object({
+      min_capacity = number
+      max_capacity = number
+      cpu_target   = number
+    }))
   })
 }
 
 variable "cluster_id" {
+  type = string
+}
+
+variable "cluster_name" {
   type = string
 }
 
