@@ -9,8 +9,31 @@ locals {
       cpu           = 512
       memory        = 1024
       desired_count = 1
-      environment   = {}
       health_check  = local.jvm_health_check
+
+      environment = {
+        DB_PORT          = "5432"
+        DB_NAME          = "identity_db"
+        DB_USER          = "app_user"
+        DB_IDENTITY_USER = "identity_user"
+
+        APP_INTERNAL_TRUSTEDISSUERS_0_NAME      = "jobmatch-matching-service"
+        APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL = "http://matching-service:8080/.well-known/service-jwks.json"
+        APP_INTERNAL_TRUSTEDISSUERS_1_NAME      = "jobmatch-application-service"
+        APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL = "http://application-service:8080/.well-known/service-jwks.json"
+
+        # Behind the ALB over HTTPS: the session cookie is Secure and links use the domain.
+        SESSION_COOKIE_SECURE = "true"
+        APP_BASE_URL          = "https://${var.domain}"
+
+        # The one-off migrate task runs the migrations, not the service.
+        MIGRATE_ON_START = "false"
+      }
+
+      environment_from = {
+        DB_HOST                       = "database-address"
+        EVENTS_USER_DELETED_TOPIC_ARN = "user-deleted-topic"
+      }
 
       secrets = {
         DB_PASSWORD          = "db-password-app_user"
@@ -25,13 +48,30 @@ locals {
         resources = ["user-deleted-topic"]
       }]
     }
+
     job-service = {
       port          = 8080
       cpu           = 512
       memory        = 1024
       desired_count = 1
-      environment   = {}
       health_check  = local.jvm_health_check
+
+      environment = {
+        DB_PORT      = "5432"
+        DB_NAME      = "jobs_db"
+        DB_JOBS_USER = "jobs_user"
+
+        INTERNAL_APPLICATIONS_URL = "http://application-service:8080"
+
+        APP_INTERNAL_TRUSTEDISSUERS_0_NAME      = "jobmatch-matching-service"
+        APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL = "http://matching-service:8080/.well-known/service-jwks.json"
+        APP_INTERNAL_TRUSTEDISSUERS_1_NAME      = "jobmatch-application-service"
+        APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL = "http://application-service:8080/.well-known/service-jwks.json"
+      }
+
+      environment_from = {
+        DB_HOST = "database-address"
+      }
 
       secrets = {
         DB_JOBS_PASSWORD        = "db-password-jobs_user"
@@ -40,13 +80,28 @@ locals {
 
       task_policy = []
     }
+
     matching-service = {
       port          = 8080
       cpu           = 512
       memory        = 1024
       desired_count = 1
-      environment   = {}
       health_check  = local.jvm_health_check
+
+      environment = {
+        AWS_REGION            = var.region
+        INTERNAL_IDENTITY_URL = "http://identity-service:8080"
+        INTERNAL_JOBS_URL     = "http://job-service:8080"
+        LLM_BASE_URL          = "https://generativelanguage.googleapis.com/v1beta/openai"
+        LLM_MODEL             = "gemini-flash-lite-latest"
+
+        # Set here rather than left to the default: a profile change reaches the ranking within this window.
+        PROFILE_CACHE_WINDOW = "10s"
+      }
+
+      environment_from = {
+        EVENTS_USER_DELETED_QUEUE_URL = "matching-user-deleted-url"
+      }
 
       secrets = {
         LLM_API_KEY             = "llm-api-key"
@@ -64,13 +119,33 @@ locals {
         },
       ]
     }
+
     application-service = {
       port          = 8080
       cpu           = 512
       memory        = 1024
       desired_count = 1
-      environment   = {}
       health_check  = local.jvm_health_check
+
+      environment = {
+        DB_PORT              = "5432"
+        DB_NAME              = "apps_db"
+        DB_APPLICATIONS_USER = "applications_user"
+
+        INTERNAL_IDENTITY_URL   = "http://identity-service:8080"
+        INTERNAL_JOBS_URL       = "http://job-service:8080"
+        JOB_SERVICE_KEY_SET_URL = "http://job-service:8080/.well-known/service-jwks.json"
+
+        EVENTS_CONSUMER_ENABLED = "true"
+
+        # The one-off migrate task runs the migrations, not the service.
+        MIGRATE_ON_START = "false"
+      }
+
+      environment_from = {
+        DB_HOST                       = "database-address"
+        EVENTS_USER_DELETED_QUEUE_URL = "applications-user-deleted-url"
+      }
 
       secrets = {
         DB_APPLICATIONS_PASSWORD = "db-password-applications_user"
@@ -82,23 +157,38 @@ locals {
         resources = ["applications-user-deleted"]
       }]
     }
+
     api-gateway = {
       port          = 8081
       cpu           = 512
       memory        = 1024
       desired_count = 1
-      environment   = {}
       health_check  = local.jvm_health_check
+
+      environment = {
+        IDENTITY_SERVICE_URL    = "http://identity-service:8080"
+        JOB_SERVICE_URL         = "http://job-service:8080"
+        MATCHING_SERVICE_URL    = "http://matching-service:8080"
+        APPLICATION_SERVICE_URL = "http://application-service:8080"
+
+        # The ALB and the frontend run in the public subnets, not the private ones: RateLimit trusts a
+        # forwarded client address only when the connecting address matches this.
+        GATEWAY_TRUSTED_PROXIES = "10\\.0\\.([0-9]|[1-9][0-9]|1[01][0-9]|12[0-7])\\.[0-9]{1,3}"
+      }
 
       secrets     = {}
       task_policy = []
     }
+
     frontend = {
       port          = 3000
       cpu           = 256
       memory        = 512
       desired_count = 1
-      environment   = {}
+
+      environment = {
+        BACKEND_API_URL = "http://api-gateway:8081"
+      }
 
       secrets     = {}
       task_policy = []

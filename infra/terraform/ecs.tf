@@ -2,6 +2,11 @@ resource "aws_ecs_cluster" "main" {
   name = "jobmatch"
 }
 
+# Service Connect names, so every internal URL keeps its compose form.
+resource "aws_service_discovery_http_namespace" "main" {
+  name = "jobmatch"
+}
+
 # Tasks run in the public subnets with a public IP because Day 32 chose no NAT gateway.
 module "service" {
   for_each = local.services
@@ -16,6 +21,10 @@ module "service" {
   subnet_ids         = module.network.public_subnet_ids
   security_group_ids = [module.network.tasks_security_group_id]
   region             = var.region
+  namespace_arn      = aws_service_discovery_http_namespace.main.arn
+
+  # The frontend only calls out, so it is a Service Connect client and is not registered.
+  register = each.key != "frontend"
 
   # Through the listener, so the service waits until the target group is attached to the ALB:
   # ECS rejects a target group with no load balancer.
@@ -27,5 +36,13 @@ module "service" {
     scores-table              = module.scores.table_arn
     matching-user-deleted     = module.bus.queue_arns["matching-user-deleted"]
     applications-user-deleted = module.bus.queue_arns["applications-user-deleted"]
+  }
+
+  # The value behind each key that a service's environment_from names.
+  environment_values = {
+    database-address              = module.database.address
+    user-deleted-topic            = module.bus.topic_arn
+    matching-user-deleted-url     = module.bus.queue_urls["matching-user-deleted"]
+    applications-user-deleted-url = module.bus.queue_urls["applications-user-deleted"]
   }
 }

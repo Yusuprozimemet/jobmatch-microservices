@@ -22,7 +22,7 @@ resource "aws_ecs_task_definition" "service" {
       containerPort = var.service.port
       protocol      = "tcp"
     }]
-    environment = [for k, v in var.service.environment : { name = k, value = v }]
+    environment = [for k, v in merge(var.service.environment, { for env, key in var.service.environment_from : env => var.environment_values[key] }) : { name = k, value = v }]
     secrets     = [for env, arn in var.secret_arns : { name = env, valueFrom = arn }]
     logConfiguration = {
       logDriver = "awslogs"
@@ -54,6 +54,26 @@ resource "aws_ecs_service" "service" {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids
     assign_public_ip = true
+  }
+
+  service_connect_configuration {
+    enabled   = true
+    namespace = var.namespace_arn
+
+    # Only the services other services call are registered; the frontend is a client.
+    dynamic "service" {
+      for_each = var.register ? [1] : []
+
+      content {
+        port_name      = var.name
+        discovery_name = var.name
+
+        client_alias {
+          port     = var.service.port
+          dns_name = var.name
+        }
+      }
+    }
   }
 
   dynamic "load_balancer" {

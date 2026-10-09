@@ -4,12 +4,13 @@ variable "name" {
 
 variable "service" {
   type = object({
-    port          = number
-    cpu           = number
-    memory        = number
-    desired_count = number
-    environment   = optional(map(string), {})
-    secrets       = optional(map(string), {})
+    port             = number
+    cpu              = number
+    memory           = number
+    desired_count    = number
+    environment      = optional(map(string), {})
+    environment_from = optional(map(string), {})
+    secrets          = optional(map(string), {})
 
     task_policy = optional(list(object({
       actions   = list(string)
@@ -62,4 +63,17 @@ variable "policy_resources" {
 variable "target_group_arns" {
   type    = list(string)
   default = []
+}
+
+variable "namespace_arn" {
+  type = string
+}
+
+variable "register" {
+  type = bool
+}
+
+# The value behind each key that a service's environment_from names.
+variable "environment_values" {
+  type = map(string)
 }
