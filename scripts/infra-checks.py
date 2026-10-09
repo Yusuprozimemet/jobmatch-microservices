@@ -7,8 +7,8 @@ C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7
 in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
 repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles),
 C36.5 (ALB and certificate), C36.6 (security groups), C36.7 (health checks), C36.8 (Service
-Connect and the compose variables), C36.9 (the service variables), C36.10 (the one-off tasks) and
-C36.11 (the scaling).
+Connect and the compose variables), C36.9 (the service variables), C36.10 (the one-off tasks),
+C36.11 (the scaling) and C34.8 (the five services' telemetry defaults).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1769,6 +1769,73 @@ def check_c36_11(plan: dict) -> list[str]:
     return failures
 
 
+# The JVM services and the telemetry defaults each application.yaml sets. Compose overrides the
+# traces endpoint to Tempo; the defaults stay off, so a service run outside compose exports nothing.
+C34_JVM_SERVICES = ("api-gateway", "application-service", "identity-service", "job-service", "matching-service")
+C34_OTEL_DEFAULTS = {
+    "OTEL_TRACES_ENDPOINT": "http://localhost:4318/v1/traces",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
+    "TRACING_EXPORT_ENABLED": "false",
+    "OTEL_METRICS_ENABLED": "false",
+}
+
+
+def check_c34_8(repo_root: Path) -> list[str]:
+    """Check each JVM service's application.yaml telemetry defaults, and that compose sends traces to Tempo."""
+    import yaml
+
+    failures = []
+    placeholder = re.compile(r"\$\{([A-Z_]+):([^}]*)\}")
+
+    def collect(node: Any, found: dict[str, list[str]]):
+        if isinstance(node, str):
+            for name, default in placeholder.findall(node):
+                found.setdefault(name, []).append(default)
+        elif isinstance(node, dict):
+            for value in node.values():
+                collect(value, found)
+        elif isinstance(node, list):
+            for item in node:
+                collect(item, found)
+
+    for service in C34_JVM_SERVICES:
+        if service == "identity-service":
+            rel = "services/identity-service/app/src/main/resources/application.yaml"
+        else:
+            rel = f"services/{service}/src/main/resources/application.yaml"
+        path = repo_root / rel
+        if not path.is_file():
+            failures.append(f"C34.8 {rel}: missing")
+            continue
+
+        # Parsed, not grepped: a commented-out default must not count as set.
+        found: dict[str, list[str]] = {}
+        collect(yaml.safe_load(path.read_text(encoding="utf-8")), found)
+        for name, want in C34_OTEL_DEFAULTS.items():
+            if name not in found:
+                failures.append(f"C34.8 {service} application.yaml: no ${{{name}:...}} placeholder")
+            for got in found.get(name, []):
+                if got != want:
+                    failures.append(f"C34.8 {service} application.yaml: {name} defaults to {got}, want {want}")
+
+    compose_path = repo_root / "docker-compose.yml"
+    if not compose_path.is_file():
+        return failures + ["C34.8 docker-compose.yml: missing"]
+    compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+    compose_services = compose.get("services", {})
+    want = "${OTEL_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}"
+    for service in C34_JVM_SERVICES:
+        if service not in compose_services:
+            failures.append(f"C34.8 docker-compose.yml {service}: service missing")
+            continue
+        env = compose_services[service].get("environment")
+        got = env.get("OTEL_TRACES_ENDPOINT") if isinstance(env, dict) else None
+        if got != want:
+            failures.append(f"C34.8 docker-compose.yml {service}: OTEL_TRACES_ENDPOINT {got}, want Tempo's {want}")
+
+    return failures
+
+
 def criterion_key(criterion: str) -> tuple[int, ...]:
     """Sort key for criterion IDs: C32.10 after C32.9."""
     return tuple(int(part) for part in criterion[1:].split("."))
@@ -1828,6 +1895,11 @@ def main():
     ))
     checks_run.append("backends")
     criteria_ran.append("C32.3")
+
+    # C34.8: the telemetry defaults of the five JVM services, and compose's traces endpoint (no plan needed)
+    failures.extend(check_c34_8(repo_root))
+    checks_run.append("telemetry defaults")
+    criteria_ran.append("C34.8")
 
     # C32.4: Main plan network and database checks
     if args.main_plan and main_plan:

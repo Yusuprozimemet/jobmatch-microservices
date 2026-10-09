@@ -14,7 +14,10 @@ on:
       - "scripts/test_infra_summary.py"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
-      - "services/matching-service/src/main/resources/application.yaml"
+      - "services/*/Dockerfile"
+      - "services/*/src/main/resources/application.yaml"
+      - "services/identity-service/app/src/main/resources/application.yaml"
+      - "observability/**"
       - "services/identity-service/**/support/EventBus.java"
       - ".github/workflows/infra-ci.yaml"
   push:
@@ -28,7 +31,10 @@ on:
       - "scripts/test_infra_summary.py"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
-      - "services/matching-service/src/main/resources/application.yaml"
+      - "services/*/Dockerfile"
+      - "services/*/src/main/resources/application.yaml"
+      - "services/identity-service/app/src/main/resources/application.yaml"
+      - "observability/**"
       - "services/identity-service/**/support/EventBus.java"
       - ".github/workflows/infra-ci.yaml"
 
