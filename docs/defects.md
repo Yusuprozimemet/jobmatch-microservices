@@ -41,9 +41,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 38: 1 setup script that crashes on Windows output
 - Day 20: 1 container path Git Bash rewrote
 
-## In the agent's own work (358)
+## In the agent's own work (382)
 
-### Spec and plan premises wrong about the code, or work they missed (132)
+### Spec and plan premises wrong about the code, or work they missed (141)
 
 - Days 1-13: 8 specs that could not be met
 - Days 1-13: 1 plan that missed a cross-module read
@@ -157,8 +157,17 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 plan by `init -backend=false`, which the override files cannot give
 - Day 32: 1 scope of a seed hand-off that named one file of two
 - Day 32: 1 estimate of 4 PRs for a day that took 6, one still `Oversized:`
+- Day 33: 1 a draft still the Azure and Kubernetes one, which `plan.md` had ruled out
+- Day 33: 1 RemoteStateReference claim, where the state is S3 and the root has no outputs
+- Day 33: 1 draft that cited none of Day 32's code hand-offs (keys, Flyway, `db-setup.py`, H32.2)
+- Day 33: 1 draft that cited none of Day 32's ECS hand-offs (task roles, the ALB's group, the redirect URI)
+- Day 33: 1 draft that would have put secrets into Terraform's state
+- Day 33: 1 estimate of 3 PRs for about 17 criteria
+- Day 33: 1 ECR repository and push that no day owned
+- Day 33: 1 estimate of 5 PRs for a day that took 7
+- Day 33: 1 line number one off, and a broken `docker build` path the docs criterion missed
 
-### Spec checks that could not fail, could not pass, or proved the wrong thing (96)
+### Spec checks that could not fail, could not pass, or proved the wrong thing (101)
 
 - Days 1-13: 1 spec check that could not fail
 - Days 1-13: 1 gate that does not pin what its spec says
@@ -240,8 +249,13 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 set of criteria with no break to see them fail
 - Day 32: 1 queue-policy check on a plan where the policy is unknown, which could not pass
 - Day 32: 1 expected report of no queues where the break left one
+- Day 33: 1 set of six criteria with no `new` or `hold` tag
+- Day 33: 1 set of criteria that could not run without a cluster
+- Day 33: 1 login check that could not fail on a trust-auth Postgres
+- Day 33: 1 grep that could not reach zero, since `../../mvnw` contains `/../mvnw`
+- Day 33: 1 pair of holds that no PR broke until the close
 
-### Code drafts that review or a break changed, and lost work (65)
+### Code drafts that review or a break changed, and lost work (73)
 
 - Day 38: 1 metric tag unlike the backend's
 - Day 40: 1 default interval that made a wait slow
@@ -302,6 +316,14 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 comparison of two LocalStacks never made against the source, which skipped missing keys
 - Day 32: 1 file the main session left with mixed line endings
 - Day 32: 1 local lock test fed through `docker run -i`, which released the lock early
+- Day 33: 1 pin test that filtered PUBLIC out of the grants it pinned, rewritten
+- Day 33: 1 key loader that changed the file messages it had to keep, rewritten
+- Day 33: 1 unreported `baseline-on-migrate` that would have skipped V1, and a helper reading one row
+- Day 33: 1 subclassed test that ran on the migrated database, reported as confirmed
+- Day 33: 1 second unreported `baselineOnMigrate`, every auto-configuration loaded, and a check on its own connection
+- Day 33: 1 implementer report of no departures, twice, over an ignored `--admin-password` and a match of `.*`
+- Day 33: 1 JWKS assertion of the main session's that did not compile
+- Day 33: 1 two breaks of the main session's that did not run, a syntax error and a compile error
 
 ### Tests a spec would break without naming, or behaviour it left untested (32)
 
@@ -346,7 +368,7 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 Verify that failed in Git Bash and held a placeholder tag
 - Day 32: 1 compose check that `-p` would not have isolated from the maintainer's stack
 
-### Bugs in the migration's own tooling (dashboard, commit keys) (13)
+### Bugs in the migration's own tooling (dashboard, commit keys) (15)
 
 - Day 39: 1 dashboard that could not read a split track
 - Day 17: 1 dashboard that could not read a three-way split
@@ -361,3 +383,5 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 42: 1 track with no Jira sub-task and no key in its branches
 - Day 32: 1 track with no Jira sub-task, and a plan-change issue left open after its merge
 - Day 32: 1 dashboard next step that read a criterion id as a track
+- Day 33: 1 dashboard that read the plan change as the day's spec change and printed the old draft's track
+- Day 33: 1 dashboard next step that read tracks A1 and B1 as all of A and B, twice
