@@ -10,6 +10,7 @@ locals {
       memory        = 1024
       desired_count = 1
       environment   = {}
+      health_check  = local.jvm_health_check
 
       secrets = {
         DB_PASSWORD          = "db-password-app_user"
@@ -30,6 +31,7 @@ locals {
       memory        = 1024
       desired_count = 1
       environment   = {}
+      health_check  = local.jvm_health_check
 
       secrets = {
         DB_JOBS_PASSWORD        = "db-password-jobs_user"
@@ -44,6 +46,7 @@ locals {
       memory        = 1024
       desired_count = 1
       environment   = {}
+      health_check  = local.jvm_health_check
 
       secrets = {
         LLM_API_KEY             = "llm-api-key"
@@ -67,6 +70,7 @@ locals {
       memory        = 1024
       desired_count = 1
       environment   = {}
+      health_check  = local.jvm_health_check
 
       secrets = {
         DB_APPLICATIONS_PASSWORD = "db-password-applications_user"
@@ -84,6 +88,7 @@ locals {
       memory        = 1024
       desired_count = 1
       environment   = {}
+      health_check  = local.jvm_health_check
 
       secrets     = {}
       task_policy = []
@@ -98,5 +103,17 @@ locals {
       secrets     = {}
       task_policy = []
     }
+  }
+}
+
+# The compose probe on the management port, for the five JVM services. The frontend has none here:
+# its target group checks "/".
+locals {
+  jvm_health_check = {
+    command      = ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090 && printf 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3"]
+    interval     = 10
+    timeout      = 5
+    retries      = 5
+    start_period = 60
   }
 }

@@ -12,7 +12,8 @@ resource "aws_ecs_task_definition" "service" {
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
-  container_definitions = jsonencode([{
+  # Only the JVM services have a probe, so the healthCheck key is merged in only when one is set.
+  container_definitions = jsonencode([merge({
     name      = var.name
     image     = var.image
     essential = true
@@ -31,7 +32,15 @@ resource "aws_ecs_task_definition" "service" {
         "awslogs-stream-prefix" = var.name
       }
     }
-  }])
+    }, var.service.health_check == null ? {} : {
+    healthCheck = {
+      command     = var.service.health_check.command
+      interval    = var.service.health_check.interval
+      timeout     = var.service.health_check.timeout
+      retries     = var.service.health_check.retries
+      startPeriod = var.service.health_check.start_period
+    }
+  })])
 }
 
 resource "aws_ecs_service" "service" {

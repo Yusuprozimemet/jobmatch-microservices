@@ -15,6 +15,14 @@ variable "service" {
       actions   = list(string)
       resources = list(string)
     })), [])
+
+    health_check = optional(object({
+      command      = list(string)
+      interval     = number
+      timeout      = number
+      retries      = number
+      start_period = number
+    }))
   })
 }
 
