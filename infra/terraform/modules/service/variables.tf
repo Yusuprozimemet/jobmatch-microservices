@@ -57,3 +57,9 @@ variable "secret_arns" {
 variable "policy_resources" {
   type = map(string)
 }
+
+# A list, not a nullable ARN: its length is known at plan time, so the plan shows the block.
+variable "target_group_arns" {
+  type    = list(string)
+  default = []
+}

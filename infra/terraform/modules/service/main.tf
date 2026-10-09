@@ -55,6 +55,16 @@ resource "aws_ecs_service" "service" {
     security_groups  = var.security_group_ids
     assign_public_ip = true
   }
+
+  dynamic "load_balancer" {
+    for_each = var.target_group_arns
+
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = var.name
+      container_port   = var.service.port
+    }
+  }
 }
 
 # Every task gets both roles; the task role has no policy unless its service names one.

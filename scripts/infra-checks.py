@@ -5,8 +5,8 @@ With --localstack, also checks applied state and resources against specification
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
 C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7 (queue policies
 in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
-repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles) and
-C36.7 (health checks).
+repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles),
+C36.5 (ALB and certificate), C36.6 (security groups) and C36.7 (health checks).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1303,6 +1303,156 @@ def config_refs(plan: dict, address: str, attr: str) -> list[str]:
     return config_expressions(plan, address)[1].get(attr, {}).get("references", [])
 
 
+def resolved_refs(plan: dict, address: str, attr: str) -> set[str]:
+    """The resource addresses attr of the configuration block at address refers to, followed through
+    variables and module outputs: the ids and ARNs the plan leaves unknown are read here."""
+    return resolve(plan, config_expressions(plan, address)[0], config_refs(plan, address, attr))
+
+
+def check_c36_5(plan: dict) -> list[str]:
+    """Check the ALB: one application load balancer on the public subnets, a DNS-validated certificate
+    for var.domain with its records in var.route53_zone_id, a 443 listener forwarding to the frontend's
+    target group, a 80 listener redirecting to 443, and the frontend's service as the only one with a
+    load balancer."""
+    failures = []
+
+    lbs = [r for r in resources(plan) if r["type"] == "aws_lb"]
+    if len(lbs) != 1:
+        failures.append(f"C36.5 expected exactly 1 aws_lb, got {len(lbs)}")
+    for lb in lbs:
+        address, values = lb["address"], lb["values"]
+        if values.get("load_balancer_type") != "application" or values.get("internal") is not False:
+            failures.append(f"C36.5 {address}: load_balancer_type {values.get('load_balancer_type')}, internal {values.get('internal')}, want application and false")
+        subnets = resolved_refs(plan, address, "subnets")
+        if subnets != {"module.network.aws_subnet.public"}:
+            failures.append(f"C36.5 {address}: subnets {sorted(subnets)}, want the public subnets")
+
+    certs = [r for r in resources(plan) if r["type"] == "aws_acm_certificate"]
+    if len(certs) != 1:
+        failures.append(f"C36.5 expected exactly 1 aws_acm_certificate, got {len(certs)}")
+    for cert in certs:
+        if cert["values"].get("validation_method") != "DNS" or not refers_to(config_refs(plan, cert["address"], "domain_name"), "var.domain"):
+            failures.append(f"C36.5 {cert['address']}: want DNS validation of var.domain")
+
+    records = [r for r in resources(plan) if r["type"] == "aws_route53_record"]
+    if not any(refers_to(config_refs(plan, r["address"].split("[")[0], "zone_id"), "var.route53_zone_id") for r in records):
+        failures.append("C36.5 no planned aws_route53_record with zone_id from var.route53_zone_id")
+
+    validations = [r for r in resources(plan) if r["type"] == "aws_acm_certificate_validation"]
+    if len(validations) != 1:
+        failures.append(f"C36.5 expected exactly 1 aws_acm_certificate_validation, got {len(validations)}")
+    for validation in validations:
+        if not refers_to(config_refs(plan, validation["address"], "validation_record_fqdns"), "aws_route53_record.certificate_validation"):
+            failures.append(f"C36.5 {validation['address']}: validation_record_fqdns not from aws_route53_record.certificate_validation")
+
+    listeners = [r for r in resources(plan) if r["type"] == "aws_lb_listener"]
+    if len(listeners) != 2:
+        failures.append(f"C36.5 expected exactly 2 aws_lb_listener, got {len(listeners)}")
+    by_port = {r["values"].get("port"): r for r in listeners}
+    https, http = by_port.get(443), by_port.get(80)
+    if https is None or https["values"].get("protocol") != "HTTPS":
+        failures.append("C36.5 no HTTPS listener on 443")
+    else:
+        address = https["address"]
+        certificate = config_refs(plan, address, "certificate_arn")
+        if not (refers_to(certificate, "aws_acm_certificate_validation.main") or refers_to(certificate, "aws_acm_certificate.main")):
+            failures.append(f"C36.5 {address}: certificate_arn not from the certificate")
+        forward = config_expressions(plan, address)[1].get("default_action", [{}])[0].get("target_group_arn", {})
+        if (https["values"].get("default_action") or [{}])[0].get("type") != "forward" or not refers_to(forward.get("references", []), "aws_lb_target_group.frontend"):
+            failures.append(f"C36.5 {address}: default action does not forward to aws_lb_target_group.frontend")
+    if http is None:
+        failures.append("C36.5 no listener on 80")
+    else:
+        action = (http["values"].get("default_action") or [{}])[0]
+        redirect = (action.get("redirect") or [{}])[0]
+        if action.get("type") != "redirect" or redirect.get("port") != "443" or redirect.get("protocol") != "HTTPS":
+            failures.append(f"C36.5 {http['address']}: default action {action.get('type')}, want redirect to 443 HTTPS")
+
+    groups = [r for r in resources(plan) if r["type"] == "aws_lb_target_group"]
+    if len(groups) != 1:
+        failures.append(f"C36.5 expected exactly 1 aws_lb_target_group, got {len(groups)}")
+    for group in groups:
+        values = group["values"]
+        path = ((values.get("health_check") or [{}])[0]).get("path")
+        if values.get("port") != 3000 or values.get("target_type") != "ip" or path != "/":
+            failures.append(f"C36.5 {group['address']}: port {values.get('port')}, target_type {values.get('target_type')}, health path {path}, want 3000, ip and /")
+
+    services_planned = [r for r in resources(plan) if r["type"] == "aws_ecs_service"]
+    if not any(r["values"].get("name") == "frontend" for r in services_planned):
+        failures.append("C36.5 no frontend aws_ecs_service in the plan")
+    for svc in services_planned:
+        blocks = [(b.get("container_name"), b.get("container_port")) for b in svc["values"].get("load_balancer") or []]
+        want = [("frontend", 3000)] if svc["values"].get("name") == "frontend" else []
+        if blocks != want:
+            failures.append(f"C36.5 {svc['address']}: load_balancer {blocks}, want {want}")
+    if not refers_to(config_refs(plan, "module.service", "target_group_arns"), "aws_lb_listener.https"):
+        failures.append("C36.5 module service: target_group_arns not from aws_lb_listener.https")
+
+    return failures
+
+
+def check_c36_6(plan: dict) -> list[str]:
+    """Check the security groups: the ALB's admits 80 and 443 from anywhere and nothing else, and the
+    tasks' admits 3000 from the ALB's group and all ports from itself. Neither has inline rules."""
+    failures = []
+
+    lbs = [r for r in resources(plan) if r["type"] == "aws_lb"]
+    if not lbs:
+        return ["C36.6 no aws_lb in the plan"]
+    groups = resolved_refs(plan, lbs[0]["address"], "security_groups")
+    if len(groups) != 1:
+        return [f"C36.6 {lbs[0]['address']}: security groups {sorted(groups)}, want exactly 1"]
+    alb = groups.pop()
+    tasks_groups = resolved_refs(plan, "module.service", "security_group_ids")
+    if tasks_groups != {"module.network.aws_security_group.tasks"}:
+        return [f"C36.6 module service: security_group_ids {sorted(tasks_groups)}, want the tasks security group"]
+    tasks = tasks_groups.pop()
+
+    planned = {r["address"]: r["values"] for r in resources(plan)}
+
+    def rules_on(kind: str, group: str) -> list[str]:
+        """Full addresses of the configuration resources of a kind whose security_group_id is group."""
+        addresses = ["".join(f"module.{n}." for n in p) + r["address"] for p, r in config_with_path(plan) if r["type"] == kind]
+        return [a for a in addresses if group in resolved_refs(plan, a, "security_group_id")]
+
+    for group in (alb, tasks):
+        if planned.get(group, {}).get("ingress"):
+            failures.append(f"C36.6 {group}: inline ingress, want none")
+        for legacy in rules_on("aws_security_group_rule", group):
+            failures.append(f"C36.6 {legacy}: rule on {group}, want only ingress rules")
+
+    alb_rules = rules_on("aws_vpc_security_group_ingress_rule", alb)
+    if len(alb_rules) != 2:
+        failures.append(f"C36.6 {alb}: {len(alb_rules)} ingress rules, want 2 (80 and 443)")
+    if {planned.get(r, {}).get("from_port") for r in alb_rules} != {80, 443}:
+        failures.append(f"C36.6 {alb}: ingress ports {sorted(str(planned.get(r, {}).get('from_port')) for r in alb_rules)}, want 80 and 443")
+    for rule in alb_rules:
+        v = planned.get(rule, {})
+        if v.get("ip_protocol") != "tcp" or v.get("from_port") != v.get("to_port") or v.get("cidr_ipv4") != "0.0.0.0/0" \
+                or v.get("cidr_ipv6") or v.get("prefix_list_id") or v.get("referenced_security_group_id"):
+            failures.append(f"C36.6 {rule}: {v.get('ip_protocol')} {v.get('from_port')}-{v.get('to_port')} from {v.get('cidr_ipv4')}, want tcp 80 or 443 from 0.0.0.0/0 only")
+
+    task_rules = rules_on("aws_vpc_security_group_ingress_rule", tasks)
+    if len(task_rules) != 2:
+        failures.append(f"C36.6 {tasks}: {len(task_rules)} ingress rules, want 2 (3000 from the ALB, all from itself)")
+    seen = set()
+    for rule in task_rules:
+        v = planned.get(rule, {})
+        source = resolved_refs(plan, rule, "referenced_security_group_id")
+        if v.get("cidr_ipv4") or v.get("cidr_ipv6") or v.get("prefix_list_id"):
+            failures.append(f"C36.6 {rule}: a CIDR source, want the security groups only")
+        if v.get("ip_protocol") == "tcp" and (v.get("from_port"), v.get("to_port")) == (3000, 3000) and source == {alb}:
+            seen.add("alb")
+        elif v.get("ip_protocol") == "-1" and source == {tasks}:
+            seen.add("self")
+        else:
+            failures.append(f"C36.6 {rule}: {v.get('ip_protocol')} {v.get('from_port')}-{v.get('to_port')} from {sorted(source)}, want tcp 3000 from the ALB or all from the tasks")
+    if task_rules and seen != {"alb", "self"}:
+        failures.append(f"C36.6 {tasks}: ingress sources {sorted(seen)}, want the ALB on 3000 and the tasks on all ports")
+
+    return failures
+
+
 def check_c36_7(plan: dict) -> list[str]:
     """Check the health checks: each JVM service probes readiness on the management port, the frontend
     has none (its target group checks "/"), and the task definitions write the check into the container."""
@@ -1392,6 +1542,8 @@ def main():
         failures.extend(check_c36_2(main_plan))
         failures.extend(check_c36_3(main_plan))
         failures.extend(check_c36_4(main_plan))
+        failures.extend(check_c36_5(main_plan))
+        failures.extend(check_c36_6(main_plan))
         failures.extend(check_c36_7(main_plan))
         checks_run.append("ECS")
 
