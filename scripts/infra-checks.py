@@ -5,7 +5,7 @@ With --localstack, also checks applied state and resources against specification
 Fails on C32.2 (bootstrap plan), C32.3 (backend blocks and bootstrap bucket match),
 C32.4 (network and database), C32.5 (secret sweep), C32.6 (bus resources), C32.7 (queue policies
 in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36.1 (ECR
-repositories), and C36.2 (ECS cluster and services).
+repositories), C36.2 (ECS cluster and services), C36.3 (secrets) and C36.4 (task roles).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1024,6 +1024,19 @@ def check_c32_9(endpoint: str, repo_root: Path) -> list[str]:
 
 C36_SERVICES = {"identity-service", "job-service", "matching-service", "application-service", "api-gateway", "frontend"}
 C36_IMAGES = C36_SERVICES | {"db-setup"}
+# db-setup.py's ROLES: the seven database roles, each with a password secret.
+C36_DB_ROLES = ("app_user", "analytics_user", "analytics_dev_user", "identity_user", "applications_user",
+                "matching_user", "jobs_user")
+C36_SECRETS = {f"db-password-{role}" for role in C36_DB_ROLES} | {
+    "jwt-private-key", "service-jwt-private-key-job-service", "service-jwt-private-key-matching-service",
+    "service-jwt-private-key-application-service", "google-client-id", "google-client-secret", "llm-api-key",
+}
+# The keys of the resources each task role may use, as task_policy names them in locals.tf.
+C36_TASK_POLICY_RESOURCES = {
+    "identity-service": {"user-deleted-topic"},
+    "matching-service": {"scores-table", "matching-user-deleted"},
+    "application-service": {"applications-user-deleted"},
+}
 
 
 def check_c36_1(plan: dict) -> list[str]:
@@ -1123,6 +1136,153 @@ def check_c36_2(plan: dict) -> list[str]:
     return failures
 
 
+def services_output(plan: dict) -> dict | None:
+    """The services output's value (each service's declaration from locals.tf), or None if absent."""
+    return plan.get("planned_values", {}).get("outputs", {}).get("services", {}).get("value")
+
+
+def refers_to(references: list[str], address: str) -> bool:
+    """True if a configuration reference is the resource at address, or one of its attributes."""
+    return any(ref.split("[")[0] == address or ref.split("[")[0].startswith(address + ".") for ref in references)
+
+
+def check_c36_3(plan: dict) -> list[str]:
+    """Check the secrets: the fourteen secrets with no version in the plan, every name a service
+    reads, and no environment variable that holds a secret or a PEM block."""
+    failures = []
+
+    secrets = [r for r in resources(plan) if r["type"] == "aws_secretsmanager_secret"]
+    if not secrets:
+        return ["C36.3 no aws_secretsmanager_secret in the plan"]
+
+    names = {r["values"].get("name") for r in secrets}
+    want = {"jobmatch/" + s for s in C36_SECRETS}
+    for name in sorted(want - names):
+        failures.append(f"C36.3 secret {name}: missing")
+    for name in sorted(names - want, key=str):
+        failures.append(f"C36.3 secret {name}: extra, want only the {len(want)} in C36_SECRETS")
+
+    for version in resources(plan):
+        if version["type"] == "aws_secretsmanager_secret_version":
+            failures.append(f"C36.3 {version['address']}: secret version in the plan, want none (values are written outside Terraform)")
+
+    services = services_output(plan)
+    if services is None:
+        return failures + ["C36.3 no services output"]
+
+    named = {secret for svc in services.values() for secret in svc.get("secrets", {}).values()}
+    if not named:
+        failures.append("C36.3 no service names a secret")
+    for secret in sorted(named - C36_SECRETS):
+        failures.append(f"C36.3 services name secret {secret}, not one of the {len(C36_SECRETS)} in C36_SECRETS")
+
+    for role in C36_DB_ROLES:
+        if f"jobmatch/db-password-{role}" not in names:
+            failures.append(f"C36.3 jobmatch/db-password-{role}: db-setup needs it, not in the plan")
+
+    secret_env = re.compile(r"PASSWORD|SECRET|PRIVATE_KEY|ACCESS_KEY")
+    for name in sorted(services):
+        for env, value in services[name].get("environment", {}).items():
+            if secret_env.search(env):
+                failures.append(f"C36.3 {name}: environment {env} looks like a secret, want none")
+            if "-----BEGIN" in str(value):
+                failures.append(f"C36.3 {name}: environment {env} holds a PEM block (not printing it)")
+
+    return failures
+
+
+def check_c36_4(plan: dict) -> list[str]:
+    """Check the IAM: each task has an execution and a task role, the execution role reads only the
+    secrets its task names and its one "*" is ecr:GetAuthorizationToken, each task role reaches only
+    the resources its service names, and no environment variable is an access key or an endpoint."""
+    failures = []
+
+    services = services_output(plan)
+    if services is None:
+        return ["C36.4 no services output"]
+
+    planned = {r["address"] for r in resources(plan)}
+    for name in sorted(C36_SERVICES):
+        for role in ("execution", "task"):
+            address = f'module.service["{name}"].aws_iam_role.{role}'
+            if address not in planned:
+                failures.append(f"C36.4 {address}: missing")
+
+    # The roles and policy documents are unknown in the plan: read them from the configuration.
+    module_call = plan.get("configuration", {}).get("root_module", {}).get("module_calls", {}).get("service")
+    if not module_call:
+        return failures + ["C36.4 module service not in the configuration"]
+    config = {(r["type"], r["name"]): r for p, r in config_with_path(plan) if p == ("service",)}
+
+    task_def = config.get(("aws_ecs_task_definition", "service"), {})
+    for attr, role in (("execution_role_arn", "execution"), ("task_role_arn", "task")):
+        refs = task_def.get("expressions", {}).get(attr, {}).get("references", [])
+        if not refers_to(refs, f"aws_iam_role.{role}"):
+            failures.append(f"C36.4 aws_ecs_task_definition {attr} does not reference aws_iam_role.{role}")
+
+    statements = config.get(("aws_iam_policy_document", "execution"), {}).get("expressions", {}).get("statement", [])
+    if not statements:
+        failures.append("C36.4 data aws_iam_policy_document.execution in module service: no statements")
+    stars = 0
+    for statement in statements:
+        actions = statement.get("actions", {}).get("constant_value")
+        if actions is None:
+            failures.append("C36.4 execution policy: a statement's actions are not literal")
+            continue
+        if any("*" in action for action in actions):
+            failures.append(f"C36.4 execution policy: action with * in {actions}")
+        if "*" in statement.get("resources", {}).get("constant_value", []):
+            stars += 1
+            if actions != ["ecr:GetAuthorizationToken"]:
+                failures.append(f"C36.4 execution policy: * resource for {actions}, want only ecr:GetAuthorizationToken")
+    if stars != 1:
+        failures.append(f"C36.4 execution policy: {stars} statements with a * resource, want 1")
+
+    # Inline policies by service: the secrets one for each service that names a secret, the task
+    # one for each service with a task_policy.
+    inline: dict[str, set[str]] = {}
+    for r in resources(plan):
+        match = re.fullmatch(r'module\.service\["([^"]+)"\]\.aws_iam_role_policy\.(\w+)(\[\d+\])?', r["address"])
+        if match:
+            inline.setdefault(match.group(2), set()).add(match.group(1))
+
+    with_secrets = {name for name, svc in services.items() if svc.get("secrets")}
+    if inline.get("secrets", set()) != with_secrets:
+        failures.append(f"C36.4 aws_iam_role_policy.secrets for {sorted(inline.get('secrets', set()))}, want {sorted(with_secrets)}")
+    secret_refs = module_call.get("expressions", {}).get("secret_arns", {}).get("references", [])
+    if not refers_to(secret_refs, "aws_secretsmanager_secret.secret"):
+        failures.append("C36.4 module service: secret_arns does not reference aws_secretsmanager_secret.secret")
+    if "each.value.secrets" not in secret_refs:
+        failures.append("C36.4 module service: secret_arns not built from each.value.secrets, want only that task's secrets")
+
+    with_task = {name for name, svc in services.items() if svc.get("task_policy")}
+    if inline.get("task", set()) != with_task:
+        failures.append(f"C36.4 aws_iam_role_policy.task for {sorted(inline.get('task', set()))}, want {sorted(with_task)}")
+    for name in sorted(services):
+        task_policy = services[name].get("task_policy", [])
+        actions = [action for statement in task_policy for action in statement["actions"]]
+        keys = {key for statement in task_policy for key in statement["resources"]}
+        if any("*" in value for value in actions + sorted(keys)):
+            failures.append(f"C36.4 {name}: task policy has a *")
+        want = C36_TASK_POLICY_RESOURCES.get(name, set())
+        if keys != want:
+            failures.append(f"C36.4 {name}: task policy resources {sorted(keys)}, want {sorted(want)}")
+
+    policy_refs = module_call.get("expressions", {}).get("policy_resources", {}).get("references", [])
+    if not policy_refs:
+        failures.append("C36.4 module service: policy_resources references nothing")
+    for ref in policy_refs:
+        if ref.split(".")[:2] not in (["module", "bus"], ["module", "scores"]):
+            failures.append(f"C36.4 module service: policy_resources references {ref}, want module.bus or module.scores")
+
+    for name in sorted(services):
+        for env in services[name].get("environment", {}):
+            if env in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY") or env.endswith(("_ACCESS_KEY", "_SECRET_KEY", "_ENDPOINT")):
+                failures.append(f"C36.4 {name}: environment {env}, want no access key or emulator endpoint")
+
+    return failures
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate Terraform infrastructure against criteria"
@@ -1188,6 +1348,8 @@ def main():
     if args.main_plan and main_plan:
         failures.extend(check_c36_1(main_plan))
         failures.extend(check_c36_2(main_plan))
+        failures.extend(check_c36_3(main_plan))
+        failures.extend(check_c36_4(main_plan))
         checks_run.append("ECS")
 
     # C32.5: Secret sweep on bootstrap plan

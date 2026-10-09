@@ -9,6 +9,12 @@ variable "service" {
     memory        = number
     desired_count = number
     environment   = optional(map(string), {})
+    secrets       = optional(map(string), {})
+
+    task_policy = optional(list(object({
+      actions   = list(string)
+      resources = list(string)
+    })), [])
   })
 }
 
@@ -30,4 +36,16 @@ variable "security_group_ids" {
 
 variable "region" {
   type = string
+}
+
+variable "repository_arn" {
+  type = string
+}
+
+variable "secret_arns" {
+  type = map(string)
+}
+
+variable "policy_resources" {
+  type = map(string)
 }
