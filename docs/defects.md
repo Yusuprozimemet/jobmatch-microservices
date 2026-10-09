@@ -9,7 +9,7 @@ totals per kind. "Days 1–13" are the entries filed before the list was kept da
 From Day 21 each day's Notes also tag every defect with where it was found and its cause
 (`specs/_template.md`); those tags are the more precise record for the days that have them.
 
-## In the system being migrated (19)
+## In the system being migrated (20)
 
 ### CI and test harness (8)
 
@@ -36,14 +36,15 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 
 - Day 16: 2 documents wrong since the initial commit
 
-### Environment (2)
+### Environment (3)
 
 - Day 38: 1 setup script that crashes on Windows output
 - Day 20: 1 container path Git Bash rewrote
+- Day 36: 1 Docker Hub pull limit, then a timeout, that kept a check red through three runs
 
-## In the agent's own work (382)
+## In the agent's own work (397)
 
-### Spec and plan premises wrong about the code, or work they missed (141)
+### Spec and plan premises wrong about the code, or work they missed (148)
 
 - Days 1-13: 8 specs that could not be met
 - Days 1-13: 1 plan that missed a cross-module read
@@ -166,8 +167,15 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 33: 1 ECR repository and push that no day owned
 - Day 33: 1 estimate of 5 PRs for a day that took 7
 - Day 33: 1 line number one off, and a broken `docker build` path the docs criterion missed
+- Day 36: 1 draft that had `db-setup.py` write the secret values, where it only reads them
+- Day 36: 1 draft that dropped Day 33's hand-off of the `db-setup.py` task, which no image packaged
+- Day 36: 1 target group probe on `/actuator/health/readiness`, which the Next.js frontend does not have
+- Day 36: 1 "no `*`" rule that execution roles cannot meet, and scaling on a request count matching never sees
+- Day 36: 1 estimate of 5 PRs for four tracks that cannot run in parallel
+- Day 36: 1 track of three criteria at 437 lines that the spec did not plan to split
+- Day 36: 1 brief that did not plan the split its spec expected, a draft of 447 lines
 
-### Spec checks that could not fail, could not pass, or proved the wrong thing (101)
+### Spec checks that could not fail, could not pass, or proved the wrong thing (104)
 
 - Days 1-13: 1 spec check that could not fail
 - Days 1-13: 1 gate that does not pin what its spec says
@@ -254,8 +262,11 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 33: 1 login check that could not fail on a trust-auth Postgres
 - Day 33: 1 grep that could not reach zero, since `../../mvnw` contains `/../mvnw`
 - Day 33: 1 pair of holds that no PR broke until the close
+- Day 36: 1 set of checks on container definitions and IAM policies, which a plan without an account leaves unknown
+- Day 36: 1 set of criteria with no IDs or tags, whose "no" and "only" checks passed on an empty plan
+- Day 36: 1 hold whose break was taken from Day 32's, after the root it ran on had changed
 
-### Code drafts that review or a break changed, and lost work (73)
+### Code drafts that review or a break changed, and lost work (77)
 
 - Day 38: 1 metric tag unlike the backend's
 - Day 40: 1 default interval that made a wait slow
@@ -324,6 +335,10 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 33: 1 implementer report of no departures, twice, over an ignored `--admin-password` and a match of `.*`
 - Day 33: 1 JWKS assertion of the main session's that did not compile
 - Day 33: 1 two breaks of the main session's that did not run, a syntax error and a compile error
+- Day 36: 1 policy check that caught every secret on every task only through a count
+- Day 36: 1 `load_balancer` block keyed on an unknown ARN, which the plan hid
+- Day 36: 1 Service Connect check that counted a missing service as registered
+- Day 36: 1 two breaks of the main session's whose checks read the previous break's plan
 
 ### Tests a spec would break without naming, or behaviour it left untested (32)
 
@@ -368,7 +383,7 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 Verify that failed in Git Bash and held a placeholder tag
 - Day 32: 1 compose check that `-p` would not have isolated from the maintainer's stack
 
-### Bugs in the migration's own tooling (dashboard, commit keys) (15)
+### Bugs in the migration's own tooling (dashboard, commit keys) (16)
 
 - Day 39: 1 dashboard that could not read a split track
 - Day 17: 1 dashboard that could not read a three-way split
@@ -385,3 +400,4 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 dashboard next step that read a criterion id as a track
 - Day 33: 1 dashboard that read the plan change as the day's spec change and printed the old draft's track
 - Day 33: 1 dashboard next step that read tracks A1 and B1 as all of A and B, twice
+- Day 36: 1 dashboard next step that skipped a split track, and again read a criterion id as a track
