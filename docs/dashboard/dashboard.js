@@ -51,6 +51,7 @@ function rowTip(r) {
   <div class="row"><span>spec names in code</span><span>${r.name_coverage == null ? "–" : fmt(r.name_coverage * 100, 1) + "%"}</span></div>
   <div class="row"><span>Jaccard, spec ∩ code</span><span>${r.jaccard == null ? "–" : fmt(r.jaccard, 2)}</span></div>
   <div class="row"><span>names kept, dropped by specs</span><span>${r.names_kept ?? "–"}</span></div>
+  <div class="row"><span>Spec names retired from the code</span><span>${r.names_retired ?? "–"}</span></div>
   <div class="row"><span>name-gap angle (secondary)</span><span>${fmt(r.gap_full)}°</span></div>
   <div class="row"><span>name gap by chance</span><span>${r.gap_chance == null ? "–" : fmt(r.gap_chance) + "°"} <small>(${band(r.gap_chance_band)})</small></span></div>
   <div class="row"><span>reached names in code</span><span>${r.coverage == null ? "–" : fmt(r.coverage * 100, 1) + "%"}</span></div>
@@ -82,7 +83,7 @@ document.getElementById("stats").innerHTML = `
   <div class="stat"><span class="k">Spec names in the code · Jaccard</span>
     <span class="v num">${last.name_coverage == null ? "–" : fmt(last.name_coverage * 100, 1) + "%"} <small>· ${last.jaccard == null ? "–" : fmt(last.jaccard, 2)}</small></span>
     <span class="n">Of the backticked names the specs use today, the share the code has; Jaccard is the names in both over the names in either.</span>
-    <span class="n" style="color:var(--muted)">Name-gap angle (secondary): ${fmt(firstGap.gap_full)}° → ${fmt(last.gap_full)}°, ${fmt(gapClosed)}° closed across ${N - 1} merges; ${fmt(last.gap_chance)}° by chance (95%: ${band(last.gap_chance_band)}). ${last.names_kept == null ? "" : `${last.names_kept} names the specs dropped are still in the code. `}${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
+    <span class="n" style="color:var(--muted)">Name-gap angle (secondary): ${fmt(firstGap.gap_full)}° → ${fmt(last.gap_full)}°, ${fmt(gapClosed)}° closed across ${N - 1} merges; ${fmt(last.gap_chance)}° by chance (95%: ${band(last.gap_chance_band)}). ${last.names_kept == null ? "" : `${last.names_kept} names the specs dropped are still in the code. `}${last.names_retired == null ? "" : `${last.names_retired} of the names not in the code were there at an earlier merge: retired, still counted as missing. `}${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
   <div class="stat"><span class="k">Share of the gap closed by the spec</span>
     <span class="v num">${Math.round(specShare * 100)}%</span>
     <span class="n"><span class="sw" style="background:var(--spec)"></span>${nKind("spec")} spec-change PRs ${specShare >= 0 ? "moved the spec toward the code" : "widened the gap, naming what was not built yet"}; <span class="sw" style="background:var(--code)"></span>${nKind("code")} code PRs closed ${Math.round(-byKind.code / gapClosed * 100)}%</span></div>
@@ -113,6 +114,37 @@ playBtn.addEventListener("click", () => {
   timer = setInterval(() => { i++; if (i >= N) return stop(); setSel(i); }, 260);
 });
 
+/* ---------- sparklines beside the selected merge ---------- */
+const SPARK_W = 96, SPARK_H = 20;
+const spX = i => +(i / Math.max(1, N - 1) * SPARK_W).toFixed(1);
+const spY = (v, hi) => +(SPARK_H - 2 - Math.min(1, v / hi) * (SPARK_H - 4)).toFixed(1);
+// The top of a scale: the largest value, or a high percentile when one huge merge should not flatten the rest.
+const scaleTop = (get, p = 1) => { const s = R.map(get).filter(v => v > 0).sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p * s.length))] || 1; };
+// A line over every merge, broken where a merge has no value, so a gap shows as a gap.
+const linePath = (get, hi) => R.map((r, i) => get(r) == null ? "" : `${i && get(R[i - 1]) != null ? "L" : "M"}${spX(i)},${spY(get(r), hi)}`).join("");
+// One bar per merge, up from the baseline; a value past the top is clipped.
+const barPath = (get, hi) => R.map((r, i) => get(r) ? `M${spX(i)},${SPARK_H - 1}V${spY(get(r), hi)}` : "").join("");
+const specTotal = r => Object.values(r.spec_files || {}).reduce((a, b) => a + b, 0);
+const SPARK_SERIES = {
+  names: [{ get: r => r.name_coverage, hi: 1, color: "var(--code)" }, { get: r => r.jaccard, hi: 1, color: "var(--muted)", dash: true }],
+  kept: [{ get: r => r.names_kept, hi: scaleTop(r => r.names_kept), color: "var(--code)" }],
+  retired: [{ get: r => r.names_retired, hi: scaleTop(r => r.names_retired), color: "var(--code)" }],
+  gap: [{ get: r => r.gap_full, hi: scaleTop(r => r.gap_full), color: "var(--gap)" }],
+  coverage: [{ get: r => r.coverage, hi: 1, color: "var(--code)" }],
+  code: [{ get: r => r.code_churn, hi: scaleTop(r => r.code_churn, 0.95), color: "var(--code)", bars: true }],
+  spec: [{ get: specTotal, hi: scaleTop(specTotal, 0.95), color: "var(--spec)", bars: true }],
+};
+// The paths are made once; a redraw only adds the dot at the selected merge.
+const SPARK = Object.fromEntries(Object.entries(SPARK_SERIES).map(([k, ss]) =>
+  [k, ss.map(s => ({ ...s, d: s.bars ? barPath(s.get, s.hi) : linePath(s.get, s.hi) }))]));
+const sparkHtml = k => `<svg viewBox="0 0 ${SPARK_W} ${SPARK_H}" preserveAspectRatio="none" role="img" aria-label="Trend across merges, dot at the selected merge">`
+  + SPARK[k].map(s => {
+    const v = s.get(R[sel]);
+    // The dot is a zero-length round stroke, not a circle: it stays round however the svg is stretched.
+    return `<path d="${s.d}" fill="none" stroke="${s.color}" stroke-width="1.25" vector-effect="non-scaling-stroke"${s.dash ? ' stroke-dasharray="3 2"' : ""}/>`
+      + (v == null ? "" : `<path d="M${spX(sel)},${spY(v, s.hi)}h0" stroke="var(--ink)" stroke-width="5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
+  }).join("") + "</svg>";
+
 function drawReadout() {
   const s = R[sel], prev = R[Math.max(0, sel - 1)];
   const dGap = s.gap_full - prev.gap_full, specLines = Object.values(s.spec_files || {}).reduce((a, b) => a + b, 0);
@@ -129,13 +161,14 @@ function drawReadout() {
     <p style="font-size:14px;color:var(--ink-2)">${moved}</p>
     <div class="hr"></div>
     <dl>
-      <dt>Spec names in code</dt><dd>${s.name_coverage == null ? "–" : fmt(s.name_coverage * 100, 1) + "%"}</dd>
-      <dt>Jaccard, spec ∩ code</dt><dd>${s.jaccard == null ? "–" : fmt(s.jaccard, 2)}</dd>
-      <dt>Names the specs dropped, still in code</dt><dd>${s.names_kept ?? "–"}</dd>
-      <dt>Spec–code name-gap angle (secondary)</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd>
-      <dt>Reached-day names in code</dt><dd>${s.coverage == null ? "–" : fmt(s.coverage * 100, 1) + "%"}</dd>
-      <dt>Code lines changed</dt><dd>${s.code_churn.toLocaleString()}</dd>
-      <dt>Spec lines changed</dt><dd>${edits.reduce((a, b) => a + b[1], 0)}</dd>
+      <dt>Spec names in code</dt><dd>${s.name_coverage == null ? "–" : fmt(s.name_coverage * 100, 1) + "%"}</dd><dd class="spark">${sparkHtml("names")}</dd>
+      <dt>Jaccard, spec ∩ code</dt><dd>${s.jaccard == null ? "–" : fmt(s.jaccard, 2)}</dd><dd></dd>
+      <dt>Names the specs dropped, still in code</dt><dd>${s.names_kept ?? "–"}</dd><dd class="spark">${sparkHtml("kept")}</dd>
+      <dt>Spec names retired from the code</dt><dd>${s.names_retired ?? "–"}</dd><dd class="spark">${sparkHtml("retired")}</dd>
+      <dt>Spec–code name-gap angle (secondary)</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd><dd class="spark">${sparkHtml("gap")}</dd>
+      <dt>Reached-day names in code</dt><dd>${s.coverage == null ? "–" : fmt(s.coverage * 100, 1) + "%"}</dd><dd class="spark">${sparkHtml("coverage")}</dd>
+      <dt>Code lines changed</dt><dd>${s.code_churn.toLocaleString()}</dd><dd class="spark">${sparkHtml("code")}</dd>
+      <dt>Spec lines changed</dt><dd>${edits.reduce((a, b) => a + b[1], 0)}</dd><dd class="spark">${sparkHtml("spec")}</dd>
     </dl>
     ${edits.length ? `<div style="font-size:12.5px;color:var(--ink-2)">${edits.slice(0, 5).map(([f, n]) => `<div style="display:flex;justify-content:space-between;gap:10px"><code>${esc(f.replace("specs/", ""))}</code><span class="num">${n}</span></div>`).join("")}${edits.length > 5 ? `<div style="color:var(--muted)">+${edits.length - 5} more files</div>` : ""}</div>` : ""}`;
 }
@@ -153,6 +186,12 @@ function dateStarts() {
   return R.map((r, i) => [i, r.date]).filter(([i, s]) => !i || R[i - 1].date !== s);
 }
 const steps = (lo, hi, n) => Array.from({ length: n + 1 }, (_, i) => +(lo + (hi - lo) * i / n).toFixed(1));
+// The key to the * on a day label, under any axis that draws day labels; there is none when no day ran out of order.
+function oooNote(box) {
+  if (!OOO.size) return;
+  const days = [...OOO].sort((a, b) => rank(a) - rank(b));
+  box.insertAdjacentHTML("beforeend", `<p class="axis-note">* Day run out of number order: ${days.map(d => "D" + dd(d)).join(", ")}.</p>`);
+}
 // bands: [{ color, get: r => [lo, hi] }], shaded under the lines.
 function lineChart(box, { H, yMin, yMax, ticks, unit, series, bands, label, strip, digits = 1 }) {
   box.innerHTML = "";
@@ -207,6 +246,7 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, bands, label, stri
   hit.addEventListener("mousemove", ev => { const i = idxAt(ev); cross.setAttribute("x1", lx(i)); cross.setAttribute("x2", lx(i)); cross.setAttribute("visibility", "visible"); showTip(ev, rowTip(R[i])); });
   hit.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
   hit.addEventListener("click", ev => setSel(idxAt(ev)));
+  oooNote(box);
 }
 // The axes follow the data, so a later phase that pushes the gap or coverage past today's range stays on the chart.
 const degMax = Math.ceil(Math.max(...R.map(r => Math.max(r.gap_full || 0, (r.gap_chance_band || [])[1] || 0))) / 15) * 15;
@@ -228,10 +268,11 @@ function drawLines() {
   });
   lineChart(document.getElementById("evidence-history"), {
     H: 190, yMin: 0, yMax: evMax, ticks: steps(0, evMax, 4), unit: "", strip: false, digits: 0,
-    label: "Tests named by finished days, present on each merge and not running",
+    label: "Tests named by finished days: present on each merge, not running (orange), retired (grey)",
     series: [
       { name: "present", color: "var(--close)", get: r => r.evidence && r.evidence.present },
-      { name: "not running", color: "var(--code)", get: r => r.evidence && r.evidence.skippable + r.evidence.missing },
+      { name: "not running", color: "var(--code)", dy: 8, get: r => r.evidence && r.evidence.skippable + r.evidence.missing },
+      { name: "retired", color: "var(--muted)", dy: -7, get: r => r.evidence && (r.evidence.retired || 0) },
     ],
   });
   lineChart(document.getElementById("moved"), {
@@ -368,6 +409,7 @@ function drawDeltas() {
     lastDate = lx(i);
     el("text", { x: lx(i) + 3, y: bot + 28, class: "date" }, svg).textContent = shortDate(s);
   });
+  oooNote(box);
 }
 
 /* ---------- pull requests per day ---------- */
@@ -417,65 +459,25 @@ function drawPerDay() {
       if (i > 0) setSel(i);
     });
   });
+  oooNote(box);
 }
 
 /* ---------- verification that leaves no lines ---------- */
-// One stacked bar per day in run order, plus one for the PRs that belong to no day.
-function dayStack(box, items, parts, label, list) {
-  box.innerHTML = "";
-  const days = [...new Set(items.map(v => v.day))].sort((a, b) => (a == null) - (b == null) || rank(a) - rank(b));
-  const groups = days.map(d => ({ d, items: items.filter(v => v.day === d) }));
-  const H = 220, P = { l: 44, r: 16, t: 22, b: 30 };
-  const yMax = Math.max(4, Math.ceil(Math.max(...groups.map(g => parts.reduce((a, p) => a + p.count(g.items), 0))) / 4) * 4);
-  const ly = v => P.t + (1 - v / yMax) * (H - P.t - P.b);
-  const bw = (LW - P.l - P.r) / groups.length, w = Math.min(28, bw - 6);
-  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": label }, box);
-  steps(0, yMax, 4).forEach(t => {
-    el("line", { x1: P.l, x2: LW - P.r, y1: ly(t), y2: ly(t), stroke: t ? "var(--grid)" : "var(--axis)" }, svg);
-    el("text", { x: P.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = t;
-  });
-  groups.forEach((g, j) => {
-    const x = P.l + j * bw + (bw - w) / 2;
-    let base = 0;
-    parts.forEach(p => {
-      const n = p.count(g.items);
-      if (!n) return;
-      el("rect", { x: x + 0.5, y: ly(base + n) + 0.5, width: w - 1, height: Math.max(1, ly(base) - ly(base + n) - 2), rx: 2,
-        fill: p.outline ? "none" : p.color, stroke: p.outline ? p.color : "none", "stroke-dasharray": p.outline ? "3 2" : "none" }, svg);
-      base += n;
-    });
-    const name = g.d == null ? "none" : "D" + dd(g.d) + (OOO.has(g.d) ? "*" : "");
-    el("text", { x: x + w / 2, y: H - P.b + 16, "text-anchor": "middle", class: "num" + (OOO.has(g.d) ? " ooo" : "") }, svg).textContent = name;
-    const hit = el("rect", { x: P.l + j * bw, y: P.t, width: bw, height: H - P.t - P.b, class: "hit" }, svg);
-    hit.addEventListener("mousemove", ev => showTip(ev, `<b>${g.d == null ? "No day (tooling, docs)" : "Day " + dd(g.d)}</b>`
-      + parts.map(p => `<div class="row"><span>${p.name}</span><span>${p.count(g.items)}</span></div>`).join("") + list(g.items)));
-    hit.addEventListener("mouseleave", hideTip);
-  });
-}
 function drawVerification() {
   const V = DATA.verification || [], code = V.filter(v => v.kind === "code");
   if (!V.length) return;
   const n = (vs, s) => vs.filter(v => v.breaks === s).length;
-  const breakParts = [
-    { name: "break recorded", color: "var(--close)", count: vs => n(vs, "recorded") },
-    { name: "says why none", color: "var(--other)", count: vs => n(vs, "none") },
-    { name: "silent", color: "var(--muted)", outline: true, count: vs => n(vs, "silent") },
-    { name: "not measured (before #310)", color: "var(--grid)", count: vs => n(vs, "not measured") },
-  ];
-  const nums = vs => vs.map(v => "#" + v.number).join(", ");
-  dayStack(document.getElementById("breaks"), code, breakParts, "Code PRs per day by whether they record a break on purpose",
-    vs => n(vs, "silent") ? `<div style="margin-top:6px">silent: ${nums(vs.filter(v => v.breaks === "silent"))}</div>` : "");
-  document.getElementById("breaks-legend").innerHTML = breakParts.map(p =>
-    `<span><i class="dot" style="${p.outline ? `border:1px dashed ${p.color}` : `background:${p.color}`}"></i>${p.name} · ${p.count(code)}</span>`).join("")
-    + `<span>${code.length} code PRs</span>`;
+  // From #310 the rules ask for the break line, so only those PRs can be silent.
+  const since = code.filter(v => v.breaks !== "not measured"), silent = since.filter(v => v.breaks === "silent");
+  const recorded = n(since, "recorded"), none = n(since, "none");
+  document.getElementById("breaks").innerHTML = `<p>Since #310, ${recorded} of ${since.length} code PRs record a break on purpose${none ? `, ${none} say why there is none` : ""}; ${silent.length} silent.</p>`
+    + `<p style="font-size:13px;color:var(--muted)">${n(code, "not measured")} code PRs before #310 are not measured.</p>`
+    + (silent.length ? `<ul>${silent.map(v => `<li>#${v.number}${v.day ? ` · Day ${dd(v.day)}` : ""}</li>`).join("")}</ul>` : "");
   const sum = (vs, k) => vs.reduce((a, v) => a + v[k], 0);
-  // Only the failures are drawn: a day's one or two would be a sliver on a bar of its 20 pushes.
-  const ciParts = [{ name: "pushes CI failed", color: "var(--fail)", count: vs => sum(vs, "failed") }];
-  dayStack(document.getElementById("ci-fails"), V, ciParts, "Commits pushed to each day's PRs, by whether CI failed them",
-    vs => `<div class="row"><span>pushes CI ran on</span><span>${sum(vs, "pushes")}</span></div>` + vs.filter(v => v.failed).map(v => `<div class="row"><span>#${v.number}</span><span>${esc(v.failed_in.join(", "))}</span></div>`).join(""));
-  const pushes = sum(V, "pushes"), failed = sum(V, "failed");
-  document.getElementById("ci-legend").innerHTML = `<span><i class="dot" style="background:var(--fail)"></i>pushes CI failed · ${failed} of ${pushes} (${fmt(failed / Math.max(1, pushes) * 100, 1)}%)</span>`
-    + `<span>in ${V.filter(v => v.failed).length} of ${V.length} merged PRs</span>`;
+  const pushes = sum(V, "pushes"), failed = sum(V, "failed"), bad = V.filter(v => v.failed);
+  document.getElementById("ci-legend").textContent = `${failed} of ${pushes} pushes CI ran on failed (${fmt(failed / Math.max(1, pushes) * 100, 1)}%), in ${bad.length} of ${V.length} merged PRs.`;
+  document.getElementById("ci-fails").innerHTML = `<thead><tr><th>PR</th><th>Day</th><th class="r">Failed pushes</th><th>Workflows that failed</th></tr></thead><tbody>` +
+    bad.map(v => `<tr><td class="num">#${v.number}</td><td class="num">${v.day ? dd(v.day) : "–"}</td><td class="r num">${v.failed} of ${v.pushes}</td><td>${esc(v.failed_in.join(", "))}</td></tr>`).join("") + "</tbody>";
 }
 
 /* ---------- heatmap ---------- */
@@ -655,12 +657,14 @@ function drawEvidence() {
   document.getElementById("evidence").innerHTML = `<thead><tr><th>Day</th><th class="r">Cite a PR</th><th class="r">Name a test</th><th class="r">Seen red</th><th class="r">Tests on main</th><th>Title</th></tr></thead><tbody>` +
     days.map(d => {
       const ev = d.evidence.filter(c => c.ticked), states = ev.flatMap(c => Object.values(c.tests));
-      const off = states.filter(s => s !== "present").length;
+      // A retired test is a loss a later day chose, so only skippable and missing tests turn the cell orange.
+      const off = states.filter(s => s === "skippable" || s === "missing").length;
+      const kept = states.filter(s => s === "present").length, retired = states.filter(s => s === "retired").length;
       const pre = !d.evidence_format;
-      return `<tr${pre ? ` title="Spec written before the evidence format (#55)"` : ""}><td class="num">${dd(d.day)}${pre ? ` <span class="pre-tag">pre-format</span>` : ""}</td>${cell(ev.filter(c => c.prs.length).length, ev.length, pre)}${cell(ev.filter(c => Object.keys(c.tests).length).length, ev.length, pre)}${cell(ev.filter(c => c.red).length, ev.length, !d.break_format)}<td class="r${off ? " none" : ""}">${states.length ? `${states.length - off}/${states.length} present` : "–"}</td><td class="t">${md(d.title)}</td></tr>`;
+      return `<tr${pre ? ` title="Spec written before the evidence format (#55)"` : ""}><td class="num">${dd(d.day)}${pre ? ` <span class="pre-tag">pre-format</span>` : ""}</td>${cell(ev.filter(c => c.prs.length).length, ev.length, pre)}${cell(ev.filter(c => Object.keys(c.tests).length).length, ev.length, pre)}${cell(ev.filter(c => c.red).length, ev.length, !d.break_format)}<td class="r${off ? " none" : ""}">${states.length ? `${kept}/${states.length} present${retired ? `, ${retired} retired` : ""}` : "–"}</td><td class="t">${md(d.title)}</td></tr>`;
     }).join("") + "</tbody>";
   const gaps = days.flatMap(d => d.evidence.flatMap(c => Object.entries(c.tests).filter(([, s]) => s !== "present")
-    .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> is ${s} · ${md(c.claim)}</li>`)));
+    .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> ${s === "retired" ? "is retired: a later day's spec names it and its PR removed it" : `is ${s}`} · ${md(c.claim)}</li>`)));
   document.getElementById("evidence-gaps").innerHTML = `<h3>Named tests not running on main</h3>` +
     (gaps.length ? `<ul>${gaps.join("")}</ul>` : `<p>None: every test a finished day names is on <code>main</code>, and none can be skipped.</p>`);
   // A check's state at one merge: found lines, read no files (so its nothing proves nothing), or clean.

@@ -18,7 +18,8 @@ the code uses the spec's names in no particular proportion. The angle is the sec
 two plain set figures come first. Name coverage: of the names the specs use at a merge, the share
 the code has. Jaccard: the names in both, over the names in either (a name the specs have dropped
 but the code keeps counts against it). Names kept: that other direction alone, how many names the
-specs once used and have dropped that the code still has.
+specs once used and have dropped that the code still has. Names retired: of the names the specs
+use that the code lacks, those it had at an earlier merge.
 
 Boundaries: for plan.md's four services, how much of their main source has left the monolith for
 services/, and how many imports still cross from one service's packages into another's. Both are
@@ -105,6 +106,8 @@ CHANCE_DRAWS = 1000
 # The most gh is asked for: a list that comes back this long may have been cut, and nothing else says so.
 PR_LIMIT = 500
 RUN_LIMIT = 5000
+# GitHub's API returns at most this many for a filtered run list, so a list that long may be cut.
+GH_CAP = 1000
 # What every figure built on the backticked names cannot see; the dashboard lists these as written.
 CAVEATS = [
     "Gap, name coverage and Jaccard see only identifiers the specs put in backticks: a name written "
@@ -130,6 +133,8 @@ def gh_list(limit, *args):
     items = json.loads(run("gh", *args, "--limit", str(limit)))
     if len(items) >= limit:
         raise SystemExit(f"gh {' '.join(args[:2])} returned its limit of {limit}: some are missing, raise it")
+    if len(items) == GH_CAP:
+        raise SystemExit(f"gh {' '.join(args[:2])} returned {GH_CAP}, the most GitHub gives for it: some may be missing")
     return items
 
 
@@ -212,6 +217,9 @@ def day_branch(pr):
 
 
 def code_like(tok):
+    """Whether a backticked token is a code name. One ending in "_" is a pattern's prefix (`aws_ecs_*`), not a name."""
+    if tok.endswith("_"):
+        return False
     return bool(re.search(r"[a-z][A-Z]", tok)) or ("_" in tok.strip("_") and tok.lower() == tok)
 
 
@@ -421,7 +429,7 @@ def trajectory(snaps, blobs, order=()):
         CACHE["code"][sha] = {vocab[k]: int(n) for k, n in enumerate(c) if n}
         return c
 
-    day, rows = 0, []
+    day, rows, ever = 0, [], np.zeros(len(vocab), dtype=bool)
     for i, s in enumerate(snaps):
         touched = at_commits("diff", "--name-only", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").split() if i else []
         s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"], touched)
@@ -451,13 +459,17 @@ def trajectory(snaps, blobs, order=()):
         mask, known = reached > 0, born <= i
         spec_v, code_v = np.log1p(spec) * known, np.log1p(code) * known
         name_coverage, jaccard, names_kept = name_overlap(spec, code, known)
+        # A name the code had at an earlier merge and lacks now: `ever` holds only the merges before this one.
+        in_code = (code > 0) & known
+        names_retired = int(((spec > 0) & known & ~in_code & ever).sum())
+        ever |= in_code
         chance = chance_angle(spec_v, code_v, known)
         rows.append(dict(i=i, sha=s["sha"], date=s["date"], pr=s["pr"], title=s["title"], kind=s["kind"],
                          day=day if s["pr"] else 0, added=added, deleted=deleted,
                          gap_full=deg(angle(spec_v, code_v)),
                          gap_chance=chance and chance[0], gap_chance_band=chance and chance[1:],
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
-                         name_coverage=name_coverage, jaccard=jaccard, names_kept=names_kept,
+                         name_coverage=name_coverage, jaccard=jaccard, names_kept=names_kept, names_retired=names_retired,
                          spec_files=spec_files, code_churn=churn, work=work))
     files = sorted({f for s in snaps for f in s["texts"] if f == "plan.md" or day_of(f)},
                    key=lambda f: (rank(day_of(f)), f))
@@ -760,14 +772,38 @@ def evidence(days, snaps, blobs):
     return days
 
 
+def snap_day(s):
+    """The day a merge is read as, as day_branch reads its PR: the day its branch names, or its title's track."""
+    return day_of(day_branch(dict(headRefName=s["branch"], title=s["title"])))
+
+
+def spec_names(text, test):
+    """Whether a spec names a test, by its class or its member, as a word."""
+    cls, _, member = test.partition(".")
+    return any(re.search(rf"\b{w}\b", text) for w in (cls, member) if w)
+
+
 def evidence_history(rows, days, snaps, blobs):
     """At each merge, where the tests of the days finished by then stand: the check that a hold's
-    test has not left the tree or been switched off, merge by merge, as CI cannot see it."""
-    moved = moves(snaps)
+    test has not left the tree or been switched off, merge by merge, as CI cannot see it. A test that
+    goes missing in a merge whose day's spec names it is retired, not lost: a later day took it out."""
+    moved, head = moves(snaps), snaps[-1]["sha"]
+    specs = {d["day"]: blobs.read(head, d["file"]) for d in days if d.get("file")}
+    last, retired = {}, set()
     for i, (r, s) in enumerate(zip(rows, snaps)):
         names = {t for d in days if d.get("ended_at", len(snaps)) <= i for c in d["evidence"] for t in c["tests"]}
-        states = list(test_state(names, s["sha"], blobs, {old: new for k, old, new in moved if k <= i}).values())
-        r["evidence"] = {k: states.count(k) for k in ("present", "skippable", "missing")} if names else None
+        states = test_state(names, s["sha"], blobs, {old: new for k, old, new in moved if k <= i})
+        spec = specs.get(snap_day(s), "")
+        for t, st in states.items():
+            if st == "missing" and (last.get(t) == "retired" or (last.get(t) == "present" and spec_names(spec, t))):
+                states[t] = "retired"
+            last[t] = states[t]
+        retired = {t for t, st in states.items() if st == "retired"}
+        r["evidence"] = ({k: list(states.values()).count(k) for k in ("present", "skippable", "missing", "retired")}
+                         if names else None)
+    for d in days:  # the page's list agrees with the last merge's count
+        for c in d["evidence"]:
+            c["tests"] = {t: "retired" if t in retired else st for t, st in c["tests"].items()}
 
 
 def removal_checks(text):
@@ -1051,8 +1087,7 @@ def main():
     if not args.no_cache:
         load_cache(args.cache)
     listed = gh_list(PR_LIMIT, "pr", "list", "--state", "all", "--json", "number,title,headRefName,state,url,body")
-    runs = gh_list(RUN_LIMIT, "run", "list", "--event", "pull_request",
-                   "--json", "headBranch,headSha,conclusion,event,workflowName")
+    runs = gh_list(RUN_LIMIT, "run", "list", "--json", "headBranch,headSha,conclusion,event,workflowName")
     prs = {p["number"]: p for p in listed}
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
     with Blobs() as blobs:
