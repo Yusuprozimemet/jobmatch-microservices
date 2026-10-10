@@ -2932,8 +2932,21 @@ def main():
     parser.add_argument("--localstack", help="LocalStack endpoint URL (e.g., http://localhost:4566)")
     parser.add_argument("--compose-localstack", help="Compose LocalStack endpoint URL")
     parser.add_argument("--summary", help="Write the criteria that ran and failed to this path as JSON")
+    parser.add_argument("--state", help="A pulled Terraform state: only the C32.5 secret sweep runs on it")
 
     args = parser.parse_args()
+
+    # A pulled state (the deploy's, pulled by hand) is swept for secrets and nothing else
+    if args.state:
+        with open(args.state, "r", encoding="utf-8") as f:
+            state_failures = check_c32_5_sweep(json.load(f), f"state {args.state}")
+        if state_failures:
+            print(f"infra-checks: {len(state_failures)} failures")
+            for failure in state_failures:
+                print(failure)
+            sys.exit(1)
+        print("infra-checks: ok (state)")
+        return
 
     failures = []
 
