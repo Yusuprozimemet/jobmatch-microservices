@@ -71,10 +71,15 @@ own specs: in this repository that session has read past its own errors more tha
 | every day, before the spec-change PR | spec-auditor | Is every claim and check in this day's spec true, and can each check fail? |
 | a phase's last day has closed | plan-auditor | What did the phase change that the next one must know? |
 | a stopping point `plan.md` names, before going on | plan-auditor, on the whole plan | Is `plan.md` still the right plan, and what has piled up that no day owns? |
+| the end of Phase 7, before `terraform destroy` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
 | any time, by hand | either | "use the plan-auditor on Phase 3" |
 
 Both check hand-offs: what earlier days' Notes and test comments defer to a later day. Nothing
 else carries them forward, and that is where most gaps have come from.
+
+The three end-of-phase auditors run once, on Opus, while the deployment is up, beside the
+plan-auditor on Phase 7 and on the whole plan. Each runs from a fresh context and reads none of
+the others' reports: their disagreement is part of the result.
 
 Their findings are advice to the maintainer. What becomes a PR is the maintainer's call.
 

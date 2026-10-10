@@ -31,7 +31,7 @@ flowchart LR
     D -- "where we are" --> M
 ```
 
-The two auditors ([`.claude/agents/`](../.claude/agents/)) only read and report. They never edit
+The auditors ([`.claude/agents/`](../.claude/agents/)) only read and report. They never edit
 files or open PRs, which is what keeps them independent from the session that writes the code.
 The implementer writes each track's code from a brief and never commits; the main session reviews
 its diff, runs the checks, breaks the code on purpose, and opens the PR.
@@ -67,6 +67,7 @@ flowchart TD
 | "start Day N", any other day | spec-auditor | findings, then a spec-change PR |
 | "merged" | dashboard refresh, then the next track or the closing PR | a PR, then wait |
 | a phase's last day closes | plan-auditor, phase-end review | a report; nothing starts until the maintainer says so |
+| Phase 7 ends, before `terraform destroy` | the three end-of-phase auditors, independently | three reports for the maintainer; nothing is destroyed until they say so |
 | any time, by hand | either auditor | for example "use the plan-auditor on Phase 3" |
 
 ## Starting, for someone new
