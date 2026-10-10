@@ -1790,6 +1790,48 @@ def check_c36_11(plan: dict) -> list[str]:
     return failures
 
 
+def check_c35_3(plan: dict, started_plan: dict | None) -> list[str]:
+    """Check the default plan starts nothing (every desired count 0, no scaling), and the started plan
+    runs each service at the count local.services declares."""
+    failures = []
+
+    services = [r for r in resources(plan) if r["type"] == "aws_ecs_service"]
+    if not services:
+        failures.append("C35.3 no aws_ecs_service on the default plan")
+    for service in services:
+        count = service["values"].get("desired_count")
+        if count != 0:
+            failures.append(f"C35.3 {service['address']} desired_count {count}, want 0 while start_services is false")
+
+    for r in resources(plan):
+        if r["type"] in ("aws_appautoscaling_target", "aws_appautoscaling_policy"):
+            failures.append(f"C35.3 {r['address']}: want none while start_services is false")
+
+    if started_plan is None:
+        failures.append("C35.3 --started-plan not given")
+        return failures
+
+    started = {r["address"]: r for r in resources(started_plan) if r["type"] == "aws_ecs_service"}
+    if set(started) != {s["address"] for s in services}:
+        want = sorted(s["address"] for s in services)
+        failures.append(f"C35.3 started plan services {sorted(started)}, want the default plan's {want}")
+
+    declared = services_output(started_plan)
+    if declared is None:
+        failures.append("C35.3 no services output on the started plan")
+        return failures
+    for key, service in declared.items():
+        address = f'module.service["{key}"].aws_ecs_service.service'
+        if address not in started:
+            failures.append(f"C35.3 {address}: missing on the started plan")
+            continue
+        got = started[address]["values"].get("desired_count")
+        if got != service["desired_count"]:
+            failures.append(f"C35.3 {address} desired_count {got}, want {service['desired_count']}")
+
+    return failures
+
+
 # The JVM services and the telemetry defaults each application.yaml sets. Compose overrides the
 # traces endpoint to Tempo; the defaults stay off, so a service run outside compose exports nothing.
 C34_JVM_SERVICES = ("api-gateway", "application-service", "identity-service", "job-service", "matching-service")
@@ -2393,6 +2435,7 @@ def main():
     )
     parser.add_argument("--bootstrap-plan", help="Path to bootstrap plan JSON")
     parser.add_argument("--main-plan", help="Path to main root plan JSON")
+    parser.add_argument("--started-plan", help="Path to main root plan made with -var start_services=true")
     parser.add_argument("--localstack", help="LocalStack endpoint URL (e.g., http://localhost:4566)")
     parser.add_argument("--compose-localstack", help="Compose LocalStack endpoint URL")
     parser.add_argument("--summary", help="Write the criteria that ran and failed to this path as JSON")
@@ -2403,6 +2446,7 @@ def main():
 
     bootstrap_plan: dict | None = None
     main_plan: dict | None = None
+    started_plan: dict | None = None
 
     # Track which checks ran, and the criteria they cover
     checks_run = []
@@ -2432,6 +2476,13 @@ def main():
                 main_plan = json.load(f)
         except Exception as e:
             failures.append(f"C32.3 error reading main plan: {e}")
+
+    if args.started_plan:
+        try:
+            with open(args.started_plan, "r", encoding="utf-8") as f:
+                started_plan = json.load(f)
+        except Exception as e:
+            failures.append(f"C35.3 error reading started plan: {e}")
 
     failures.extend(check_c32_3_text(
         str(bootstrap_dir),
@@ -2481,9 +2532,20 @@ def main():
         failures.extend(check_c36_8(main_plan, repo_root))
         failures.extend(check_c36_9(main_plan))
         failures.extend(check_c36_10(main_plan, repo_root))
-        failures.extend(check_c36_11(main_plan))
         checks_run.append("ECS")
-        criteria_ran.extend(f"C36.{n}" for n in range(1, 12))
+        criteria_ran.extend(f"C36.{n}" for n in range(1, 11))
+
+    # C35.3: the default plan starts nothing, so the scaling is checked on the started plan
+    if args.main_plan and main_plan:
+        failures.extend(check_c35_3(main_plan, started_plan))
+        checks_run.append("services stopped")
+        criteria_ran.append("C35.3")
+
+    # C36.11 reads the started plan because the default plan starts nothing
+    if started_plan:
+        failures.extend(check_c36_11(started_plan))
+        checks_run.append("started plan")
+        criteria_ran.append("C36.11")
 
     # C34.3, C34.4, C34.5: the collector sidecar, its telemetry policy and the metrics log group (main plan)
     if args.main_plan and main_plan:

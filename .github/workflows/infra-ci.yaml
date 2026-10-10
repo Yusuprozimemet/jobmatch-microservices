@@ -160,6 +160,13 @@ jobs:
             -var domain=example.com -var route53_zone_id=Z0000000000000000000
           terraform -chdir=infra/terraform show -json tfplan > "$RUNNER_TEMP/main-plan.json"
 
+          # The same plan with the services started (Day 35): C36.11 and the cost read it
+          terraform -chdir=infra/terraform plan -input=false -out=tfplan-started \
+            -var alert_email=alerts@example.com \
+            -var domain=example.com -var route53_zone_id=Z0000000000000000000 \
+            -var start_services=true
+          terraform -chdir=infra/terraform show -json tfplan-started > "$RUNNER_TEMP/started-plan.json"
+
       - name: LocalStack state bucket
         run: |
           awslocal s3 mb s3://jobmatch-microservices-tfstate
@@ -260,6 +267,7 @@ jobs:
           python scripts/infra-checks.py \
             --bootstrap-plan "$RUNNER_TEMP/bootstrap-plan.json" \
             --main-plan "$RUNNER_TEMP/main-plan.json" \
+            --started-plan "$RUNNER_TEMP/started-plan.json" \
             --localstack http://localhost:4566 \
             --compose-localstack "$COMPOSE_LOCALSTACK" \
             --summary "$RUNNER_TEMP/infra-checks.json"
@@ -270,6 +278,7 @@ jobs:
         run: |
           python scripts/infra-summary.py \
             --main-plan "$RUNNER_TEMP/main-plan.json" \
+            --started-plan "$RUNNER_TEMP/started-plan.json" \
             --checks "$RUNNER_TEMP/infra-checks.json" \
             --step fmt=${{ steps.fmt.outcome }} \
             --step validate=${{ steps.validate.outcome }} \

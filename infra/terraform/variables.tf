@@ -19,6 +19,12 @@ variable "image_tag" {
   description = "Tag of every service image in ECR; Day 35's deploy sets it"
 }
 
+variable "start_services" {
+  type        = bool
+  default     = false
+  description = "Whether the services run: false sets every desired count to 0 and leaves out the scaling, so the first apply starts nothing before the images and the one-off tasks"
+}
+
 variable "domain" {
   type        = string
   description = "Public domain the ALB serves; its certificate is validated in route53_zone_id"

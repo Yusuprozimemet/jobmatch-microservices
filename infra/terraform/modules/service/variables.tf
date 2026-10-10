@@ -70,6 +70,11 @@ variable "policy_resources" {
   type = map(string)
 }
 
+# false sets the desired count to 0 and leaves out the scaling target and policy.
+variable "started" {
+  type = bool
+}
+
 # A list, not a nullable ARN: its length is known at plan time, so the plan shows the block.
 variable "target_group_arns" {
   type    = list(string)

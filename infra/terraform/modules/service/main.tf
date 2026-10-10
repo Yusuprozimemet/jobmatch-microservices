@@ -64,7 +64,7 @@ resource "aws_ecs_service" "service" {
   cluster         = var.cluster_id
   task_definition = aws_ecs_task_definition.service.arn
   launch_type     = "FARGATE"
-  desired_count   = var.service.desired_count
+  desired_count   = var.started ? var.service.desired_count : 0
 
   network_configuration {
     subnets          = var.subnet_ids
@@ -103,9 +103,10 @@ resource "aws_ecs_service" "service" {
   }
 }
 
-# Only a service with scaling set gets a target: the gateway keeps its one task.
+# Only a service with scaling set gets a target: the gateway keeps its one task. It also needs the
+# services started: a target's minimum would start a task while start_services is false.
 resource "aws_appautoscaling_target" "service" {
-  count = var.service.scaling == null ? 0 : 1
+  count = var.started && var.service.scaling != null ? 1 : 0
 
   min_capacity       = var.service.scaling.min_capacity
   max_capacity       = var.service.scaling.max_capacity
@@ -115,7 +116,7 @@ resource "aws_appautoscaling_target" "service" {
 }
 
 resource "aws_appautoscaling_policy" "service" {
-  count = var.service.scaling == null ? 0 : 1
+  count = var.started && var.service.scaling != null ? 1 : 0
 
   name               = "jobmatch-${var.name}-cpu"
   policy_type        = "TargetTrackingScaling"
