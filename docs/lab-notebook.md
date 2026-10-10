@@ -823,6 +823,24 @@ account.
 - *Estimated 7 pull requests; took 7,* in 1,114 track lines, none over the gate; the spec had split
   C and D at the auditor's sizes.
 
+**The dashboard's measurement, corrected (outside the days).** Found by reproducing the page's
+numbers from `main` with the script's own functions; every figure below recomputes all of history.
+- **CI pushes were capped at 1,000 runs.** `gh run list --event pull_request` returns at most
+  1,000 for a filtered query, and the 5,000-run guard never fired: PRs #1–136 showed no pushes.
+  Read unfiltered: 245 → 397 pushes, now in all 378 merged PRs; failed pushes 6 → 14, in 12 PRs
+  (was 6). The guard now refuses a list of exactly 1,000 as well.
+- **Ten wildcard names could never match.** A spec's `aws_ecs_*` became the name `aws_ecs_`, which
+  no word in the code is; a token ending in `_` is now a pattern, not a name. Names 817 → 807;
+  spec names in code 85.3% → 86.3%, reached-day 85.3% → 86.4%; the angle moved 0.13°.
+- **Retired names are counted apart, still as misses.** 40 of the 109 names the code lacks were in
+  it at an earlier merge (`PendingGoogleLink`, `UserDirectory`, monolith tests). The headline keeps
+  its meaning.
+- **Days not reached:** already apart, as the reached-day figure. Since Day 34 closed, one name
+  (`ScaledObject`, Day 35) is the whole difference.
+- **The four tests "not running" are retired.** Day 42 removed them, and its spec names them:
+  now grey, and orange is left for a test gone with no spec saying so (4 → 0). The spec named
+  `noModuleCanReadAnothersSchema`'s replacement nowhere; one line in its Notes now does.
+
 **Read on the hypothesis at the end of Phase 0.** Across five days the agent's implementation has
 been sound and its most useful output has been *disagreement with the spec*. The constraint is
 specification quality and estimation, as predicted — but not in the way predicted. The expectation

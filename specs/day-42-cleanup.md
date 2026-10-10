@@ -443,6 +443,9 @@ docker compose -p day42 down -v                                                 
     docs, since each half's docs went with its code.
   - **Track D turned JSON on with an environment variable** in each Dockerfile, not a `prod`
     profile: none of the four had a profile file. The spec left the choice to the track.
+  - **`ModuleConnectionsIT.noModuleCanReadAnothersSchema` was replaced by
+    `noOtherModuleCanConnectToIdentityDb`** in Track C (#337); until this line only the commit
+    message (f975601) recorded it. Added after the close, outside the days.
 - **Defect** — found: Track A1a · cause: spec · C42.1 could not pass as written even after the
   audit's exclusions: they covered the `.withEnv` lines, not the key-set URLs, ITs and doc rows
   that name the other services' keys with the same words.

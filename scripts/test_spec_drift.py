@@ -195,6 +195,18 @@ class SpecDriftTest(unittest.TestCase):
         finally:
             sd.run = real
 
+    def test_a_gh_list_of_a_thousand_is_refused_under_a_larger_limit(self):
+        # GitHub gives at most 1,000 for a filtered run list, so 1,000 may be cut whatever the limit.
+        real = sd.run
+        try:
+            sd.run = lambda *args: "[" + ",".join(["{}"] * 1000) + "]"
+            with self.assertRaisesRegex(SystemExit, "run list returned 1000"):
+                sd.gh_list(5000, "run", "list")
+            sd.run = lambda *args: "[" + ",".join(["{}"] * 999) + "]"
+            self.assertEqual(len(sd.gh_list(5000, "run", "list")), 999)
+        finally:
+            sd.run = real
+
     def test_an_infra_run_whose_artifact_does_not_download_is_skipped(self):
         def fake(*args):
             if args[2] == "list":
@@ -238,6 +250,20 @@ class SpecDriftTest(unittest.TestCase):
         self.repo.snaps[-1]["branch"] = "day-17/track-a-y"
         rows = self.repo.inside(lambda blobs: sd.trajectory([dict(s) for s in self.repo.snaps], blobs, [1, 38, 17])[0])
         self.assertEqual(rows[-1]["day"], 17)  # after 38 in the run order, though lower in number
+
+    def test_a_wildcard_prefix_is_no_name_the_code_could_miss(self):
+        self.assertFalse(sd.code_like("aws_ecs_"))
+        self.assertFalse(sd.code_like("check_c34_"))
+        self.assertTrue(sd.code_like("aws_ecs_service"))
+        self.repo.merge({"src/Foo.java": "class FooService { FooService f; }\n"})
+        rows = self.repo.merge({"specs/day-02-y.md": "It writes `aws_ecs_*`.\n", "src/Ecs.java": "aws_ecs_service e;\n"}).rows()
+        self.assertEqual((rows[1]["name_coverage"], rows[2]["name_coverage"]), (0.5, 0.5))  # bar_table still missing
+
+    def test_a_name_the_code_had_and_lost_is_retired_and_still_a_miss(self):
+        self.repo.merge({"src/Foo.java": "class FooService { }\n"})
+        rows = self.repo.merge({"src/Foo.java": None}).rows()
+        self.assertEqual([r["names_retired"] for r in rows], [0, 0, 1])  # bar_table was never in the code
+        self.assertEqual((rows[1]["name_coverage"], rows[2]["name_coverage"]), (0.5, 0.0))
 
     def test_code_in_the_spec_proportions_sits_below_chance(self):
         rows = self.repo.merge({"src/Foo.java": "class FooService { FooService f; bar_table b; }\n"}).rows()
@@ -376,9 +402,9 @@ class EvidenceTest(unittest.TestCase):
         self.repo.inside(lambda blobs: sd.evidence_history(rows, sd.evidence(days, self.repo.snaps, blobs),
                                                            self.repo.snaps, blobs))
         self.assertEqual([r["evidence"] for r in rows][1:], [
-            dict(present=3, skippable=0, missing=0),
-            dict(present=0, skippable=0, missing=3),
-            dict(present=3, skippable=0, missing=0)])
+            dict(present=3, skippable=0, missing=0, retired=0),
+            dict(present=0, skippable=0, missing=3, retired=0),
+            dict(present=3, skippable=0, missing=0, retired=0)])
 
 
     def test_the_history_starts_when_the_day_ends_and_shows_the_merge_a_test_left(self):
@@ -391,8 +417,29 @@ class EvidenceTest(unittest.TestCase):
         self.repo.inside(history)
         self.assertEqual([r["evidence"] for r in rows], [
             None,
-            dict(present=3, skippable=0, missing=0),
-            dict(present=2, skippable=0, missing=1)])
+            dict(present=3, skippable=0, missing=0, retired=0),
+            dict(present=2, skippable=0, missing=1, retired=0)])
+
+    def history_after_removal(self, spec):
+        """Day 1's tests, then a day 2 merge that removes FooIT and writes day 2's spec, as `spec`."""
+        days = [dict(day=1, status="done", prs=[dict(number=1)], evidence=sd.criteria(CRITERIA)),
+                dict(day=2, file="specs/day-02-y.md", status="done", prs=[dict(number=2)], evidence=[])]
+        self.repo.merge({"src/FooIT.java": None, "specs/day-02-y.md": spec})
+        self.repo.snaps[-1]["branch"] = "day-02/track-a-x"
+        rows = [{} for _ in self.repo.snaps]
+        self.repo.inside(lambda blobs: sd.evidence_history(rows, sd.evidence(days, self.repo.snaps, blobs),
+                                                           self.repo.snaps, blobs))
+        return rows, days
+
+    def test_a_test_a_later_days_spec_names_as_removed_is_retired_not_missing(self):
+        rows, days = self.history_after_removal("# Day 02\n\nIt removes `FooIT`.\n")
+        self.assertEqual(rows[-1]["evidence"], dict(present=0, skippable=0, missing=0, retired=3))
+        self.assertEqual({v for c in days[0]["evidence"] for v in c["tests"].values()}, {"retired"})
+
+    def test_a_test_gone_that_no_later_spec_names_stays_missing(self):
+        rows, days = self.history_after_removal("# Day 02\n\nIt removes the rest.\n")
+        self.assertEqual(rows[-1]["evidence"], dict(present=0, skippable=0, missing=3, retired=0))
+        self.assertEqual({v for c in days[0]["evidence"] for v in c["tests"].values()}, {"missing"})
 
 
 REMOVALS = """## Acceptance criteria

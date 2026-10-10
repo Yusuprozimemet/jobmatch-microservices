@@ -112,16 +112,15 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Verification the lines do not show</h2>
-      <p>A break on purpose never merges and a failed CI run leaves nothing in git, so neither is in “Where the work went”. Both are read from GitHub instead. First, each code PR's description: does it record a break on purpose in the one line the rules fix (<code>broken: &lt;what&gt; → &lt;what it reported&gt;</code>), say why there is none (<code>broken: none → &lt;why&gt;</code>), or say nothing? The line was asked for from #310; a PR before it described its breaks in free text, read by phrasing until then, and is not measured. Hover a bar for the silent PRs.</p>
+      <p>A break on purpose never merges and a failed CI run leaves nothing in git, so neither is in “Where the work went”. Both are read from GitHub instead. First, each code PR's description: does it record a break on purpose in the one line the rules fix (<code>broken: &lt;what&gt; → &lt;what it reported&gt;</code>), say why there is none (<code>broken: none → &lt;why&gt;</code>), or say nothing? The line was asked for from #310; a PR before it described its breaks in free text, read by phrasing until then, and is not measured. Any silent PR is listed below.</p>
     </div>
-    <div class="legend" id="breaks-legend"></div>
     <div id="breaks"></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Pushes CI failed</h2>
-      <p>Every commit CI ran on for a pull request that later merged, counted once however many workflows ran on it, and failed if any of them failed (a cancelled run is not a failure). Each bar is a day's PRs, spec changes and closing PRs included; “none” is the PRs that belong to no day. Pushes to <code>main</code> are not counted: what failed there had already merged. Only the failures are drawn; hover a bar for its pushes and the workflows that failed.</p>
+      <p>Every commit CI ran on for a pull request that later merged, counted once however many workflows ran on it, and failed if any of them failed (a cancelled run is not a failure). Pushes to <code>main</code> are not counted: what failed there had already merged. Each pull request CI failed on at least once is listed below, with the workflows that failed.</p>
     </div>
-    <div class="legend" id="ci-legend"></div>
-    <div id="ci-fails"></div>
+    <p id="ci-legend"></p>
+    <div class="scroll-x"><table id="ci-fails"></table></div>
   </section>
 
   <section class="panel">
@@ -159,13 +158,13 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Evidence behind the ticks</h2>
-      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property, like <code>GatewayHarnessIT</code>, runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Days marked <em>pre-format</em> were written before the evidence format (#55, from Day 9): nothing asked their ticks to record any of this, so a zero there is not measured, not missing. The <code>broken:</code> line was asked for from #310: “Seen red” is not measured for a day none of whose PRs reaches it.</p>
+      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property, like <code>GatewayHarnessIT</code>, runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Grey is retired: a later day's spec names the test and that day's PR removed it; orange is gone with no spec saying so. Days marked <em>pre-format</em> were written before the evidence format (#55, from Day 9): nothing asked their ticks to record any of this, so a zero there is not measured, not missing. The <code>broken:</code> line was asked for from #310: “Seen red” is not measured for a day none of whose PRs reaches it.</p>
     </div>
     <div class="scroll-x"><table id="evidence"></table></div>
     <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Merge by merge</h2>
-      <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
+      <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree with no spec saying so; grey is retired. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
     </div>
     <div id="evidence-history"></div>
     <div class="panel-head" style="margin-top:14px">
