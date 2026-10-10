@@ -2070,9 +2070,11 @@ C35_DEPLOY_WORKFLOWS = {
     "job-service-ci-cd.yaml": "job-service",
     "matching-service-ci-cd.yaml": "matching-service",
     "frontend-ci-cd.yaml": "frontend",
+    "identity-service-ci-cd.yaml": "identity-service",
+    "application-service-ci-cd.yaml": "application-service",
     "db-setup-tests.yml": None,
 }
-# infra-ci reruns when any of the seven changes, identity's and application-service's included (Track C2b adds their jobs).
+# infra-ci reruns when any of the seven changes, identity's and application-service's included.
 C35_INFRA_CI_WORKFLOWS = (
     "api-gateway-ci-cd.yaml",
     "application-service-ci-cd.yaml",
@@ -2082,6 +2084,23 @@ C35_INFRA_CI_WORKFLOWS = (
     "job-service-ci-cd.yaml",
     "matching-service-ci-cd.yaml",
 )
+# The two workflows with migrations: each runs its migrate task before update-service (C35.6).
+C35_MIGRATE_WORKFLOWS = {"identity-service-ci-cd.yaml", "application-service-ci-cd.yaml"}
+# identity's image changes only with its own paths (its OWN in the changes job): a file that must match,
+# and files that must not, since their changes run identity's suite but not its image (C35.6).
+C35_OWN_PATHS = {
+    "identity-service-ci-cd.yaml": (
+        "services/identity-service/pom.xml",
+        (
+            "services/job-service/pom.xml",
+            "services/api-gateway/pom.xml",
+            "services/matching-service/pom.xml",
+            "services/application-service/pom.xml",
+            "scripts/db-setup.py",
+            "checkstyle.xml",
+        ),
+    ),
+}
 # The only tokens the workflows' if: expressions use; anything else is an error, not a guess (C35.6).
 C35_EXPRESSION_TOKEN = re.compile(r"(==|!=|&&|\|\||[!()])|'([^']*)'|([A-Za-z_][\w.]*)")
 
@@ -2126,7 +2145,7 @@ def workflow_condition(expression, context: dict[str, str]) -> bool:
 
 
 def c35_step_kind(step: dict) -> str | None:
-    """Classify the steps the deploy checks count: an ECR push, a GHCR push, the deploy role, the ECS update (C35.6)."""
+    """Classify the steps the deploy checks count: an ECR push, a GHCR push, the deploy role, the migrate task, the ECS update (C35.6)."""
     uses = str(step.get("uses", ""))
     run = str(step.get("run", ""))
     if uses.startswith("docker/build-push-action"):
@@ -2135,32 +2154,43 @@ def c35_step_kind(step: dict) -> str | None:
         return "ecr"
     if uses.startswith("aws-actions/configure-aws-credentials"):
         return "role"
+    if "aws ecs run-task" in run:
+        return "migrate"
     if "aws ecs update-service" in run:
         return "update"
     return None
 
 
 def check_c35_6(repo_root: Path) -> list[str]:
-    """Check the deploy job in the seven workflows: workflow_dispatch, the ECR push, the role and the ECS
-    update only on main with DEPLOY_ENABLED on, the OIDC role without keys or an environment, the GHCR
-    push that stays while the switch is off (db-setup pushes nothing), and infra-ci's paths for them."""
+    """Check the deploy job in the seven workflows: workflow_dispatch, the ECR push, the role, the migrate
+    task and the ECS update only on main with DEPLOY_ENABLED on, the OIDC role without keys or an
+    environment, the GHCR push that stays while the switch is off (db-setup pushes nothing), identity's
+    own paths, and infra-ci's paths for them."""
     import yaml
 
     failures = []
-    # Every event, ref and switch value the if: expressions read; the deploy runs in exactly one of them.
-    scenarios = []
-    for event in ("push", "workflow_dispatch", "pull_request"):
-        refs = ("refs/pull/1/merge", "refs/heads/other") if event == "pull_request" else ("refs/heads/main", "refs/heads/other")
-        for ref in refs:
-            for switch in ("true", ""):
-                context = {
-                    "github.event_name": event,
-                    "github.ref": ref,
-                    "vars.DEPLOY_ENABLED": switch,
-                    "needs.changes.outputs.run": "true",
-                }
-                deploy = event != "pull_request" and ref == "refs/heads/main" and switch == "true"
-                scenarios.append((f"{event} {ref} DEPLOY_ENABLED='{switch}'", context, deploy))
+
+    def scenarios_for(file: str) -> list[tuple[str, dict, bool]]:
+        # Every event, ref, switch and own-path value the if: expressions read; the deploy runs in exactly
+        # one of them. Only identity's workflow reads its own-path output, so only it has that dimension.
+        owns = ("true", "false") if file in C35_OWN_PATHS else ("true",)
+        scenarios = []
+        for event in ("push", "workflow_dispatch", "pull_request"):
+            refs = ("refs/pull/1/merge", "refs/heads/other") if event == "pull_request" else ("refs/heads/main", "refs/heads/other")
+            for ref in refs:
+                for switch in ("true", ""):
+                    for own in owns:
+                        context = {
+                            "github.event_name": event,
+                            "github.ref": ref,
+                            "vars.DEPLOY_ENABLED": switch,
+                            "needs.changes.outputs.run": "true",
+                            "needs.changes.outputs.own": own,
+                        }
+                        deploy = event != "pull_request" and ref == "refs/heads/main" and switch == "true" and own == "true"
+                        label = f"{event} {ref} DEPLOY_ENABLED='{switch}'" + (f" own='{own}'" if file in C35_OWN_PATHS else "")
+                        scenarios.append((label, context, deploy))
+        return scenarios
 
     def runs_step(job: dict, step: dict, context: dict) -> bool:
         return workflow_condition(job.get("if"), context) and workflow_condition(step.get("if"), context)
@@ -2173,6 +2203,7 @@ def check_c35_6(repo_root: Path) -> list[str]:
         if not path.is_file():
             failures.append(f"C35.6 {file}: missing")
             continue
+        scenarios = scenarios_for(file)
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         jobs = workflow.get("jobs", {})
         # YAML 1.1 reads the bare key "on" as True.
@@ -2196,7 +2227,7 @@ def check_c35_6(repo_root: Path) -> list[str]:
             failures.append(f"C35.6 {file}: want exactly one deploy-role step")
 
         for kind, _, job, step in found:
-            if kind not in ("ecr", "role", "update"):
+            if kind not in ("ecr", "role", "update", "migrate"):
                 continue
             for label, context, deploy in scenarios:
                 try:
@@ -2211,9 +2242,40 @@ def check_c35_6(repo_root: Path) -> list[str]:
                     failures.append(f"C35.6 {file} step {step.get('name')!r} does not run on {label}, want it on main with the switch on")
                     break
 
-        for job_name in sorted({job_name for kind, job_name, _, _ in found if kind in ("ecr", "role", "update")}):
+        for job_name in sorted({job_name for kind, job_name, _, _ in found if kind in ("ecr", "role", "update", "migrate")}):
             if (jobs[job_name].get("permissions") or {}).get("id-token") != "write":
                 failures.append(f"C35.6 {file} job {job_name}: no id-token: write")
+
+        if file in C35_OWN_PATHS:
+            must_match, must_not_match = C35_OWN_PATHS[file]
+            own_envs = [(step.get("env") or {}).get("OWN") for step in jobs.get("changes", {}).get("steps", []) if "OWN" in (step.get("env") or {})]
+            if not own_envs:
+                failures.append(f"C35.6 {file}: no OWN in the changes job")
+            else:
+                own = re.compile(own_envs[0])
+                if not own.search(must_match):
+                    failures.append(f"C35.6 {file}: OWN does not match {must_match}")
+                for path_name in must_not_match:
+                    if own.search(path_name):
+                        failures.append(f"C35.6 {file}: OWN matches {path_name}, so a change to it pushes identity's image")
+
+        migrates = [(job_name, job, step) for job_name, job in jobs.items() for step in job.get("steps", []) if c35_step_kind(step) == "migrate"]
+        if file not in C35_MIGRATE_WORKFLOWS and migrates:
+            failures.append(f"C35.6 {file}: runs a migrate task, want none")
+        if file in C35_MIGRATE_WORKFLOWS:
+            if len(migrates) != 1:
+                failures.append(f"C35.6 {file}: {len(migrates)} migrate steps, want one")
+            for _, job, step in migrates:
+                run = str(step.get("run", ""))
+                for want in (f"--task-definition jobmatch-{service}-migrate", "aws ecs wait tasks-stopped", "exitCode"):
+                    if want not in run:
+                        failures.append(f"C35.6 {file} step {step.get('name')!r}: run lacks {want}")
+                job_steps = job.get("steps", [])
+                index = job_steps.index(step)
+                if not any(c35_step_kind(s) == "ecr" for s in job_steps[:index]):
+                    failures.append(f"C35.6 {file} step {step.get('name')!r}: no ECR push before it")
+                if not any(c35_step_kind(s) == "update" for s in job_steps[index + 1:]):
+                    failures.append(f"C35.6 {file} step {step.get('name')!r}: no ECS update after it in its job")
 
         updates = [(job, step) for kind, _, job, step in found if kind == "update"]
         ghcr = [(job, step) for kind, _, job, step in found if kind == "ghcr"]
@@ -2237,7 +2299,7 @@ def check_c35_6(repo_root: Path) -> list[str]:
         for job, step in ghcr:
             for label, context, deploy in scenarios:
                 main_push = context["github.event_name"] != "pull_request" and context["github.ref"] == "refs/heads/main"
-                want = service is not None and main_push and not deploy
+                want = service is not None and main_push and not deploy and context["needs.changes.outputs.own"] == "true"
                 try:
                     got = pushes_step(job, step, context)
                 except ValueError as error:
