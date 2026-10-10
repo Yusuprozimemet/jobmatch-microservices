@@ -1958,6 +1958,112 @@ def check_c35_4(plan: dict, repo_root: Path) -> list[str]:
     return failures
 
 
+# The deploy role's trust and what it may do, each action with the one resource key it reaches (C35.5).
+C35_DEPLOY_SUB = "repo:Yusuprozimemet/jobmatch-microservices:ref:refs/heads/main"
+C35_DEPLOY_POLICY = {
+    "ecr:BatchCheckLayerAvailability": "repositories",
+    "ecr:InitiateLayerUpload": "repositories",
+    "ecr:UploadLayerPart": "repositories",
+    "ecr:CompleteLayerUpload": "repositories",
+    "ecr:PutImage": "repositories",
+    "ecr:BatchGetImage": "repositories",
+    "ecr:GetAuthorizationToken": "*",
+    "ecs:UpdateService": "services",
+    "ecs:DescribeServices": "services",
+    "ecs:RunTask": "migrate-task-definitions",
+    "ecs:DescribeTasks": "cluster-tasks",
+    "iam:PassRole": "migrate-roles",
+    "logs:GetLogEvents": "migrate-log-streams",
+}
+
+
+def deploy_output(plan: dict) -> dict | None:
+    """The deploy output's value (the deploy role's trust and statements from deploy.tf), or None if absent."""
+    return plan.get("planned_values", {}).get("outputs", {}).get("deploy", {}).get("value")
+
+
+def check_c35_5(plan: dict, repo_root: Path) -> list[str]:
+    """Check the deploy role: one GitHub OIDC provider, the role jobmatch-deploy, and the deploy output's
+    trust (main of this repository only) and statements (exactly C35_DEPLOY_POLICY, its only "*" on
+    ecr:GetAuthorizationToken). The role's documents must refer to the locals the output is read from,
+    and no root may hold an access key."""
+    failures = []
+
+    providers = [r for r in resources(plan) if r["type"] == "aws_iam_openid_connect_provider"]
+    if len(providers) != 1:
+        failures.append(f"C35.5 {len(providers)} aws_iam_openid_connect_provider, want one")
+    for provider in providers:
+        url = (provider["values"].get("url") or "").removeprefix("https://")
+        if url != "token.actions.githubusercontent.com":
+            failures.append(f"C35.5 {provider['address']} url {provider['values'].get('url')}, want GitHub's")
+        if provider["values"].get("client_id_list") != ["sts.amazonaws.com"]:
+            failures.append(f"C35.5 {provider['address']} client_id_list {provider['values'].get('client_id_list')}, want sts.amazonaws.com")
+
+    if not any(r["type"] == "aws_iam_role" and r["values"].get("name") == "jobmatch-deploy" for r in resources(plan)):
+        failures.append("C35.5 no aws_iam_role named jobmatch-deploy")
+
+    for access_key in [r["address"] for r in resources(plan) if r["type"] == "aws_iam_access_key"]:
+        failures.append(f"C35.5 {access_key}: an access key, want none (the deploy uses OIDC)")
+    # .terraform holds what init downloaded, not this repository's code.
+    for path in sorted(p for p in Path(repo_root, "infra", "terraform").rglob("*.tf") if ".terraform" not in p.parts):
+        if re.search(r'^\s*resource\s+"aws_iam_access_key"', path.read_text(encoding="utf-8"), re.MULTILINE):
+            failures.append(f"C35.5 {path.relative_to(repo_root).as_posix()} declares aws_iam_access_key, want none")
+
+    deploy = deploy_output(plan)
+    if deploy is None:
+        return failures + ["C35.5 no deploy output"]
+
+    trust = deploy.get("trust", {})
+    if set(trust) != {"Action", "Condition"} or trust.get("Action") != "sts:AssumeRoleWithWebIdentity":
+        failures.append(f"C35.5 deploy trust {trust}, want Action sts:AssumeRoleWithWebIdentity and a Condition only")
+    want_condition = {"StringEquals": {
+        "token.actions.githubusercontent.com:sub": C35_DEPLOY_SUB,
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+    }}
+    if trust.get("Condition") != want_condition:
+        failures.append(f"C35.5 deploy trust Condition {trust.get('Condition')}, want {want_condition}")
+
+    statements = deploy.get("statements", [])
+    actions = [action for statement in statements for action in statement.get("actions", [])]
+    for statement in statements:
+        keys = statement.get("resources", [])
+        if "*" in keys and statement.get("actions") != ["ecr:GetAuthorizationToken"]:
+            failures.append(f"C35.5 deploy statement {statement.get('actions')} has * as a resource, want it only on ecr:GetAuthorizationToken")
+        for action in statement.get("actions", []):
+            if "*" in action:
+                failures.append(f"C35.5 deploy action {action} contains *")
+            if action in C35_DEPLOY_POLICY and keys != [C35_DEPLOY_POLICY[action]]:
+                failures.append(f"C35.5 deploy action {action} resources {keys}, want [{C35_DEPLOY_POLICY[action]}]")
+    missing = sorted(set(C35_DEPLOY_POLICY) - set(actions))
+    extra = sorted(set(actions) - set(C35_DEPLOY_POLICY))
+    if missing:
+        failures.append(f"C35.5 deploy actions missing {missing}")
+    if extra:
+        failures.append(f"C35.5 deploy actions {extra}, want none beyond the policy")
+
+    migrate = ["identity-service-migrate", "application-service-migrate"]
+    if deploy.get("migrate_tasks") != migrate:
+        failures.append(f"C35.5 deploy migrate_tasks {deploy.get('migrate_tasks')}, want {migrate}")
+    tasks = tasks_output(plan) or {}
+    for name in migrate:
+        if name not in tasks:
+            failures.append(f"C35.5 migrate task {name} is not in the tasks output")
+
+    if not refers_to(config_refs(plan, "aws_iam_role.deploy", "assume_role_policy"), "local.deploy.trust"):
+        failures.append("C35.5 aws_iam_role.deploy assume_role_policy does not refer to local.deploy.trust")
+    if not refers_to(config_refs(plan, "aws_iam_role.deploy", "assume_role_policy"), "aws_iam_openid_connect_provider.github"):
+        failures.append("C35.5 aws_iam_role.deploy assume_role_policy does not refer to aws_iam_openid_connect_provider.github")
+    policy_refs = config_refs(plan, "aws_iam_role_policy.deploy", "policy")
+    if not refers_to(policy_refs, "local.deploy.statements"):
+        failures.append("C35.5 aws_iam_role_policy.deploy policy does not refer to local.deploy.statements")
+    if not refers_to(policy_refs, "local.deploy_resources"):
+        failures.append("C35.5 aws_iam_role_policy.deploy policy does not refer to local.deploy_resources")
+    if not refers_to(config_refs(plan, "aws_iam_role_policy.deploy", "role"), "aws_iam_role.deploy"):
+        failures.append("C35.5 aws_iam_role_policy.deploy role does not refer to aws_iam_role.deploy")
+
+    return failures
+
+
 # The JVM services and the telemetry defaults each application.yaml sets. Compose overrides the
 # traces endpoint to Tempo; the defaults stay off, so a service run outside compose exports nothing.
 C34_JVM_SERVICES = ("api-gateway", "application-service", "identity-service", "job-service", "matching-service")
@@ -2680,6 +2786,12 @@ def main():
         failures.extend(check_c35_4(main_plan, repo_root))
         checks_run.append("jobs seed")
         criteria_ran.append("C35.4")
+
+    # C35.5: the deploy role, its trust and statements, and no access key (main plan)
+    if args.main_plan and main_plan:
+        failures.extend(check_c35_5(main_plan, repo_root))
+        checks_run.append("deploy role")
+        criteria_ran.append("C35.5")
 
     # C36.11 reads the started plan because the default plan starts nothing
     if started_plan:
