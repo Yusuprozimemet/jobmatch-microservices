@@ -19,6 +19,7 @@ on:
       - "scripts/live-checks.py"
       - "scripts/test_deploy_scripts.py"
       - "docs/runbooks/deploy.md"
+      - "docs/architecture.md"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/*/Dockerfile"
@@ -50,6 +51,7 @@ on:
       - "scripts/live-checks.py"
       - "scripts/test_deploy_scripts.py"
       - "docs/runbooks/deploy.md"
+      - "docs/architecture.md"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/*/Dockerfile"
@@ -119,6 +121,8 @@ jobs:
           python scripts/live-checks.py --help > /dev/null
           python scripts/test_deploy_scripts.py
           python scripts/check-links.py docs/runbooks/deploy.md
+          python scripts/infra-checks.py --architecture docs/architecture.md
+          python scripts/check-links.py docs/architecture.md
 
       - name: Install Python dependencies
         run: pip install boto3 awscli-local pyyaml

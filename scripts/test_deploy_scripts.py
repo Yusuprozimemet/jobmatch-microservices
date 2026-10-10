@@ -1,5 +1,6 @@
-"""The deploy scripts (Day 35) against stub aws and dig, infra-checks.py --state on a fixture, and
-the deploy runbook and deploy.tfvars.example against the repository.
+"""The deploy scripts (Day 35) against stub aws and dig, infra-checks.py --state on a fixture and
+--architecture on fixtures and the drawing, and the deploy runbook and deploy.tfvars.example
+against the repository.
 
     python scripts/test_deploy_scripts.py
 """
@@ -187,6 +188,34 @@ class DeployScriptsTest(unittest.TestCase):
         result = self.infra_checks_state(None)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("ok (state)", result.stdout)
+
+    def infra_checks_architecture(self, text):
+        path = os.path.join(self.root, "architecture.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return subprocess.run([sys.executable, os.path.join(HERE, "infra-checks.py"), "--architecture", path],
+                              capture_output=True, text=True)
+
+    def test_infra_checks_architecture_passes_when_every_named_tf_file_exists(self):
+        result = self.infra_checks_architecture("[alb.tf](../infra/terraform/alb.tf) and modules/bus/main.tf\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ok (architecture", result.stdout)
+
+    def test_infra_checks_architecture_fails_on_a_named_tf_file_that_does_not_exist(self):
+        result = self.infra_checks_architecture("[alb.tf](../infra/terraform/alb.tf) and nowhere.tf\n")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("nowhere.tf", result.stdout)
+
+    def test_infra_checks_architecture_fails_on_a_drawing_that_names_no_tf_file(self):
+        result = self.infra_checks_architecture("# An empty drawing\n")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("names no .tf file", result.stdout)
+
+    def test_infra_checks_architecture_passes_on_the_real_drawing(self):
+        result = subprocess.run([sys.executable, os.path.join(HERE, "infra-checks.py"), "--architecture",
+                                 os.path.join(REPO, "docs", "architecture.md")], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ok (architecture", result.stdout)
 
     def test_teardown_check_passes_on_an_empty_account(self):
         result = self.run_script("teardown-check.sh", STUB_TEARDOWN="")

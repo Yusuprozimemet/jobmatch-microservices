@@ -1,3 +1,5 @@
+> **Retired (Day 35):** applies only to an installation set up before Day 28. The deployment is a fresh RDS instance that `db-setup` sets up, so nothing here runs on it.
+
 # Runbook: `project_db` renamed `identity_db`, and back
 
 Day 28 made what was left of the monolith identity-service, and its database `identity_db`. A
