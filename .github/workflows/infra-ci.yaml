@@ -12,6 +12,8 @@ on:
       - "scripts/infra-checks.py"
       - "scripts/infra-summary.py"
       - "scripts/test_infra_summary.py"
+      - "scripts/run-once.sh"
+      - "scripts/test_deploy_scripts.py"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/*/Dockerfile"
@@ -36,6 +38,8 @@ on:
       - "scripts/infra-checks.py"
       - "scripts/infra-summary.py"
       - "scripts/test_infra_summary.py"
+      - "scripts/run-once.sh"
+      - "scripts/test_deploy_scripts.py"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/*/Dockerfile"
@@ -95,6 +99,14 @@ jobs:
 
       - name: Test the infra summary
         run: python scripts/test_infra_summary.py
+
+      - name: Test the deploy scripts
+        run: |
+          for script in run-once; do
+            bash "scripts/$script.sh" --help > /dev/null
+          done
+          python scripts/infra-checks.py --help > /dev/null
+          python scripts/test_deploy_scripts.py
 
       - name: Install Python dependencies
         run: pip install boto3 awscli-local pyyaml
