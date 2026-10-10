@@ -1,3 +1,5 @@
+> **Retired (Day 35):** applies only to an installation set up before Day 20. The deployment is a fresh RDS instance that `db-setup` sets up, so nothing here runs on it.
+
 # Runbook: job-service onto `jobs_db`, and back
 
 Day 20 moved the mart (`analytics`, and `analytics_dev` beside it) out of `project_db` into

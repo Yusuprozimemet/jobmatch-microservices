@@ -1,4 +1,4 @@
-# Applied first with local state, destroyed last (Day 35).
+# Applied first with local state, and kept after the main root's destroy: the budget keeps watching (Day 35).
 # Holds the main root's state.
 
 provider "aws" {

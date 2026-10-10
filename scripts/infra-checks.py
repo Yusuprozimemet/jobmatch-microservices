@@ -2325,6 +2325,25 @@ def check_c35_6(repo_root: Path) -> list[str]:
     return failures
 
 
+# A .tf name in the architecture drawing: a word-bounded path ending in .tf, with or without infra/terraform/
+C35_8_TF_NAME = r"\b[\w/.-]+\.tf\b"
+
+
+def check_c35_8_architecture(text: str, terraform_root: Path) -> list[str]:
+    """Check docs/architecture.md: every .tf file it names must exist under infra/terraform/, and it must
+    name at least one, so an empty drawing cannot pass. The names are the links' targets and the labels."""
+    names = list(dict.fromkeys(re.findall(C35_8_TF_NAME, text)))
+    if not names:
+        return ["C35.8: docs/architecture.md names no .tf file"]
+
+    failures = []
+    for name in names:
+        name = name.removeprefix("infra/terraform/")
+        if not (terraform_root / name).is_file():
+            failures.append(f"C35.8: docs/architecture.md names {name}, not under infra/terraform/")
+    return failures
+
+
 # The JVM services and the telemetry defaults each application.yaml sets. Compose overrides the
 # traces endpoint to Tempo; the defaults stay off, so a service run outside compose exports nothing.
 C34_JVM_SERVICES = ("api-gateway", "application-service", "identity-service", "job-service", "matching-service")
@@ -2933,6 +2952,7 @@ def main():
     parser.add_argument("--compose-localstack", help="Compose LocalStack endpoint URL")
     parser.add_argument("--summary", help="Write the criteria that ran and failed to this path as JSON")
     parser.add_argument("--state", help="A pulled Terraform state: only the C32.5 secret sweep runs on it")
+    parser.add_argument("--architecture", help="docs/architecture.md: every .tf it names must exist under infra/terraform/ (C35.8); nothing else runs")
 
     args = parser.parse_args()
 
@@ -2946,6 +2966,20 @@ def main():
                 print(failure)
             sys.exit(1)
         print("infra-checks: ok (state)")
+        return
+
+    # The architecture drawing names the .tf files it draws from; no plan is read for it
+    if args.architecture:
+        with open(args.architecture, "r", encoding="utf-8") as f:
+            architecture_text = f.read()
+        architecture_failures = check_c35_8_architecture(architecture_text, Path(__file__).parent.parent / "infra" / "terraform")
+        if architecture_failures:
+            print(f"infra-checks: {len(architecture_failures)} failures")
+            for failure in architecture_failures:
+                print(failure)
+            sys.exit(1)
+        names = {name.removeprefix("infra/terraform/") for name in re.findall(C35_8_TF_NAME, architecture_text)}
+        print(f"infra-checks: ok (architecture, {len(names)} .tf names)")
         return
 
     failures = []

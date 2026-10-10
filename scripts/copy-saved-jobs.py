@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Retired (Day 35): applies only to an installation set up before Day 25. The deployment is a fresh
+# RDS instance, so nothing here runs on it.
 """Copy saved_jobs from project_db to application-service's apps_db.
 
 Copies applications.saved_jobs from the monolith's project_db into apps_db. Rows already
