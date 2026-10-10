@@ -131,7 +131,7 @@ resource "aws_appautoscaling_policy" "service" {
   }
 }
 
-# Every task gets both roles; the task role has no policy unless its service names one.
+# Every task gets both roles; the task role has no policy unless its service names one, or runs a collector.
 data "aws_iam_policy_document" "assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -203,4 +203,28 @@ resource "aws_iam_role_policy" "task" {
       Resource = [for key in s.resources : var.policy_resources[key]]
     }]
   })
+}
+
+data "aws_iam_policy_document" "telemetry" {
+  count = var.collector == null ? 0 : 1
+
+  # X-Ray has no resource-level permission for these, so this is the one "*" a task role holds.
+  statement {
+    actions   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
+    resources = ["*"]
+  }
+
+  # No logs:CreateLogGroup: Terraform owns the group.
+  statement {
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+    resources = ["${var.metrics_log_group_arn}:*"]
+  }
+}
+
+# One policy beside the service's own task policy, for the collector's traces and metrics.
+resource "aws_iam_role_policy" "telemetry" {
+  count = var.collector == null ? 0 : 1
+
+  role   = aws_iam_role.task.name
+  policy = data.aws_iam_policy_document.telemetry[0].json
 }

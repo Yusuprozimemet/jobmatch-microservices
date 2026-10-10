@@ -8,8 +8,8 @@ in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36
 repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles),
 C36.5 (ALB and certificate), C36.6 (security groups), C36.7 (health checks), C36.8 (Service
 Connect and the compose variables), C36.9 (the service variables), C36.10 (the one-off tasks),
-C36.11 (the scaling), C34.3 (the collector sidecar and the telemetry variables), C34.5 (the metrics
-log group) and C34.8 (the five services' telemetry defaults).
+C36.11 (the scaling), C34.3 (the collector sidecar and the telemetry variables), C34.4 (the task
+role's telemetry policy), C34.5 (the metrics log group) and C34.8 (the five services' telemetry defaults).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1218,7 +1218,8 @@ def check_c36_3(plan: dict) -> list[str]:
 def check_c36_4(plan: dict) -> list[str]:
     """Check the IAM: each task has an execution and a task role, the execution role reads only the
     secrets its task names and its one "*" is ecr:GetAuthorizationToken, each task role reaches only
-    the resources its service names, and no environment variable is an access key or an endpoint."""
+    the resources its service names and its only "*" is the collector's two X-Ray actions, and no
+    environment variable is an access key or an endpoint."""
     failures = []
 
     services = services_output(plan)
@@ -1291,6 +1292,26 @@ def check_c36_4(plan: dict) -> list[str]:
         want = C36_TASK_POLICY_RESOURCES.get(name, set())
         if keys != want:
             failures.append(f"C36.4 {name}: task policy resources {sorted(keys)}, want {sorted(want)}")
+
+    # A task role's policies are the task one and the telemetry one; the telemetry policy's "*" is the
+    # collector's X-Ray actions alone. A missing telemetry document is C34.4's failure, not this one.
+    for path, r in config_with_path(plan):
+        if path == ("service",) and r["type"] == "aws_iam_role_policy" and r["name"] not in ("task", "telemetry"):
+            if refers_to(r.get("expressions", {}).get("role", {}).get("references", []), "aws_iam_role.task"):
+                failures.append(f"C36.4 aws_iam_role_policy.{r['name']}: a policy on the task role, want only task and telemetry")
+    telemetry = config.get(("aws_iam_policy_document", "telemetry"))
+    if telemetry is not None:
+        stars = 0
+        for statement in telemetry.get("expressions", {}).get("statement", []):
+            actions = statement.get("actions", {}).get("constant_value") or []
+            if any("*" in action for action in actions):
+                failures.append(f"C36.4 telemetry policy: action with * in {actions}")
+            if "*" in statement.get("resources", {}).get("constant_value", []):
+                stars += 1
+                if sorted(actions) != ["xray:PutTelemetryRecords", "xray:PutTraceSegments"]:
+                    failures.append(f"C36.4 telemetry policy: * resource for {actions}, want only the two X-Ray actions")
+        if stars != 1:
+            failures.append(f"C36.4 telemetry policy: {stars} statements with a * resource, want 1")
 
     policy_refs = module_call.get("expressions", {}).get("policy_resources", {}).get("references", [])
     if not policy_refs:
@@ -2031,25 +2052,110 @@ def check_c34_3(plan: dict, repo_root: Path) -> list[str]:
     return failures
 
 
-def check_c34_5(plan: dict, repo_root: Path) -> list[str]:
-    """Check that the log group awsemf writes to, named in collector.yaml, is one aws_cloudwatch_log_group
-    in the plan with 14 days' retention."""
+def check_c34_4(plan: dict, repo_root: Path) -> list[str]:
+    """Check the telemetry policy each task role gets when its task runs a collector: the two X-Ray
+    actions on "*", the log actions on the metrics group's streams, and that group is the one awsemf
+    writes to. Only the services with a collector get it, so the frontend has none."""
+    failures = []
+
+    services = services_output(plan)
+    if services is None:
+        return ["C34.4 no services output"]
+    with_collector = {name for name, entry in services.items() if entry.get("collector") is True}
+    if with_collector != C36_SERVICES - {"frontend"}:
+        failures.append(f"C34.4 services with a collector {sorted(with_collector)}, want all but frontend")
+
+    policies = set()
+    for r in resources(plan):
+        match = re.fullmatch(r'module\.service\["([^"]+)"\]\.aws_iam_role_policy\.telemetry(\[\d+\])?', r["address"])
+        if match:
+            policies.add(match.group(1))
+    if policies != with_collector:
+        failures.append(f"C34.4 aws_iam_role_policy.telemetry for {sorted(policies)}, want {sorted(with_collector)}")
+
+    # The roles and policy documents are unknown in the plan: read them from the configuration.
+    config = {(r["type"], r["name"]): r for p, r in config_with_path(plan) if p == ("service",)}
+    policy = config.get(("aws_iam_role_policy", "telemetry"), {}).get("expressions", {})
+    if not refers_to(policy.get("role", {}).get("references", []), "aws_iam_role.task"):
+        failures.append("C34.4 aws_iam_role_policy.telemetry: role does not reference aws_iam_role.task")
+    if not refers_to(policy.get("policy", {}).get("references", []), "data.aws_iam_policy_document.telemetry"):
+        failures.append("C34.4 aws_iam_role_policy.telemetry: policy does not reference data.aws_iam_policy_document.telemetry")
+    if not refers_to(config.get(("aws_iam_role_policy", "telemetry"), {}).get("count_expression", {}).get("references", []), "var.collector"):
+        failures.append("C34.4 aws_iam_role_policy.telemetry: count does not reference var.collector")
+
+    statements = config.get(("aws_iam_policy_document", "telemetry"), {}).get("expressions", {}).get("statement", [])
+    if len(statements) != 2:
+        failures.append(f"C34.4 telemetry policy has {len(statements)} statements, want 2")
+    xray_actions = sorted(["xray:PutTraceSegments", "xray:PutTelemetryRecords"])
+    log_actions = sorted(["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"])
+    kinds = []
+    group_resolved = False
+    for statement in statements:
+        actions = statement.get("actions", {}).get("constant_value")
+        if actions is None:
+            failures.append("C34.4 telemetry policy: a statement's actions are not literal")
+            continue
+        if sorted(actions) == xray_actions:
+            kinds.append("xray")
+            if statement.get("resources", {}).get("constant_value") != ["*"]:
+                failures.append(f"C34.4 telemetry policy: X-Ray actions on {statement.get('resources')}, want *")
+        elif sorted(actions) == log_actions:
+            kinds.append("logs")
+            if "constant_value" in statement.get("resources", {}):
+                failures.append("C34.4 telemetry policy: log resources are a constant, want the metrics group's streams")
+            resolved = resolve(plan, ("service",), statement.get("resources", {}).get("references", []))
+            group_resolved = resolved == {"aws_cloudwatch_log_group.metrics"}
+            if not group_resolved:
+                failures.append(f"C34.4 telemetry policy: log resources resolve to {sorted(resolved)}, want aws_cloudwatch_log_group.metrics")
+        else:
+            failures.append(f"C34.4 telemetry policy: statement with actions {sorted(actions)}, want the X-Ray or the log actions")
+    if sorted(kinds) != ["logs", "xray"]:
+        failures.append(f"C34.4 telemetry policy: statements {sorted(kinds)}, want one X-Ray and one log statement")
+
+    if group_resolved:
+        name, failure = emf_log_group_name(repo_root)
+        group = next((r for r in resources(plan) if r["address"] == "aws_cloudwatch_log_group.metrics"), None)
+        if group is None:
+            failures.append("C34.4 aws_cloudwatch_log_group.metrics: missing from the plan")
+        elif failure:
+            failures.append(failure)
+        elif group["values"].get("name") != name:
+            failures.append(f"C34.4 aws_cloudwatch_log_group.metrics name {group['values'].get('name')}, want {name} from collector.yaml")
+
+    main_text = (repo_root / "infra/terraform/modules/service/main.tf").read_text(encoding="utf-8")
+    if '"${var.metrics_log_group_arn}:*"' not in main_text:
+        failures.append('C34.4 modules/service/main.tf: no "${var.metrics_log_group_arn}:*" stream resource')
+
+    return failures
+
+
+def emf_log_group_name(repo_root: Path) -> tuple[str | None, str | None]:
+    """The log group awsemf writes to, from collector.yaml: (name, None), or (None, failure message)."""
     import yaml
 
     rel = "infra/terraform/collector.yaml"
     path = repo_root / rel
     if not path.is_file():
-        return [f"C34.5 {rel}: missing"]
+        return None, f"C34.5 {rel}: missing"
     try:
         config = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
-        return [f"C34.5 {rel}: not valid YAML: {e}"]
+        return None, f"C34.5 {rel}: not valid YAML: {e}"
 
     exporters = config.get("exporters") if isinstance(config, dict) else None
     emf = exporters.get("awsemf") if isinstance(exporters, dict) else None
     name = emf.get("log_group_name") if isinstance(emf, dict) else None
     if not isinstance(name, str) or not name:
-        return [f"C34.5 {rel}: no exporters.awsemf.log_group_name"]
+        return None, f"C34.5 {rel}: no exporters.awsemf.log_group_name"
+    return name, None
+
+
+def check_c34_5(plan: dict, repo_root: Path) -> list[str]:
+    """Check that the log group awsemf writes to, named in collector.yaml, is one aws_cloudwatch_log_group
+    in the plan with 14 days' retention."""
+    name, failure = emf_log_group_name(repo_root)
+    if failure:
+        return [failure]
 
     groups = [r for r in resources(plan) if r["type"] == "aws_cloudwatch_log_group" and r["values"].get("name") == name]
     if len(groups) != 1:
@@ -2219,12 +2325,13 @@ def main():
         checks_run.append("ECS")
         criteria_ran.extend(f"C36.{n}" for n in range(1, 12))
 
-    # C34.3, C34.5: the collector sidecar and the metrics log group (main plan)
+    # C34.3, C34.4, C34.5: the collector sidecar, its telemetry policy and the metrics log group (main plan)
     if args.main_plan and main_plan:
         failures.extend(check_c34_3(main_plan, repo_root))
+        failures.extend(check_c34_4(main_plan, repo_root))
         failures.extend(check_c34_5(main_plan, repo_root))
         checks_run.append("collector sidecar")
-        criteria_ran.extend(["C34.3", "C34.5"])
+        criteria_ran.extend(["C34.3", "C34.4", "C34.5"])
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:

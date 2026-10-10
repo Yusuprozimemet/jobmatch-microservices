@@ -102,3 +102,8 @@ variable "collector" {
   })
   default = null
 }
+
+# The group the collector's awsemf exporter writes to (collector.tf), for the task role's telemetry policy.
+variable "metrics_log_group_arn" {
+  type = string
+}
