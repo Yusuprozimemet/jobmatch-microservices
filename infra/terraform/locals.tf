@@ -220,7 +220,8 @@ locals {
 
 # The one-off tasks, declared as the services are and read the same way. Each runs once, before the
 # services start (Day 35, H36.3), and has no service. A migrate task runs its service's image with
-# MIGRATE_ONLY, which stops after the migrations.
+# MIGRATE_ONLY, which stops after the migrations. jobs-seed runs the db-setup image's seed instead
+# of its ENTRYPOINT, so it sets entry_point.
 locals {
   tasks = {
     identity-service-migrate = {
@@ -285,6 +286,28 @@ locals {
 
       # The master's password is one key of the RDS-managed secret, not a secret Terraform creates.
       secrets = merge({ POSTGRES_PASSWORD = "rds-master:password::" }, { for role in local.db_roles : "DB_PASSWORD_${upper(role)}" => "db-password-${role}" })
+    }
+
+    # The test mart, loaded into jobs_db (H32.1). seed-mart.py refuses when the mart already has rows.
+    jobs-seed = {
+      image       = "db-setup"
+      cpu         = 256
+      memory      = 512
+      entry_point = ["python", "/app/seed-mart.py"]
+
+      environment = {
+        POSTGRES_PORT = "5432"
+        POSTGRES_DB   = "jobs_db"
+        POSTGRES_USER = "analytics_user"
+      }
+
+      environment_from = {
+        POSTGRES_HOST = "database-address"
+      }
+
+      secrets = {
+        POSTGRES_PASSWORD = "db-password-analytics_user"
+      }
     }
   }
 }

@@ -19,7 +19,7 @@ resource "aws_ecs_task_definition" "task" {
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
-  # Only db-setup passes arguments, so the command key is merged in only when one is set.
+  # Only db-setup passes arguments and only jobs-seed an entry point, so each key is merged in only when set.
   container_definitions = jsonencode([merge({
     name        = var.name
     image       = var.image
@@ -34,6 +34,8 @@ resource "aws_ecs_task_definition" "task" {
         "awslogs-stream-prefix" = var.name
       }
     }
+    }, length(var.task.entry_point) == 0 ? {} : {
+    entryPoint = var.task.entry_point
     }, length(var.task.command) == 0 ? {} : {
     command = var.task.command
   })])
