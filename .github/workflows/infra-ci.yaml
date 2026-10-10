@@ -94,6 +94,13 @@ jobs:
         run: |
           image=$(sed -n 's/^ *collector_image *= *"\(.*\)"$/\1/p' infra/terraform/collector.tf)
           test -n "$image"
+          # Public ECR throttles anonymous pulls per second and runners share their IPs (the
+          # first run of PR #379: "toomanyrequests: Rate exceeded"), so the pull is retried.
+          for wait in 5 10 20 40 0; do
+            docker pull -q "$image" && break
+            [ "$wait" -gt 0 ] || exit 1
+            sleep "$wait"
+          done
           docker run -d --name collector \
             -e AWS_REGION=eu-west-1 -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test \
             -e AOT_CONFIG_CONTENT="$(cat infra/terraform/collector.yaml)" "$image"
