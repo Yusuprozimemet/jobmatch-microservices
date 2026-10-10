@@ -2166,6 +2166,80 @@ def check_c34_5(plan: dict, repo_root: Path) -> list[str]:
     return []
 
 
+# The ALB's alarms (Day 34): the metric each one watches, its dimensions, its thresholds and how it
+# treats missing data. All of them send to the bus module's alarm topic.
+C34_6_ALARMS = {
+    "HTTPCode_Target_5XX_Count": dict(dims={"LoadBalancer": "aws_lb.main.arn_suffix"}, statistic="Sum", period=300, evaluation_periods=1, threshold=0, comparison_operator="GreaterThanThreshold", treat_missing_data="notBreaching"),
+    "HTTPCode_ELB_5XX_Count": dict(dims={"LoadBalancer": "aws_lb.main.arn_suffix"}, statistic="Sum", period=300, evaluation_periods=1, threshold=0, comparison_operator="GreaterThanThreshold", treat_missing_data="notBreaching"),
+    "HealthyHostCount": dict(dims={"LoadBalancer": "aws_lb.main.arn_suffix", "TargetGroup": "aws_lb_target_group.frontend.arn_suffix"}, statistic="Minimum", period=60, evaluation_periods=2, threshold=1, comparison_operator="LessThanThreshold", treat_missing_data="breaching"),
+}
+
+
+def alarm_dimensions(repo_root: Path, address: str) -> dict[str, str] | None:
+    """The dimensions = { Key = expression } of a root-module resource's block in infra/terraform/*.tf,
+    or None when the block is not found once."""
+    rtype, name = address.split(".")
+    found = []
+    for tf in sorted((repo_root / "infra" / "terraform").glob("*.tf")):
+        content = tf.read_text(encoding="utf-8")
+        for block in find_blocks(content, f'resource "{rtype}" "{name}"'):
+            for dims in find_blocks(block, "dimensions ="):
+                found.append(dict(re.findall(r"^\s*(\w+)\s*=\s*(\S+)\s*$", dims, re.MULTILINE)))
+    return found[0] if len(found) == 1 else None
+
+
+def check_c34_6(plan: dict, repo_root: Path) -> list[str]:
+    """Check the alarms in AWS/ApplicationELB: one per metric in C34_6_ALARMS, with its statistic, period,
+    thresholds, dimensions and missing-data treatment, and both actions sending to the bus module's topic."""
+    failures = []
+
+    alarms = [r for r in resources(plan) if r["type"] == "aws_cloudwatch_metric_alarm" and r["values"].get("namespace") == "AWS/ApplicationELB"]
+    if not alarms:
+        return ["C34.6 no aws_cloudwatch_metric_alarm in AWS/ApplicationELB in the plan"]
+
+    by_metric = {}
+    for alarm in alarms:
+        metric = alarm["values"].get("metric_name")
+        by_metric.setdefault(metric, []).append(alarm)
+        if metric not in C34_6_ALARMS:
+            failures.append(f"C34.6 {alarm['address']}: metric_name {metric}, want one of {sorted(C34_6_ALARMS)}")
+
+    for metric, want in C34_6_ALARMS.items():
+        found = by_metric.get(metric, [])
+        if len(found) != 1:
+            failures.append(f"C34.6 {metric}: {len(found)} alarms, want 1")
+            continue
+        alarm = found[0]
+        address = alarm["address"]
+        values = alarm["values"]
+
+        for key in ("statistic", "period", "evaluation_periods", "comparison_operator", "treat_missing_data"):
+            if values.get(key) != want[key]:
+                failures.append(f"C34.6 {address}: {key} {values.get(key)}, want {want[key]}")
+        threshold = values.get("threshold")
+        if threshold is None or float(threshold) != want["threshold"]:
+            failures.append(f"C34.6 {address}: threshold {threshold}, want {want['threshold']}")
+
+        # The dimensions are the ARNs' suffixes, so the plan has the whole map unknown, keys included, and
+        # the configuration gives the map one list of references. Which key holds which suffix is read from
+        # the resource's block in the .tf files; that each suffix is a reference, from the configuration.
+        dims = alarm_dimensions(repo_root, address)
+        if dims != want["dims"]:
+            failures.append(f"C34.6 {address}: dimensions {dims}, want {want['dims']}")
+        dim_refs = config_refs(plan, address, "dimensions")
+        for ref in sorted(want["dims"].values()):
+            if ref not in dim_refs:
+                failures.append(f"C34.6 {address}: dimensions do not reference {ref} in the configuration")
+
+        topics = resolved_refs(plan, address, "alarm_actions")
+        if topics != {"module.bus.aws_sns_topic.alarms"}:
+            failures.append(f"C34.6 {address}: alarm_actions resolve to {sorted(topics)}, want the bus alarm topic")
+        if "module.bus.alarm_topic_arn" not in config_refs(plan, address, "alarm_actions"):
+            failures.append(f"C34.6 {address}: alarm_actions do not reference module.bus.alarm_topic_arn")
+
+    return failures
+
+
 def check_c34_8(repo_root: Path) -> list[str]:
     """Check each JVM service's application.yaml telemetry defaults, and that compose sends traces to Tempo."""
     import yaml
@@ -2332,6 +2406,12 @@ def main():
         failures.extend(check_c34_5(main_plan, repo_root))
         checks_run.append("collector sidecar")
         criteria_ran.extend(["C34.3", "C34.4", "C34.5"])
+
+    # C34.6: the ALB's alarms (main plan)
+    if args.main_plan and main_plan:
+        failures.extend(check_c34_6(main_plan, repo_root))
+        checks_run.append("ALB alarms")
+        criteria_ran.append("C34.6")
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
