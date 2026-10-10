@@ -3,10 +3,12 @@ the deploy runbook and deploy.tfvars.example against the repository.
 
     python scripts/test_deploy_scripts.py
 """
+import importlib.util
 import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -20,6 +22,11 @@ BASH = shutil.which("bash")  # on Windows a bare "bash" can be the WSL launcher 
 # The stubs log each call as one tab-separated line to $STUB_LOG, then answer from STUB_* variables
 STUB_AWS = r"""#!/usr/bin/env bash
 (IFS=$'\t'; printf 'aws\t%s\n' "$*") >> "$STUB_LOG"
+# Teardown runs answer only the leftover verb, so the answers above do not leak into them
+if [ -n "${STUB_TEARDOWN+set}" ]; then
+    [ -n "$STUB_TEARDOWN" ] && case "$*" in *"$STUB_TEARDOWN"*) echo stub-leftover ;; esac
+    exit 0
+fi
 case "$*" in
     *describe-services*) echo network ;;
     *run-task*) echo arn:aws:ecs:eu-west-1:123456789012:task/jobmatch/stubtask ;;
@@ -180,6 +187,35 @@ class DeployScriptsTest(unittest.TestCase):
         result = self.infra_checks_state(None)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("ok (state)", result.stdout)
+
+    def test_teardown_check_passes_on_an_empty_account(self):
+        result = self.run_script("teardown-check.sh", STUB_TEARDOWN="")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("teardown-check: nothing left", result.stdout)
+
+    def test_teardown_check_fails_on_each_kind_left(self):
+        verbs = ["list-clusters", "describe-load-balancers", "describe-target-groups",
+                 "describe-db-instances", "describe-db-snapshots",
+                 "describe-db-instance-automated-backups", "describe-addresses", "describe-vpcs",
+                 "describe-network-interfaces", "describe-repositories", "list-secrets",
+                 "list-tables", "list-topics", "list-queues", "describe-alarms",
+                 "list-dashboards", "describe-log-groups", "list-open-id-connect-providers"]
+        for verb in verbs:
+            with self.subTest(verb=verb):
+                result = self.run_script("teardown-check.sh", STUB_TEARDOWN=verb)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("stub-leftover", result.stdout)
+
+    def test_live_checks_reports_a_listening_port_open_and_a_closed_one_not(self):
+        spec = importlib.util.spec_from_file_location("live_checks", os.path.join(HERE, "live-checks.py"))
+        live = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(live)
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            port = listener.getsockname()[1]
+            self.assertEqual(live.open_ports(["127.0.0.1"], [port], timeout=1), [f"127.0.0.1:{port}"])
+        self.assertEqual(live.open_ports(["127.0.0.1"], [port], timeout=1), [])
 
 
 # The fifteen steps of docs/runbooks/deploy.md, by their titles without the numbers
