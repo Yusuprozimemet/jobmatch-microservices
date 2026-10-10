@@ -2240,6 +2240,92 @@ def check_c34_6(plan: dict, repo_root: Path) -> list[str]:
     return failures
 
 
+def emf_declarations(repo_root: Path) -> list[dict] | None:
+    """The awsemf metric_declarations in collector.yaml, or None if the file does not give a list."""
+    import yaml
+
+    path = repo_root / "infra/terraform/collector.yaml"
+    if not path.is_file():
+        return None
+    try:
+        config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return None
+
+    exporters = config.get("exporters") if isinstance(config, dict) else None
+    emf = exporters.get("awsemf") if isinstance(exporters, dict) else None
+    declarations = emf.get("metric_declarations") if isinstance(emf, dict) else None
+    if not isinstance(declarations, list):
+        return None
+    return [d for d in declarations if isinstance(d, dict)]
+
+
+def check_c34_7(plan: dict, repo_root: Path) -> list[str]:
+    """Check the dashboard: one aws_cloudwatch_dashboard named jobmatch whose widgets (the dashboard output)
+    refer to the local and the ALB's suffix, plot each namespace, plot only JobMatch metrics a metric_declarations
+    entry selects with one of its dimension sets, and plot each service's rate, CPU, memory and DLQ depth."""
+    failures = []
+
+    dashboards = [r for r in resources(plan) if r["type"] == "aws_cloudwatch_dashboard"]
+    if len(dashboards) != 1:
+        return [f"C34.7 {len(dashboards)} aws_cloudwatch_dashboard resources in the plan, want 1"]
+    dashboard = dashboards[0]
+    address = dashboard["address"]
+    if dashboard["values"].get("dashboard_name") != "jobmatch":
+        failures.append(f"C34.7 {address}: dashboard_name {dashboard['values'].get('dashboard_name')}, want jobmatch")
+
+    refs = config_refs(plan, address, "dashboard_body")
+    for want in ("local.dashboard", "aws_lb.main.arn_suffix"):
+        if want not in refs:
+            failures.append(f"C34.7 {address}: dashboard_body does not reference {want} in the configuration")
+
+    output = plan.get("planned_values", {}).get("outputs", {}).get("dashboard", {})
+    widgets = output.get("value")
+    if widgets is None:
+        return failures + ["C34.7 the dashboard output has no value in planned_values (an unknown part)"]
+    if not isinstance(widgets, list) or not widgets:
+        return failures + ["C34.7 the dashboard output is not a non-empty list of widgets"]
+
+    # A metric row is [namespace, name, key, value, ...]: the dimensions are the pairs after the name.
+    def value_of(row: list, key: str) -> str | None:
+        return dict(zip(row[2::2], row[3::2])).get(key)
+
+    rows = [row for widget in widgets for row in widget["properties"]["metrics"]]
+    for namespace in ("AWS/ApplicationELB", "AWS/ECS", "AWS/SQS", "JobMatch"):
+        if not any(row[0] == namespace for row in rows):
+            failures.append(f"C34.7 no widget plots a {namespace} metric")
+
+    declarations = emf_declarations(repo_root)
+    if declarations is None:
+        return failures + ["C34.7 collector.yaml has no exporters.awsemf.metric_declarations list"]
+    for row in rows:
+        if row[0] != "JobMatch":
+            continue
+        name, keys = row[1], set(row[2::2])
+        selected = [d for d in declarations if any(re.search(s, name) for s in d.get("metric_name_selectors", []))]
+        if not any(set(s) == keys for d in selected for s in d.get("dimensions", [])):
+            failures.append(f"C34.7 JobMatch {name} {sorted(keys)}: no metric_declarations entry selecting it has that dimension set")
+
+    services = services_output(plan)
+    if services is None:
+        return failures + ["C34.7 no services output, so the dashboard cannot be checked per service"]
+    jobmatch = [row for row in rows if row[0] == "JobMatch"]
+    for name, service in services.items():
+        if service.get("collector") and not any(value_of(row, "service.name") == f"jobmatch-{name}" for row in jobmatch):
+            failures.append(f"C34.7 no JobMatch row for service.name jobmatch-{name}")
+        for metric in ("CPUUtilization", "MemoryUtilization"):
+            if not any(row[:2] == ["AWS/ECS", metric] and value_of(row, "ServiceName") == name and value_of(row, "ClusterName") == "jobmatch" for row in rows):
+                failures.append(f"C34.7 no AWS/ECS {metric} row for ServiceName {name} in ClusterName jobmatch")
+
+    queues = {r["values"].get("name") for r in resources(plan) if r["type"] == "aws_sqs_queue"}
+    dlqs = {name for name in queues if isinstance(name, str) and name.endswith("-dlq")}
+    plotted = {value_of(row, "QueueName") for row in rows if row[0] == "AWS/SQS"}
+    if plotted != dlqs:
+        failures.append(f"C34.7 AWS/SQS rows plot queues {sorted(plotted, key=str)}, want the plan's DLQs {sorted(dlqs)}")
+
+    return failures
+
+
 def check_c34_8(repo_root: Path) -> list[str]:
     """Check each JVM service's application.yaml telemetry defaults, and that compose sends traces to Tempo."""
     import yaml
@@ -2412,6 +2498,12 @@ def main():
         failures.extend(check_c34_6(main_plan, repo_root))
         checks_run.append("ALB alarms")
         criteria_ran.append("C34.6")
+
+    # C34.7: the dashboard (main plan)
+    if args.main_plan and main_plan:
+        failures.extend(check_c34_7(main_plan, repo_root))
+        checks_run.append("dashboard")
+        criteria_ran.append("C34.7")
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
