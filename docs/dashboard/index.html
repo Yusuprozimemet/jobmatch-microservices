@@ -144,6 +144,15 @@
     <div class="chips" id="infra-runs"></div>
   </section>
 
+  <section class="panel" id="deployment">
+    <div class="panel-head">
+      <h2>The deployment, as it was checked live</h2>
+      <p>Day 35 deploys once. <code>scripts/live-checks.py</code> then checks the running system against the domain (C35.16 and C35.17) and commits <code>deployment.json</code>. Each check shows its result and when it ran; the account is destroyed after.</p>
+    </div>
+    <div id="deployment-head"></div>
+    <div class="scroll-x" id="deployment-checks"></div>
+  </section>
+
   <section class="panel" id="tokens">
     <div class="panel-head">
       <h2>Tokens spent</h2>

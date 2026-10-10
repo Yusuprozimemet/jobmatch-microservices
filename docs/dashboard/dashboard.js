@@ -831,7 +831,20 @@ function drawInfra() {
     `<a class="run-sq" href="${esc(r.url)}" style="background:${tone(r.conclusion)}" title="${esc(`${r.sha} ${r.date} ${r.conclusion || "running"}`)}"></a>`).join("");
 }
 
-drawNow(); drawWork(); drawPerDay(); drawVerification(); drawInfra(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
+// The live checks of the one deployment (scripts/live-checks.py), each with the time it ran.
+function drawDeployment() {
+  const D = DATA.deployment, C = D ? D.checks : [];
+  const tone = ok => ok ? "var(--close)" : "var(--fail)";
+  if (!D) {
+    document.getElementById("deployment-head").innerHTML = '<p class="load-error">Nothing deployed yet: the panel fills when scripts/live-checks.py has written docs/dashboard/deployment.json.</p>';
+    document.getElementById("deployment-checks").innerHTML = "";
+    return;
+  }
+  document.getElementById("deployment-head").innerHTML = `<p>Checked ${esc(D.domain)} at ${esc(D.checkedAt)}: ${C.filter(c => c.ok).length} of ${C.length} checks passed.</p>`;
+  document.getElementById("deployment-checks").innerHTML = `<table><thead><tr><th>Criterion</th><th>Check</th><th>Result</th><th>Detail</th><th>Checked at</th></tr></thead><tbody>${C.map(c => `<tr><td>${esc(c.criterion)}</td><td>${esc(c.name)}</td><td><span class="chip" style="color:${tone(c.ok)}">${c.ok ? "pass" : "fail"}</span></td><td>${esc(c.detail)}</td><td>${esc(c.at)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+drawNow(); drawWork(); drawPerDay(); drawVerification(); drawInfra(); drawDeployment(); drawTokens(); drawEvidence(); drawHandOffs(); drawConclusion(); drawFindings(); drawTable(); setSel(sel);
 }
 
 function start() {
