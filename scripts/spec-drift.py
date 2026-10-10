@@ -224,7 +224,7 @@ def code_like(tok):
 
 
 WORK_KINDS = ("spec", "context", "prod", "test", "tooling")
-NOT_WRITTEN = re.compile(r"(^|/)package-lock\.json$|^docs/dashboard/token-usage\.json$|^screenshots/")
+NOT_WRITTEN = re.compile(r"(^|/)package-lock\.json$|^docs/dashboard/token-usage\.json$|^docs/dashboard/deployment\.json$|^screenshots/")
 TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)(test_[^/]*|[^/]*_test|conftest)\.py$|(Test|Tests|IT)\.java$"
                        r"|\.(test|spec)\.[jt]sx?$")
 
@@ -971,6 +971,15 @@ def token_usage():
         return json.load(f)
 
 
+def deployment():
+    """The live checks of the one deployment (scripts/live-checks.py), or None if nothing was deployed."""
+    path = os.path.join(PAGE, "deployment.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 INFRA_TRIES = 5
 
 
@@ -1112,6 +1121,7 @@ def main():
                                vocab_size=vocab, tokens=token_usage(),
                                verification=verification(prs, runs),
                                infra=infra(),
+                               deployment=deployment(),
                                conclusion=conclusion(blobs.read(snaps[-1]["sha"], "docs/lab-notebook.md")),
                                meta=dict(caveats=CAVEATS, provenance=provenance())),
                           separators=(",", ":"))

@@ -155,6 +155,7 @@ class SpecDriftTest(unittest.TestCase):
                           ("scripts/spec-drift.py", "tooling"), (".github/workflows/ci.yml", "tooling"),
                           ("docs/dashboard/dashboard.js", "tooling"), ("backend/app/src/main/java/x/Latest.java", "prod"),
                           ("docker-compose.yml", "prod"), ("docs/dashboard/token-usage.json", None),
+                          ("docs/dashboard/deployment.json", None),
                           ("frontend/package-lock.json", None), ("screenshots/a.png", None)]:
             self.assertEqual(sd.work_kind(path), box, path)
         self.assertEqual(sd.renamed_to("backend/{app => job}/src/X.java"), "backend/job/src/X.java")
@@ -228,6 +229,21 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual([r["sha"] for r in got["runs"]], ["bbbbbbb", "aaaaaaa"])
         self.assertEqual(got["latest"], dict(sha="aaaaaaa", conclusion="success", date="2026-10-07", url="u1",
                                              summary={"criteria": {"C32.2": "pass"}}))
+
+    def test_the_deployment_is_its_checks_and_none_without_the_file(self):
+        real = sd.PAGE
+        sd.PAGE = tempfile.mkdtemp()
+        try:
+            self.assertIsNone(sd.deployment())
+            checks = [dict(criterion="C35.16", name="the site answers", ok=True, detail="200", at="2026-10-10T09:00:00Z"),
+                      dict(criterion="C35.17", name="login sets the cookie", ok=False, detail="no Secure",
+                           at="2026-10-10T09:01:00Z")]
+            with open(os.path.join(sd.PAGE, "deployment.json"), "w", encoding="utf-8") as f:
+                json.dump(dict(domain="example.test", checkedAt="2026-10-10T09:01:00Z", checks=checks), f)
+            self.assertEqual(sd.deployment()["checks"], checks)
+        finally:
+            shutil.rmtree(sd.PAGE)
+            sd.PAGE = real
 
     def test_the_data_names_the_commit_versions_and_draws_that_made_it(self):
         p = sd.provenance()
