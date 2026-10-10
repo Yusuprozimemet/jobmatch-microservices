@@ -66,6 +66,13 @@ resource "aws_ecs_service" "service" {
   launch_type     = "FARGATE"
   desired_count   = var.started ? var.service.desired_count : 0
 
+  # A failed deployment rolls back to the previous task definition; migrations are forward-only,
+  # so the rollback swaps images, never the schema.
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids

@@ -1790,6 +1790,57 @@ def check_c36_11(plan: dict) -> list[str]:
     return failures
 
 
+def check_c35_1(plan: dict) -> list[str]:
+    """Check the domain's record: one A record named by var.domain in var.route53_zone_id, whose alias
+    refers to the ALB (read from the configuration, the plan shows only the resolved name and zone)."""
+    failures = []
+
+    records = [r for r in resources(plan) if r["type"] == "aws_route53_record"]
+    a_records = [r for r in records if r["values"].get("type") == "A"]
+    if not a_records:
+        found = [r["address"] for r in records]
+        return [f"C35.1 no aws_route53_record of type A; the plan's records: {found}"]
+    if len(a_records) > 1:
+        return [f"C35.1 {len(a_records)} aws_route53_record of type A, want one: {[r['address'] for r in a_records]}"]
+
+    record = a_records[0]
+    address = record["address"]
+    domain = plan["variables"]["domain"]["value"]
+    zone_id = plan["variables"]["route53_zone_id"]["value"]
+    if record["values"].get("name") != domain:
+        failures.append(f"C35.1 {address} name {record['values'].get('name')}, want {domain}")
+    if record["values"].get("zone_id") != zone_id:
+        failures.append(f"C35.1 {address} zone_id {record['values'].get('zone_id')}, want {zone_id}")
+
+    alias = config_expressions(plan, address)[1].get("alias", [])
+    if not alias:
+        failures.append(f"C35.1 {address} has no alias block, want one to aws_lb.main")
+        return failures
+    for attr in ("name", "zone_id"):
+        refs = alias[0].get(attr, {}).get("references", [])
+        if not refers_to(refs, "aws_lb.main"):
+            failures.append(f"C35.1 {address} alias {attr} refers to {refs or 'nothing'}, want aws_lb.main")
+
+    return failures
+
+
+def check_c35_2(plan: dict) -> list[str]:
+    """Check every ECS service rolls a failed deployment back: deployment_circuit_breaker with enable
+    and rollback both true."""
+    failures = []
+
+    services = [r for r in resources(plan) if r["type"] == "aws_ecs_service"]
+    if not services:
+        return ["C35.2 no aws_ecs_service in the plan"]
+    for service in services:
+        value = service["values"].get("deployment_circuit_breaker")
+        on = [b for b in value or [] if b.get("enable") is True and b.get("rollback") is True]
+        if not isinstance(value, list) or len(on) != 1:
+            failures.append(f"C35.2 {service['address']} deployment_circuit_breaker {value}, want enable and rollback true")
+
+    return failures
+
+
 def check_c35_3(plan: dict, started_plan: dict | None) -> list[str]:
     """Check the default plan starts nothing (every desired count 0, no scaling), and the started plan
     runs each service at the count local.services declares."""
@@ -2534,6 +2585,14 @@ def main():
         failures.extend(check_c36_10(main_plan, repo_root))
         checks_run.append("ECS")
         criteria_ran.extend(f"C36.{n}" for n in range(1, 11))
+
+    # C35.1, C35.2: the domain's record and the services' rollback (main plan)
+    if args.main_plan and main_plan:
+        failures.extend(check_c35_1(main_plan))
+        failures.extend(check_c35_2(main_plan))
+        checks_run.append("domain record")
+        checks_run.append("circuit breaker")
+        criteria_ran.extend(["C35.1", "C35.2"])
 
     # C35.3: the default plan starts nothing, so the scaling is checked on the started plan
     if args.main_plan and main_plan:
