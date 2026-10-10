@@ -2064,6 +2064,205 @@ def check_c35_5(plan: dict, repo_root: Path) -> list[str]:
     return failures
 
 
+# The workflows with a deploy job, and the ECS service each deploys (None: an image only, no service) (C35.6).
+C35_DEPLOY_WORKFLOWS = {
+    "api-gateway-ci-cd.yaml": "api-gateway",
+    "job-service-ci-cd.yaml": "job-service",
+    "matching-service-ci-cd.yaml": "matching-service",
+    "frontend-ci-cd.yaml": "frontend",
+    "db-setup-tests.yml": None,
+}
+# infra-ci reruns when any of the seven changes, identity's and application-service's included (Track C2b adds their jobs).
+C35_INFRA_CI_WORKFLOWS = (
+    "api-gateway-ci-cd.yaml",
+    "application-service-ci-cd.yaml",
+    "db-setup-tests.yml",
+    "frontend-ci-cd.yaml",
+    "identity-service-ci-cd.yaml",
+    "job-service-ci-cd.yaml",
+    "matching-service-ci-cd.yaml",
+)
+# The only tokens the workflows' if: expressions use; anything else is an error, not a guess (C35.6).
+C35_EXPRESSION_TOKEN = re.compile(r"(==|!=|&&|\|\||[!()])|'([^']*)'|([A-Za-z_][\w.]*)")
+
+
+def workflow_condition(expression, context: dict[str, str]) -> bool:
+    """Evaluate a GitHub Actions if: or ${{ }} expression over the context's values (C35.6). An unset
+    vars.* reads as the empty string, as GitHub reads it; any other unknown name raises ValueError."""
+    if expression is None:
+        return True
+    if isinstance(expression, bool):
+        return expression
+    text = str(expression).strip()
+    if text.startswith("${{") and text.endswith("}}"):
+        text = text[3:-2].strip()
+    python = []
+    pos = 0
+    while pos < len(text):
+        if text[pos].isspace():
+            pos += 1
+            continue
+        match = C35_EXPRESSION_TOKEN.match(text, pos)
+        if not match:
+            raise ValueError(f"cannot read {text[pos:]!r} in {str(expression)!r}")
+        pos = match.end()
+        operator, string, name = match.groups()
+        if operator:
+            python.append({"&&": "and", "||": "or", "!": "not"}.get(operator, operator))
+        elif string is not None:
+            python.append(repr(string))
+        elif name in ("true", "false"):
+            python.append(name.capitalize())
+        elif name in context:
+            python.append(repr(context[name]))
+        elif name.startswith("vars."):
+            python.append("''")
+        else:
+            raise ValueError(f"unknown name {name!r} in {str(expression)!r}")
+    try:
+        return bool(eval(" ".join(python), {"__builtins__": {}}))
+    except SyntaxError as error:
+        raise ValueError(f"malformed expression {str(expression)!r}") from error
+
+
+def c35_step_kind(step: dict) -> str | None:
+    """Classify the steps the deploy checks count: an ECR push, a GHCR push, the deploy role, the ECS update (C35.6)."""
+    uses = str(step.get("uses", ""))
+    run = str(step.get("run", ""))
+    if uses.startswith("docker/build-push-action"):
+        return "ecr" if "ecr" in str((step.get("with") or {}).get("tags", "")).lower() else "ghcr"
+    if "docker push" in run or re.search(r"docker (buildx )?build\b.*--push", run):
+        return "ecr"
+    if uses.startswith("aws-actions/configure-aws-credentials"):
+        return "role"
+    if "aws ecs update-service" in run:
+        return "update"
+    return None
+
+
+def check_c35_6(repo_root: Path) -> list[str]:
+    """Check the deploy job in the seven workflows: workflow_dispatch, the ECR push, the role and the ECS
+    update only on main with DEPLOY_ENABLED on, the OIDC role without keys or an environment, the GHCR
+    push that stays while the switch is off (db-setup pushes nothing), and infra-ci's paths for them."""
+    import yaml
+
+    failures = []
+    # Every event, ref and switch value the if: expressions read; the deploy runs in exactly one of them.
+    scenarios = []
+    for event in ("push", "workflow_dispatch", "pull_request"):
+        refs = ("refs/pull/1/merge", "refs/heads/other") if event == "pull_request" else ("refs/heads/main", "refs/heads/other")
+        for ref in refs:
+            for switch in ("true", ""):
+                context = {
+                    "github.event_name": event,
+                    "github.ref": ref,
+                    "vars.DEPLOY_ENABLED": switch,
+                    "needs.changes.outputs.run": "true",
+                }
+                deploy = event != "pull_request" and ref == "refs/heads/main" and switch == "true"
+                scenarios.append((f"{event} {ref} DEPLOY_ENABLED='{switch}'", context, deploy))
+
+    def runs_step(job: dict, step: dict, context: dict) -> bool:
+        return workflow_condition(job.get("if"), context) and workflow_condition(step.get("if"), context)
+
+    def pushes_step(job: dict, step: dict, context: dict) -> bool:
+        return runs_step(job, step, context) and workflow_condition((step.get("with") or {}).get("push"), context)
+
+    for file, service in C35_DEPLOY_WORKFLOWS.items():
+        path = repo_root / ".github" / "workflows" / file
+        if not path.is_file():
+            failures.append(f"C35.6 {file}: missing")
+            continue
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        jobs = workflow.get("jobs", {})
+        # YAML 1.1 reads the bare key "on" as True.
+        triggers = workflow.get("on") or workflow.get(True) or {}
+        if "workflow_dispatch" not in triggers:
+            failures.append(f"C35.6 {file}: no workflow_dispatch trigger")
+        for job_name, job in jobs.items():
+            if "environment" in job:
+                failures.append(f"C35.6 {file} job {job_name}: has an environment, which changes the token's sub")
+
+        found = [(c35_step_kind(step), job_name, job, step) for job_name, job in jobs.items() for step in job.get("steps", [])]
+        for kind, _, _, step in found:
+            with_ = step.get("with") or {}
+            if "aws-access-key-id" in with_ or "aws-secret-access-key" in with_:
+                failures.append(f"C35.6 {file} step {step.get('name')!r}: passes access keys, want the OIDC role")
+            if kind == "role" and "vars.AWS_DEPLOY_ROLE_ARN" not in str(with_.get("role-to-assume", "")):
+                failures.append(f"C35.6 {file} step {step.get('name')!r}: role-to-assume is not vars.AWS_DEPLOY_ROLE_ARN")
+        if not any(kind == "ecr" for kind, *_ in found):
+            failures.append(f"C35.6 {file}: no ECR push")
+        if sum(kind == "role" for kind, *_ in found) != 1:
+            failures.append(f"C35.6 {file}: want exactly one deploy-role step")
+
+        for kind, _, job, step in found:
+            if kind not in ("ecr", "role", "update"):
+                continue
+            for label, context, deploy in scenarios:
+                try:
+                    ran = runs_step(job, step, context)
+                except ValueError as error:
+                    failures.append(f"C35.6 {file} step {step.get('name')!r}: {error}")
+                    break
+                if ran and not deploy:
+                    failures.append(f"C35.6 {file} step {step.get('name')!r} runs on {label}, want only on main with the switch on")
+                    break
+                if deploy and not ran:
+                    failures.append(f"C35.6 {file} step {step.get('name')!r} does not run on {label}, want it on main with the switch on")
+                    break
+
+        for job_name in sorted({job_name for kind, job_name, _, _ in found if kind in ("ecr", "role", "update")}):
+            if (jobs[job_name].get("permissions") or {}).get("id-token") != "write":
+                failures.append(f"C35.6 {file} job {job_name}: no id-token: write")
+
+        updates = [(job, step) for kind, _, job, step in found if kind == "update"]
+        ghcr = [(job, step) for kind, _, job, step in found if kind == "ghcr"]
+        if service is None and updates:
+            failures.append(f"C35.6 {file}: runs update-service, want none for an image only")
+        if service is not None:
+            if len(updates) != 1:
+                failures.append(f"C35.6 {file}: {len(updates)} update-service steps, want one")
+            for job, step in updates:
+                run = str(step.get("run", ""))
+                for want in ("--cluster jobmatch", f"--service {service}", "--force-new-deployment"):
+                    if want not in run:
+                        failures.append(f"C35.6 {file} step {step.get('name')!r}: run lacks {want}")
+                job_steps = job.get("steps", [])
+                if not any(c35_step_kind(s) == "ecr" for s in job_steps[:job_steps.index(step)]):
+                    failures.append(f"C35.6 {file} step {step.get('name')!r}: no ECR push before it")
+            if len(ghcr) != 1:
+                failures.append(f"C35.6 {file}: {len(ghcr)} GHCR push steps, want one")
+
+        # The six services push to GHCR while the switch is off; db-setup pushes nothing in any scenario.
+        for job, step in ghcr:
+            for label, context, deploy in scenarios:
+                main_push = context["github.event_name"] != "pull_request" and context["github.ref"] == "refs/heads/main"
+                want = service is not None and main_push and not deploy
+                try:
+                    got = pushes_step(job, step, context)
+                except ValueError as error:
+                    failures.append(f"C35.6 {file} step {step.get('name')!r}: {error}")
+                    break
+                if got != want:
+                    verb = "pushes" if got else "does not push"
+                    expected = "only on main with the switch off" if service is not None else "never: db-setup pushes only to ECR"
+                    failures.append(f"C35.6 {file} step {step.get('name')!r} {verb} on {label}, want it to push {expected}")
+                    break
+
+    infra_path = repo_root / ".github" / "workflows" / "infra-ci.yaml"
+    if not infra_path.is_file():
+        return failures + ["C35.6 infra-ci.yaml: missing"]
+    infra = yaml.safe_load(infra_path.read_text(encoding="utf-8"))
+    triggers = infra.get("on") or infra.get(True) or {}
+    for trigger in ("pull_request", "push"):
+        paths = (triggers.get(trigger) or {}).get("paths", [])
+        for file in C35_INFRA_CI_WORKFLOWS:
+            if f".github/workflows/{file}" not in paths:
+                failures.append(f"C35.6 infra-ci.yaml {trigger} paths lack .github/workflows/{file}")
+
+    return failures
+
+
 # The JVM services and the telemetry defaults each application.yaml sets. Compose overrides the
 # traces endpoint to Tempo; the defaults stay off, so a service run outside compose exports nothing.
 C34_JVM_SERVICES = ("api-gateway", "application-service", "identity-service", "job-service", "matching-service")
@@ -2739,6 +2938,11 @@ def main():
     failures.extend(check_c34_8(repo_root))
     checks_run.append("telemetry defaults")
     criteria_ran.append("C34.8")
+
+    # C35.6: the deploy job in the workflows, behind DEPLOY_ENABLED on main (no plan needed)
+    failures.extend(check_c35_6(repo_root))
+    checks_run.append("deploy workflows")
+    criteria_ran.append("C35.6")
 
     # C32.4: Main plan network and database checks
     if args.main_plan and main_plan:

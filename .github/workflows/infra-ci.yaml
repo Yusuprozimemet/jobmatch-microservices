@@ -19,6 +19,13 @@ on:
       - "services/identity-service/app/src/main/resources/application.yaml"
       - "observability/**"
       - "services/identity-service/**/support/EventBus.java"
+      - ".github/workflows/api-gateway-ci-cd.yaml"
+      - ".github/workflows/application-service-ci-cd.yaml"
+      - ".github/workflows/db-setup-tests.yml"
+      - ".github/workflows/frontend-ci-cd.yaml"
+      - ".github/workflows/identity-service-ci-cd.yaml"
+      - ".github/workflows/job-service-ci-cd.yaml"
+      - ".github/workflows/matching-service-ci-cd.yaml"
       - ".github/workflows/infra-ci.yaml"
   push:
     branches:
@@ -36,6 +43,13 @@ on:
       - "services/identity-service/app/src/main/resources/application.yaml"
       - "observability/**"
       - "services/identity-service/**/support/EventBus.java"
+      - ".github/workflows/api-gateway-ci-cd.yaml"
+      - ".github/workflows/application-service-ci-cd.yaml"
+      - ".github/workflows/db-setup-tests.yml"
+      - ".github/workflows/frontend-ci-cd.yaml"
+      - ".github/workflows/identity-service-ci-cd.yaml"
+      - ".github/workflows/job-service-ci-cd.yaml"
+      - ".github/workflows/matching-service-ci-cd.yaml"
       - ".github/workflows/infra-ci.yaml"
 
 permissions:
