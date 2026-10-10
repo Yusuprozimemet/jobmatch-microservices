@@ -1,4 +1,5 @@
-"""The deploy scripts (Day 35) against stub aws and dig, and infra-checks.py --state on a fixture.
+"""The deploy scripts (Day 35) against stub aws and dig, infra-checks.py --state on a fixture, and
+the deploy runbook and deploy.tfvars.example against the repository.
 
     python scripts/test_deploy_scripts.py
 """
@@ -179,6 +180,52 @@ class DeployScriptsTest(unittest.TestCase):
         result = self.infra_checks_state(None)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("ok (state)", result.stdout)
+
+
+# The fifteen steps of docs/runbooks/deploy.md, by their titles without the numbers
+RUNBOOK_STEPS = [
+    "Preflight", "The bootstrap", "The budget", "The main root, services stopped",
+    "The alarm topic's subscription", "The seven images", "The secrets", "db-setup",
+    "The migrations", "jobs-seed", "Services started", "The live checks", "The audits",
+    "The destroy", "The teardown check",
+]
+
+
+class RunbookTest(unittest.TestCase):
+    def runbook_sections(self):
+        """Each numbered step as (number, title, text), the text running to the next heading."""
+        with open(os.path.join(REPO, "docs", "runbooks", "deploy.md"), encoding="utf-8") as f:
+            text = f.read()
+        headings = list(re.finditer(r"^## (\d+)\. (.+)$", text, re.M))
+        ends = [h.start() for h in headings[1:]] + [len(text)]
+        return [(int(h.group(1)), h.group(2), text[h.start():end]) for h, end in zip(headings, ends)]
+
+    def test_runbook_has_every_step_in_order(self):
+        steps = [(number, title) for number, title, _ in self.runbook_sections()]
+        self.assertEqual(steps, list(enumerate(RUNBOOK_STEPS, 1)))
+
+    def test_every_step_has_a_check(self):
+        for number, _, text in self.runbook_sections():
+            self.assertIn("**Check:**", text, f"step {number} has no check")
+
+    def test_tfvars_example_names_the_variables(self):
+        with open(os.path.join(REPO, "infra", "terraform", "deploy.tfvars.example"), encoding="utf-8") as f:
+            named = re.findall(r"^([a-z0-9_]+)\s*=", f.read(), re.M)
+        with open(os.path.join(REPO, "infra", "terraform", "variables.tf"), encoding="utf-8") as f:
+            variables = f.read()
+        declared = re.findall(r'^variable "(\w+)"', variables, re.M)
+        for name in named:
+            self.assertIn(name, declared, "the example names a variable that variables.tf does not declare")
+        required = [m.group(1) for m in re.finditer(r'^variable "(\w+)" \{\n(.*?)^\}', variables, re.M | re.S)
+                    if not re.search(r"^\s*default\s*=", m.group(2), re.M)]
+        for name in required:
+            self.assertIn(name, named, "a variable with no default is missing from the example")
+
+    def test_deploy_tfvars_is_ignored(self):
+        result = subprocess.run(["git", "check-ignore", "-q", "infra/terraform/deploy.tfvars"],
+                                cwd=REPO, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,6 +16,7 @@ on:
       - "scripts/write-secrets.sh"
       - "scripts/run-once.sh"
       - "scripts/test_deploy_scripts.py"
+      - "docs/runbooks/deploy.md"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/*/Dockerfile"
@@ -44,6 +45,7 @@ on:
       - "scripts/write-secrets.sh"
       - "scripts/run-once.sh"
       - "scripts/test_deploy_scripts.py"
+      - "docs/runbooks/deploy.md"
       - "docker-compose.yml"
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/*/Dockerfile"
@@ -111,6 +113,7 @@ jobs:
           done
           python scripts/infra-checks.py --help > /dev/null
           python scripts/test_deploy_scripts.py
+          python scripts/check-links.py docs/runbooks/deploy.md
 
       - name: Install Python dependencies
         run: pip install boto3 awscli-local pyyaml

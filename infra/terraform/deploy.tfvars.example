@@ -1,0 +1,10 @@
+# Copy this file to deploy.tfvars beside it (gitignored) and fill in the values. Every plan, apply
+# and destroy of the main root in docs/runbooks/deploy.md passes it as -var-file=deploy.tfvars.
+# scripts/deploy-preflight.sh reads it with sed, so keep each string in double quotes on one line.
+
+# alert_email: the maintainer's address; preflight fails on this placeholder. No comment after a
+# quoted value: preflight's sed would not read it.
+alert_email     = "alerts@example.com"
+domain          = "example.com"
+route53_zone_id = "Z0000000000000000000"
+start_services  = false # the first apply; set true for step 11 and every apply after

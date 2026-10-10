@@ -244,3 +244,4 @@ data/airflow/.env
 tfplan
 *.tfplan
 ci_override.tf
+infra/terraform/deploy.tfvars
