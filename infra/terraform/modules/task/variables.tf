@@ -7,6 +7,7 @@ variable "task" {
     cpu              = number
     memory           = number
     command          = optional(list(string), [])
+    entry_point      = optional(list(string), [])
     environment      = optional(map(string), {})
     environment_from = optional(map(string), {})
     secrets          = optional(map(string), {})

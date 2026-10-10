@@ -4,6 +4,8 @@ name: db-setup.py runs twice and matches its pin
 # could merge unseen. scripts/test_db_setup.py runs it twice against a fresh Postgres:
 # the second run must change nothing, and the result must equal the pin in the test.
 # The same script is the image the db-setup task runs (Day 36), so that image must build and print its help.
+# The image also holds seed-mart.py and the two fixtures (the jobs-seed task): the seed runs against the
+# Postgres after db-setup, and its second run must refuse.
 
 on:
   pull_request:
@@ -11,6 +13,10 @@ on:
       - scripts/db-setup.py
       - scripts/db-setup.Dockerfile
       - scripts/test_db_setup.py
+      - scripts/seed-mart.py
+      - scripts/test_seed_mart.py
+      - services/identity-service/app/src/test/resources/fixtures/analytics-schema.sql
+      - services/identity-service/app/src/test/resources/fixtures/analytics-seed.sql
       - .github/workflows/db-setup-tests.yml
   push:
     branches:
@@ -19,6 +25,10 @@ on:
       - scripts/db-setup.py
       - scripts/db-setup.Dockerfile
       - scripts/test_db_setup.py
+      - scripts/seed-mart.py
+      - scripts/test_seed_mart.py
+      - services/identity-service/app/src/test/resources/fixtures/analytics-schema.sql
+      - services/identity-service/app/src/test/resources/fixtures/analytics-seed.sql
       - .github/workflows/db-setup-tests.yml
 
 permissions:
@@ -54,5 +64,11 @@ jobs:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ${{ format('dbsetup-{0}-{1}', github.run_id, github.run_attempt) }}
-      - run: docker build -t jobmatch-db-setup:ci -f scripts/db-setup.Dockerfile scripts
+      - run: docker build --build-context fixtures=services/identity-service/app/src/test/resources/fixtures -t jobmatch-db-setup:ci -f scripts/db-setup.Dockerfile scripts
+      - run: python -m pytest -q scripts/test_seed_mart.py
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ format('dbsetup-{0}-{1}', github.run_id, github.run_attempt) }}
+          SEED_IMAGE: jobmatch-db-setup:ci
       - run: docker run --rm jobmatch-db-setup:ci --help

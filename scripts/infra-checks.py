@@ -1042,8 +1042,8 @@ C36_TASK_POLICY_RESOURCES = {
     "matching-service": {"scores-table", "matching-user-deleted"},
     "application-service": {"applications-user-deleted"},
 }
-# The one-off tasks in locals.tf: two migrate tasks and db-setup. None has a service.
-C36_TASKS = {"identity-service-migrate", "application-service-migrate", "db-setup"}
+# The four one-off tasks in locals.tf: two migrate tasks, db-setup and jobs-seed. None has a service.
+C36_TASKS = {"identity-service-migrate", "application-service-migrate", "db-setup", "jobs-seed"}
 
 
 # Compose variables that have no services entry, each with the reason it is left out.
@@ -1657,7 +1657,7 @@ def check_c36_9(plan: dict) -> list[str]:
 
 
 def check_c36_10(plan: dict, repo_root: Path) -> list[str]:
-    """Check the one-off tasks: three task definitions in module.task and no service for any of them,
+    """Check the one-off tasks: four task definitions in module.task and no service for any of them,
     each migrate on its service's image with MIGRATE_ONLY, db-setup on its image with the master
     secret and every role's password, the module's master secret read from RDS, the Dockerfile's
     entrypoint, and the workflow that builds the image and runs its --help."""
@@ -1684,7 +1684,7 @@ def check_c36_10(plan: dict, repo_root: Path) -> list[str]:
         if r["type"] == "aws_ecs_service" and (r["address"].startswith("module.task[") or r["values"].get("name") in C36_TASKS):
             failures.append(f"C36.10 {r['address']}: a service for a one-off task, want none")
 
-    for name in sorted(C36_TASKS - {"db-setup"}):
+    for name in sorted(C36_TASKS - {"db-setup", "jobs-seed"}):
         service = name.removesuffix("-migrate")
         task = tasks.get(name, {})
         env = task.get("environment", {})
@@ -1879,6 +1879,81 @@ def check_c35_3(plan: dict, started_plan: dict | None) -> list[str]:
         got = started[address]["values"].get("desired_count")
         if got != service["desired_count"]:
             failures.append(f"C35.3 {address} desired_count {got}, want {service['desired_count']}")
+
+    return failures
+
+
+def check_c35_4(plan: dict, repo_root: Path) -> list[str]:
+    """Check the jobs seed: jobs-seed is a one-off task on the db-setup image whose entry point runs
+    seed-mart.py as analytics_user on jobs_db with its password, and module.task passes that entry
+    point to the container with no command. Then the image's files and the workflow that builds and
+    runs it, which must name the fixtures and the seed's test."""
+    import yaml
+
+    failures = []
+
+    tasks = tasks_output(plan)
+    if tasks is None:
+        return ["C35.4 no tasks output"]
+    task = tasks.get("jobs-seed")
+    if task is None:
+        return ["C35.4 tasks output has no jobs-seed"]
+    if task.get("image") != "db-setup":
+        failures.append(f"C35.4 jobs-seed image {task.get('image')}, want db-setup")
+    entry_point = task.get("entry_point") or []
+    if not entry_point or not entry_point[-1].endswith("seed-mart.py"):
+        failures.append(f"C35.4 jobs-seed entry_point {entry_point}, want one ending in seed-mart.py")
+    env = task.get("environment", {})
+    if env.get("POSTGRES_USER") != "analytics_user":
+        failures.append(f"C35.4 jobs-seed POSTGRES_USER {env.get('POSTGRES_USER')}, want analytics_user")
+    if env.get("POSTGRES_DB") != "jobs_db":
+        failures.append(f"C35.4 jobs-seed POSTGRES_DB {env.get('POSTGRES_DB')}, want jobs_db")
+    secrets = task.get("secrets", {})
+    if secrets.get("POSTGRES_PASSWORD") != "db-password-analytics_user":
+        failures.append(f"C35.4 jobs-seed POSTGRES_PASSWORD {secrets.get('POSTGRES_PASSWORD')}, want db-password-analytics_user")
+
+    address = 'module.task["jobs-seed"].aws_ecs_task_definition.task'
+    definition = next((r for r in resources(plan) if r["address"] == address), None)
+    if definition is None:
+        failures.append(f"C35.4 {address}: missing")
+    elif definition["values"].get("container_definitions") is None:
+        # The image's URL is unknown without an account, so the JSON is too: the configuration must pass it.
+        refs = config_refs(plan, "module.task.aws_ecs_task_definition.task", "container_definitions")
+        if not refers_to(refs, "var.task.entry_point"):
+            failures.append("C35.4 module.task container_definitions does not reference var.task.entry_point")
+    else:
+        containers = json.loads(definition["values"]["container_definitions"])
+        container = containers[0] if containers else {}
+        if container.get("entryPoint") != entry_point:
+            failures.append(f"C35.4 {address} entryPoint {container.get('entryPoint')}, want {entry_point}")
+        if "command" in container:
+            failures.append(f"C35.4 {address} command {container['command']}, want none")
+
+    if not (repo_root / "scripts" / "seed-mart.py").is_file():
+        failures.append("C35.4 scripts/seed-mart.py: missing")
+    dockerfile = repo_root / "scripts" / "db-setup.Dockerfile"
+    text = dockerfile.read_text(encoding="utf-8") if dockerfile.is_file() else ""
+    if not re.search(r"^COPY --from=fixtures .*analytics-schema\.sql.*analytics-seed\.sql", text, re.M):
+        failures.append("C35.4 scripts/db-setup.Dockerfile: no COPY --from=fixtures of both analytics files")
+    if not re.search(r"^COPY seed-mart\.py ", text, re.M):
+        failures.append("C35.4 scripts/db-setup.Dockerfile: does not copy seed-mart.py")
+
+    fixtures = "services/identity-service/app/src/test/resources/fixtures"
+    workflow_path = repo_root / ".github" / "workflows" / "db-setup-tests.yml"
+    if not workflow_path.is_file():
+        return failures + ["C35.4 .github/workflows/db-setup-tests.yml: missing"]
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    # YAML 1.1 reads the bare key "on" as True.
+    triggers = workflow.get("on") or workflow.get(True) or {}
+    runs = [step.get("run", "") for job in workflow.get("jobs", {}).values() for step in job.get("steps", [])]
+    if not any(f"--build-context fixtures={fixtures}" in run for run in runs):
+        failures.append(f"C35.4 db-setup-tests.yml: no step builds with --build-context fixtures={fixtures}")
+    if not any("scripts/test_seed_mart.py" in run for run in runs):
+        failures.append("C35.4 db-setup-tests.yml: no step runs scripts/test_seed_mart.py")
+    paths = (triggers.get("pull_request") or {}).get("paths", [])
+    for path in ["scripts/seed-mart.py", f"{fixtures}/analytics-schema.sql", f"{fixtures}/analytics-seed.sql"]:
+        if path not in paths:
+            failures.append(f"C35.4 db-setup-tests.yml: pull_request paths lack {path}")
 
     return failures
 
@@ -2599,6 +2674,12 @@ def main():
         failures.extend(check_c35_3(main_plan, started_plan))
         checks_run.append("services stopped")
         criteria_ran.append("C35.3")
+
+    # C35.4: the jobs seed is a one-off task on the db-setup image, read from the default plan and the repository
+    if args.main_plan and main_plan:
+        failures.extend(check_c35_4(main_plan, repo_root))
+        checks_run.append("jobs seed")
+        criteria_ran.append("C35.4")
 
     # C36.11 reads the started plan because the default plan starts nothing
     if started_plan:
