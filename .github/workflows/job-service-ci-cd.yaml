@@ -12,6 +12,7 @@ on:
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: docker-build-job-service-${{ github.ref }}
@@ -72,6 +73,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # The deploy role is assumed through OIDC; no environment: here, or its token's sub would change.
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -80,7 +83,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED != 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -96,16 +99,58 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=main-sha-,format=short,enable={{is_default_branch}}
 
-      - name: Build and Push
+      - name: Build, and push to GHCR
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main' || vars.DEPLOY_ENABLED != 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./services/job-service
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'push' }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=job-service
           cache-to: type=gha,scope=job-service,mode=max
+
+      # With the switch off the image goes to GHCR as before, so merges after the destroy still
+      # publish. Terraform's image_tag stays latest, so the deploy changes no task definition.
+      - name: Assume the deploy role
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Log in to ECR
+        id: ecr
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate ECR metadata
+        id: ecr-meta
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/jobmatch/job-service
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=,format=short
+
+      - name: Build, and push to ECR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./services/job-service
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr-meta.outputs.tags }}
+          labels: ${{ steps.ecr-meta.outputs.labels }}
+          cache-from: type=gha,scope=job-service
+
+      - name: Deploy to ECS
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        run: |
+          aws ecs update-service --cluster jobmatch --service job-service --force-new-deployment > /dev/null
+          aws ecs wait services-stable --cluster jobmatch --services job-service
 
   # The required check, named per workflow so the four do not share one name. It runs even when a
   # job before it failed or was skipped, since a skipped required check counts as passed: skipped
