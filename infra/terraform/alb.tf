@@ -1,5 +1,6 @@
 # The public entry point: HTTPS to the frontend with a certificate for var.domain, and HTTP
-# redirected to HTTPS. The certificate is validated by DNS records in var.route53_zone_id.
+# redirected to HTTPS. The certificate is validated by DNS records in var.route53_zone_id, and
+# var.domain is an alias record to the ALB in the same zone.
 resource "aws_lb" "main" {
   name               = "jobmatch"
   load_balancer_type = "application"
@@ -49,6 +50,19 @@ resource "aws_route53_record" "certificate_validation" {
 resource "aws_acm_certificate_validation" "main" {
   certificate_arn         = aws_acm_certificate.main.arn
   validation_record_fqdns = [for record in aws_route53_record.certificate_validation : record.fqdn]
+}
+
+# The domain itself: an alias to the ALB, so https://<domain> resolves.
+resource "aws_route53_record" "domain" {
+  zone_id = var.route53_zone_id
+  name    = var.domain
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
 }
 
 resource "aws_lb_listener" "https" {
