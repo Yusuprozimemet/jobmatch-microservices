@@ -24,6 +24,9 @@ module "service" {
   region             = var.region
   namespace_arn      = aws_service_discovery_http_namespace.main.arn
 
+  # The group a collector's task role may write metrics to; only tasks with a collector get the policy.
+  metrics_log_group_arn = aws_cloudwatch_log_group.metrics.arn
+
   # The frontend only calls out, so it is a Service Connect client and is not registered.
   register = each.key != "frontend"
 
