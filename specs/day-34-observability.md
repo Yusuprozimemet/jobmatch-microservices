@@ -171,12 +171,17 @@ repository root (`repo_root` in `infra-checks.py`). Red today for all of C34.1�
 Each "only" or "no" check first asserts that what it inspects exists, so none passes on an empty
 plan.
 
-- [ ] C34.1 **new** — Each of the five JVM services' Dockerfiles sets `OTEL_SERVICE_NAME` to
+- [x] C34.1 **new** — Each of the five JVM services' Dockerfiles sets `OTEL_SERVICE_NAME` to
       `jobmatch-<its directory under services/>`. No Dockerfile and nothing under
       `observability/` contains `jobmatch-backend`. `jobmatch.json`'s `uid` is `jobmatch`. Red
       today: identity's is `jobmatch-backend`, `services/api-gateway/Dockerfile` sets none, and
       the `uid` is `jobmatch-backend`.
-- [ ] C34.2 **new** — The collector's file parses as YAML and has:
+      Met (#378). `check_c34_1` reads the five Dockerfiles, `observability/` and `jobmatch.json`;
+      green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`). The other three Dockerfiles already had their names.
+      broken: gateway's `ENV OTEL_SERVICE_NAME` commented out → `C34.1 services/api-gateway/Dockerfile: 0 ENV OTEL_SERVICE_NAME lines, want 1` (#378)
+      broken: job-service's name set to `jobmatch-matching-service` → `C34.1 services/job-service/Dockerfile: OTEL_SERVICE_NAME is jobmatch-matching-service, want jobmatch-job-service` (#378)
+      broken: dashboard `uid` set to `jobmatch-dashboard` → `C34.1 observability/grafana/jobmatch.json: uid is jobmatch-dashboard, want jobmatch` (#378)
+- [x] C34.2 **new** — The collector's file parses as YAML and has:
       - an `otlp` receiver with `http` on `localhost:4318` and `grpc` on `localhost:4317`;
       - a `traces` pipeline from `otlp` to `awsxray`, and a `metrics` pipeline from `otlp` to
         `awsemf`;
@@ -189,7 +194,14 @@ plan.
       infra-ci starts the pinned image with the file, and `docker exec <container>
       /healthcheck` prints `STATUS: 200` within 60 s. The image's tag is not `latest`. Red
       today: no file, no step.
-- [ ] C34.3 **new** — Each of the five JVM services declares the collector, in its `services`
+      Met (#379). `check_c34_2` parses `infra/terraform/collector.yaml`; the step "collector starts"
+      pulls `aws-otel-collector:v0.50.0` with retries and greps `STATUS: 200` from `/healthcheck`;
+      both green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`).
+      broken: rollup option `ZeroAndSingleDimensionRollup` → `C34.2 collector.yaml: awsemf dimension_rollup_option ZeroAndSingleDimensionRollup, want NoDimensionRollup` (#379)
+      broken: selector unanchored → `C34.2 collector.yaml: metric_name_selectors ['http\.server\.requests'], want only ^http\.server\.requests$` (#379)
+      broken: grpc on `0.0.0.0:4317` → `C34.2 collector.yaml: otlp grpc endpoint 0.0.0.0:4317, want localhost:4317` (#379)
+      broken: misspelt awsemf key `dimension_rolup_option` → start step exit 1 after the wait; log `'awsemfexporter.Config' has invalid keys: dimension_rolup_option` (#379)
+- [x] C34.3 **new** — Each of the five JVM services declares the collector, in its `services`
       entry or through one `collector` local returned by an output, and the module call passes
       it from that local. The collector has:
       - the pinned image, `essential = false` and `restartPolicy` enabled;
@@ -203,17 +215,32 @@ plan.
       "delta"`, and no `OTEL_*ENDPOINT`. `C36_COMPOSE_ONLY` no longer lists
       `TRACING_EXPORT_ENABLED`. Red today: no collector, and none of the four variables in any
       entry.
-- [ ] C34.4 **new** — Each JVM service's task role has one telemetry policy:
+      Met (#380). One `local.collector`, returned by the `collector` output; the module call is
+      `collector = each.value.collector ? local.collector : null`, and the check requires both
+      references (review: the draft's `lookup()` could not be told from the collector on every
+      task). Memory 128 MiB. Green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`).
+      broken: `collector = local.collector` for every service, frontend included → `C34.3 module service: collector does not reference each.value.collector` (#380)
+      broken: collector `essential = true` → `C34.3 collector essential True, want false` (#380)
+      broken: `OTEL_TRACES_ENDPOINT` in job-service's entry → `C34.3 job-service sets OTEL_TRACES_ENDPOINT, the default is the sidecar` (and C36.4) (#380)
+- [x] C34.4 **new** — Each JVM service's task role has one telemetry policy:
       `xray:PutTraceSegments` and `xray:PutTelemetryRecords` on `*`, and the three `logs:`
       actions on the metrics log group's `arn` with `:*`, read from `configuration` references.
       The frontend's role has none. C36.4's check allows a task role's `*` for those two X-Ray
       actions and nothing else, and still finds identity's, matching's and
       application-service's own statements as before. Red today: no task role has an `xray:`
       action, and job-service's and the gateway's roles have no policy.
-- [ ] C34.5 **new** — The `log_group_name` in C34.2's file is the literal name of an
+      Met (#381). `aws_iam_role_policy.telemetry`, a policy of its own with `count` on
+      `var.collector`; C36.4's check allows `*` for the two X-Ray actions only.
+      Green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`).
+      broken: telemetry policy `count = 1` (frontend included) → `C34.4 aws_iam_role_policy.telemetry for [...'frontend'...], want [the five]` and `count does not reference var.collector` (#381)
+      broken: log statement `resources = ["*"]` → `C36.4 telemetry policy: * resource for ['logs:CreateLogStream', ...], want only the two X-Ray actions`, `2 statements with a * resource, want 1`, and three C34.4 failures (#381)
+- [x] C34.5 **new** — The `log_group_name` in C34.2's file is the literal name of an
       `aws_cloudwatch_log_group` in the plan with `retention_in_days = 14`. Red today: there is
       no such file and no such group.
-- [ ] C34.6 **new** — Three `aws_cloudwatch_metric_alarm` beside Day 32's DLQ alarms, all in
+      Met (#380). `/jobmatch/metrics`, 14 days; green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`).
+      broken: metrics group `retention_in_days = 7` → `C34.5 /jobmatch/metrics: retention_in_days 7, want 14` (#380)
+      broken: metrics group renamed `/jobmatch/emf` → `C34.5 /jobmatch/metrics: 0 aws_cloudwatch_log_group resources with that name in the plan, want 1` (#380)
+- [x] C34.6 **new** — Three `aws_cloudwatch_metric_alarm` beside Day 32's DLQ alarms, all in
       `AWS/ApplicationELB`:
       - `HTTPCode_Target_5XX_Count` and `HTTPCode_ELB_5XX_Count` on the ALB's `LoadBalancer`,
         each with `treat_missing_data = "notBreaching"`;
@@ -225,7 +252,14 @@ plan.
       `module.bus.alarm_topic_arn`), as C32.8 resolves its own. The track's PR pins thresholds
       and periods. C32.8 still finds only its DLQ alarms. Red today: the only alarms in the plan
       are the DLQ ones.
-- [ ] C34.7 **new** — One `aws_cloudwatch_dashboard` named `jobmatch`. The check reads its
+      Met (#382), departing from the text: the plan without an account has the whole
+      `dimensions` map unknown, and `configuration` lists its references without keys, so the
+      check reads each `Key = reference` pair from the `.tf` block (`find_blocks`) and also
+      requires each suffix among the `configuration` references. C32.8 still reports only its DLQ
+      alarms. Green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`).
+      broken: swapped which key holds which `arn_suffix` → `C34.6 aws_cloudwatch_metric_alarm.frontend_healthy_hosts: dimensions {'TargetGroup': 'aws_lb.main.arn_suffix', 'LoadBalancer': 'aws_lb_target_group.frontend.arn_suffix'}, want {...}` (#382)
+      broken: ELB 5xx alarm removed, health alarm `notBreaching`, target 5xx `alarm_actions` a literal ARN → `HTTPCode_ELB_5XX_Count: 0 alarms, want 1`, `treat_missing_data notBreaching, want breaching`, `alarm_actions resolve to [], want the bus alarm topic`; C32.8 not reported (#382)
+- [x] C34.7 **new** — One `aws_cloudwatch_dashboard` named `jobmatch`. The check reads its
       widgets from an output, a literal local, and they include:
       - at least one widget in each of `AWS/ApplicationELB`, `AWS/ECS`, `AWS/SQS` and
         `JobMatch`;
@@ -234,17 +268,31 @@ plan.
 
       The dashboard's `dashboard_body` refers to that local (`configuration`). Red today: no
       dashboard.
-- [ ] C34.8 **hold** — Each JVM service's `application.yaml` has these defaults:
+      Met (#383). `local.dashboard`, returned by the `dashboard` output; the resource adds the
+      region and the ALB's `arn_suffix`. The check reads `collector.yaml`'s selectors, not
+      C34.2's constant. Green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`).
+      broken: JobMatch rows changed to `http.server.requests.active` → `C34.7 JobMatch http.server.requests.active ['service.name']: no metric_declarations entry selecting it has that dimension set` (#383)
+      broken: `aws_lb.main.arn_suffix` inside `local.dashboard` → `C34.7 the dashboard output has no value in planned_values (an unknown part)` (#383)
+- [x] C34.8 **hold** — Each JVM service's `application.yaml` has these defaults:
       `OTEL_TRACES_ENDPOINT` is `http://localhost:4318/v1/traces`, `OTEL_EXPORTER_OTLP_ENDPOINT`
       is `http://localhost:4318`, and `TRACING_EXPORT_ENABLED` and `OTEL_METRICS_ENABLED` are
       `false`. The files are the four under `services/*/src/main/resources` and identity's under
       `app/`. Compose still sets `OTEL_TRACES_ENDPOINT` to Tempo. True today, in all five files.
       Break: point job-service's traces default at `localhost:4317`; the check must name
       job-service.
-- [ ] C34.9 **hold** — Day 32's and Day 36's criteria stay green in infra-ci: every step, and
+      Held (#377); green in infra-ci on `main` at `3c8b101` (run 38047497544, `infra-checks: ok`).
+      broken: job-service's `OTEL_TRACES_ENDPOINT` default set to `localhost:4317` → `C34.8 job-service application.yaml: OTEL_TRACES_ENDPOINT defaults to http://localhost:4317/v1/traces, want http://localhost:4318/v1/traces` (#377)
+      broken: compose job-service's `OTEL_TRACES_ENDPOINT` on `localhost` instead of `tempo` → `C34.8 docker-compose.yml job-service: OTEL_TRACES_ENDPOINT ..., want Tempo's ...` (#377)
+- [x] C34.9 **hold** — Day 32's and Day 36's criteria stay green in infra-ci: every step, and
       `infra-checks.py` on C32.2–C32.10 and C36.1–C36.11, with C36.4 as C34.4 changes it.
       Break: as C36.12's, a `timestamp()` tag in `modules/scores`; the second-apply step must
       fail.
+      Held. Every step of infra-ci passed on each of the seven track PRs and on `main` at
+      `3c8b101` (run 38047497544): fmt, validate, the plan without an account, the lock test, the
+      LocalStack apply, the second apply, the collector start and `infra-checks.py`. The close ran
+      the break on a copy of `infra/terraform` against `localstack/localstack:4.14.0` with
+      `hashicorp/terraform:1.16.3`, the step's commands unchanged.
+      broken: a tag `Applied = timestamp()` in `modules/scores` → the second apply showed `~ tags` (`- "Applied" = "2026-10-10T11:24:25Z"`) and `Plan: 0 to add, 1 to change, 0 to destroy.`; the step's `grep -q "No changes."` exited 1 (close)
 
 ## Verify
 ```bash
@@ -304,3 +352,42 @@ python scripts/infra-checks.py --bootstrap-plan bootstrap-plan.json --main-plan 
   be deleted early.
 - **Hand-off** H34.5 → Day 35: the collector's memory under the day's traffic, against its limit,
   and whether ECS's restart policy restarts a stopped collector.
+- **Closed** on `3c8b101` (KAN-38). Tracks in the order the spec set: 0 (#377), A (#378),
+  B (#379), C1 (#380), C2 (#381), D1 (#382), D2 (#383). *Estimated 7 pull requests; took 7,* in
+  1,114 track lines (+1,069 −45), none over the gate: the spec had already split C and D at the
+  auditor's sizes. The implementer (Haiku 5.5) wrote all seven; review found a defect in one
+  draft (C1).
+- **Departures.**
+  - C34.6's check reads each dimension's key from the alarm's block in `infra/terraform/*.tf`,
+    not from the plan or `configuration` (#382; the Defect below). It still requires each
+    `arn_suffix` among the block's `configuration` references.
+  - infra-ci pulls the collector image before it starts it, retrying after 5, 10, 20 and 40 s
+    (#379; the Defect below).
+  - `OTEL_TRACES_ENDPOINT` stays on `C36_COMPOSE_ONLY`, as In scope recorded (#380).
+- **Known limits for Day 35.**
+  - The bus module's alarm topic is still named `user-deleted-dlq-alarms` (Day 32), though the
+    ALB's alarms now send to it too. Renaming it replaces the topic and its email subscription,
+    which would need confirming again, so it is left.
+  - Public ECR throttles anonymous pulls, and ECS pulls the collector image at every task start;
+    whether a deployment ever meets the throttle is for H34.5 to see.
+- **Defect** — found: CI · cause: spec · "public ECR: no Docker Hub limit" was true of monthly
+  caps but not of throttling: #379's first run failed `docker run` with `toomanyrequests: Rate
+  exceeded`, GitHub's runners sharing their addresses. A retried pull fixed it (`e856613`).
+- **Defect** — found: implementer · cause: spec · C34.6 said the check reads the dimension values
+  as `configuration` references. Without an account the whole `dimensions` map is unknown in the
+  plan, and `configuration` gives one list of references with no keys, so neither says which key
+  holds which suffix. The implementer stopped rather than guess; the check reads the `.tf` text
+  (#382).
+- **Defect** — found: CI · cause: brief · Track B's brief sent `/healthcheck`'s output to
+  `/dev/null` from stderr; the binary prints `STATUS: 200` to stderr, so the step's grep could
+  never match. Corrected in the PR (#379).
+- **Defect** — found: review · cause: draft · C1's module call was `lookup(each.value,
+  "collector", false)`, and the check passed it as it would have passed `local.collector` for
+  every task, the frontend's task definition being unknown. The call now chooses on
+  `each.value.collector`, and the check requires that reference (#380).
+- **Defect** — found: implementer · cause: draft · C2's check first read `count` from
+  `expressions`; `terraform show -json` puts it in `count_expression`. Fixed before the
+  hand-back (#381).
+- **Defect** — found: main session · cause: tooling · after #377 the dashboard's next step read
+  a criterion id as a track ("Track C32: announced in #377"), and after C1 it named Track D,
+  the table having one C row for C1 and C2. Both are on the dashboard's fix list, as on Day 36.
