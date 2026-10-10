@@ -12,6 +12,7 @@ on:
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: docker-build-application-service-${{ github.ref }}
@@ -72,6 +73,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # The deploy role is assumed through OIDC; no environment: here, or its token's sub would change.
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -80,7 +83,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED != 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -96,16 +99,78 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=main-sha-,format=short,enable={{is_default_branch}}
 
-      - name: Build and Push
+      - name: Build, and push to GHCR
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main' || vars.DEPLOY_ENABLED != 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./services/application-service
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'push' }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=application-service
           cache-to: type=gha,scope=application-service,mode=max
+
+      # With the switch off the image goes to GHCR as before, so merges after the destroy still
+      # publish. Terraform's image_tag stays latest, so the deploy changes no task definition.
+      - name: Assume the deploy role
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Log in to ECR
+        id: ecr
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate ECR metadata
+        id: ecr-meta
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/jobmatch/application-service
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=,format=short
+
+      - name: Build, and push to ECR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./services/application-service
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr-meta.outputs.tags }}
+          labels: ${{ steps.ecr-meta.outputs.labels }}
+          cache-from: type=gha,scope=application-service
+
+      # Flyway runs as a one-off ECS task before the deploy (plan.md). The task definition runs
+      # :latest, which the step above has just pushed. The migrate task runs in the services'
+      # subnets and security group, read from the service so the role needs no ec2 permission.
+      - name: Run the migrations
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        run: |
+          network=$(aws ecs describe-services --cluster jobmatch --services application-service \
+            --query 'services[0].networkConfiguration' --output json)
+          task=$(aws ecs run-task --cluster jobmatch --task-definition jobmatch-application-service-migrate \
+            --launch-type FARGATE --network-configuration "$network" \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster jobmatch --tasks "$task"
+          code=$(aws ecs describe-tasks --cluster jobmatch --tasks "$task" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          aws logs get-log-events --log-group-name /ecs/jobmatch/application-service-migrate \
+            --log-stream-name "application-service-migrate/application-service-migrate/${task##*/}" \
+            --limit 50 --query 'events[].message' --output text || true
+          echo "exit code: $code"
+          [ "$code" = 0 ]
+
+      - name: Deploy to ECS
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        run: |
+          aws ecs update-service --cluster jobmatch --service application-service --force-new-deployment > /dev/null
+          aws ecs wait services-stable --cluster jobmatch --services application-service
 
   # The required check, named per workflow so the five do not share one name. It runs even when a
   # job before it failed or was skipped, since a skipped required check counts as passed: skipped

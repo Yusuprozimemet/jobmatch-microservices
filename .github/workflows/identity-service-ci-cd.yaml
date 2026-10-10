@@ -26,6 +26,7 @@ on:
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
+  workflow_dispatch:
 
 # Cancel previous runs on new pushes
 concurrency:
@@ -41,26 +42,33 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.diff.outputs.run }}
+      own: ${{ steps.diff.outputs.own }}
     steps:
       # A pull request's checkout is its merge commit, whose first parent is the base.
       - name: Checkout
-        if: github.event_name == 'pull_request'
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
-      # The same paths as the push trigger's filter, which has already decided on a push.
+      # The same paths as the push trigger's filter, which has already decided on a push. A manual run
+      # deploys whatever is on main, so it always runs.
       - name: Compare with the base
         id: diff
         env:
+          # identity's suite runs on the other services' changes, but its image changes only with its own
+          # directory, so it is pushed only on these paths (Day 35).
+          OWN: '^(services/identity-service/|\.github/workflows/identity-service-ci-cd\.yaml$)'
           PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|scripts/db-init/|scripts/db-setup\.py$|scripts/check-links\.py$|\.github/workflows/identity-service-ci-cd\.yaml$)'
         run: |
-          if [ "${{ github.event_name }}" != pull_request ]; then
-            echo run=true >> "$GITHUB_OUTPUT"; exit 0
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            echo run=true >> "$GITHUB_OUTPUT"; echo own=true >> "$GITHUB_OUTPUT"; exit 0
           fi
           files=$(git diff --name-only HEAD^1 HEAD)
-          if grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
+          if [ "${{ github.event_name }}" = push ] || grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
+          if grep -qE "$OWN" <<< "$files"; then own=true; else own=false; fi
           echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+          echo "own=$own" | tee -a "$GITHUB_OUTPUT"
 
   lint-and-test:
     needs: changes
@@ -126,13 +134,17 @@ jobs:
           -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT,GoogleLinkClaimIT,PendingGoogleLinksIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
+  # Identity's image changes only with its own directory, so a push runs the build only for
+  # those paths; a pull request always builds, and the suite above covers the rest.
   build:
     needs: [changes, lint-and-test]
-    if: needs.changes.outputs.run == 'true'
+    if: needs.changes.outputs.run == 'true' && (github.event_name == 'pull_request' || needs.changes.outputs.own == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      # The deploy role is assumed through OIDC; no environment: here, or its token's sub would change.
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -141,7 +153,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED != 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -160,17 +172,78 @@ jobs:
             type=raw,value=${{ env.MAJOR_VERSION }}.${{ env.MINOR_VERSION }}.${{ env.PATCH_VERSION }},enable={{is_default_branch}}
             type=sha,prefix=main-sha-,format=short,enable={{is_default_branch}}
 
-      # Push only on main branch, otherwise just build
-      - name: Build and Push
+      - name: Build, and push to GHCR
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main' || vars.DEPLOY_ENABLED != 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./services/identity-service
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'push' }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=identity-service
           cache-to: type=gha,scope=identity-service,mode=max
+
+      # With the switch off the image goes to GHCR as before, so merges after the destroy still
+      # publish. Terraform's image_tag stays latest, so the deploy changes no task definition.
+      - name: Assume the deploy role
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Log in to ECR
+        id: ecr
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate ECR metadata
+        id: ecr-meta
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/jobmatch/identity-service
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=,format=short
+
+      - name: Build, and push to ECR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./services/identity-service
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.ecr-meta.outputs.tags }}
+          labels: ${{ steps.ecr-meta.outputs.labels }}
+          cache-from: type=gha,scope=identity-service
+
+      # Flyway runs as a one-off ECS task before the deploy (plan.md). The task definition runs
+      # :latest, which the step above has just pushed. The migrate task runs in the services'
+      # subnets and security group, read from the service so the role needs no ec2 permission.
+      - name: Run the migrations
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        run: |
+          network=$(aws ecs describe-services --cluster jobmatch --services identity-service \
+            --query 'services[0].networkConfiguration' --output json)
+          task=$(aws ecs run-task --cluster jobmatch --task-definition jobmatch-identity-service-migrate \
+            --launch-type FARGATE --network-configuration "$network" \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster jobmatch --tasks "$task"
+          code=$(aws ecs describe-tasks --cluster jobmatch --tasks "$task" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          aws logs get-log-events --log-group-name /ecs/jobmatch/identity-service-migrate \
+            --log-stream-name "identity-service-migrate/identity-service-migrate/${task##*/}" \
+            --limit 50 --query 'events[].message' --output text || true
+          echo "exit code: $code"
+          [ "$code" = 0 ]
+
+      - name: Deploy to ECS
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        run: |
+          aws ecs update-service --cluster jobmatch --service identity-service --force-new-deployment > /dev/null
+          aws ecs wait services-stable --cluster jobmatch --services identity-service
 
   # The required check, named per workflow so the four do not share one name. It runs even when a
   # job before it failed or was skipped, since a skipped required check counts as passed: skipped
