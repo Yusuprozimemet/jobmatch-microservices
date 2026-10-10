@@ -1780,6 +1780,11 @@ C34_OTEL_DEFAULTS = {
 }
 
 
+# The one metric collector.yaml sends to JobMatch and its dimension sets; C34.7's dashboard check will reuse them.
+C34_METRIC_SELECTOR = r"^http\.server\.requests$"
+C34_DIMENSION_SETS = [["service.name"], ["service.name", "uri"], ["service.name", "outcome"]]
+
+
 def check_c34_1(repo_root: Path) -> list[str]:
     """Check each JVM service's Dockerfile names its spans after the service, and the Grafana dashboard's uid."""
     failures = []
@@ -1829,6 +1834,98 @@ def check_c34_1(repo_root: Path) -> list[str]:
         else:
             if uid != "jobmatch":
                 failures.append(f"C34.1 observability/grafana/jobmatch.json: uid is {uid}, want jobmatch")
+
+    return failures
+
+
+def check_c34_2(repo_root: Path) -> list[str]:
+    """Check the collector's configuration file (receivers, pipelines, awsemf, metric declarations and
+    the health_check extension), and the image pin in collector.tf."""
+    import yaml
+
+    failures = []
+    rel = "infra/terraform/collector.yaml"
+    path = repo_root / rel
+    if not path.is_file():
+        return [f"C34.2 {rel}: missing"]
+
+    try:
+        config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        return [f"C34.2 {rel}: not valid YAML: {e}"]
+    if not isinstance(config, dict):
+        return [f"C34.2 {rel}: not a mapping"]
+
+    # A missing key or a node of the wrong type reads as None, so the comparison below reports it.
+    def child(node: Any, key: str) -> Any:
+        return node.get(key) if isinstance(node, dict) else None
+
+    protocols = child(child(child(config, "receivers"), "otlp"), "protocols")
+    for protocol, want in (("http", "localhost:4318"), ("grpc", "localhost:4317")):
+        got = child(child(protocols, protocol), "endpoint")
+        if got != want:
+            failures.append(f"C34.2 {rel}: otlp {protocol} endpoint {got}, want {want}")
+
+    pipelines = child(child(config, "service"), "pipelines")
+    for signal, exporter in (("traces", "awsxray"), ("metrics", "awsemf")):
+        pipeline = child(pipelines, signal)
+        receivers = child(pipeline, "receivers")
+        exporters = child(pipeline, "exporters")
+        if receivers != ["otlp"]:
+            failures.append(f"C34.2 {rel}: {signal} pipeline receivers {receivers}, want ['otlp']")
+        if exporters != [exporter]:
+            failures.append(f"C34.2 {rel}: {signal} pipeline exporters {exporters}, want ['{exporter}']")
+
+    emf = child(child(config, "exporters"), "awsemf")
+    for key, want in (("namespace", "JobMatch"), ("dimension_rollup_option", "NoDimensionRollup")):
+        got = child(emf, key)
+        if got != want:
+            failures.append(f"C34.2 {rel}: awsemf {key} {got}, want {want}")
+    if child(child(emf, "resource_to_telemetry_conversion"), "enabled") is not True:
+        failures.append(f"C34.2 {rel}: awsemf resource_to_telemetry_conversion.enabled is not true")
+    log_group = child(emf, "log_group_name")
+    if not isinstance(log_group, str) or not log_group:
+        failures.append(f"C34.2 {rel}: awsemf log_group_name {log_group!r}, want a name")
+
+    declarations = child(emf, "metric_declarations")
+    if not isinstance(declarations, list) or not declarations:
+        failures.append(f"C34.2 {rel}: awsemf metric_declarations missing or empty")
+    else:
+        selectors = []
+        dimension_sets = []
+        for declaration in declarations:
+            selector = child(declaration, "metric_name_selectors")
+            selectors.extend(selector if isinstance(selector, list) else [selector])
+            dimensions = child(declaration, "dimensions")
+            if isinstance(dimensions, list):
+                dimension_sets.extend(tuple(d) if isinstance(d, list) else d for d in dimensions)
+        if not selectors or any(s != C34_METRIC_SELECTOR for s in selectors):
+            failures.append(f"C34.2 {rel}: metric_name_selectors {selectors}, want only {C34_METRIC_SELECTOR}")
+        want_sets = sorted((tuple(d) for d in C34_DIMENSION_SETS), key=repr)
+        got_sets = sorted(dimension_sets, key=repr)
+        if got_sets != want_sets:
+            failures.append(f"C34.2 {rel}: dimension sets {got_sets}, want {want_sets}")
+
+    service = child(config, "service")
+    extensions = child(service, "extensions")
+    if not isinstance(extensions, list) or "health_check" not in extensions:
+        failures.append(f"C34.2 {rel}: service.extensions {extensions}, want health_check")
+    top_extensions = child(config, "extensions")
+    if not isinstance(top_extensions, dict) or "health_check" not in top_extensions:
+        failures.append(f"C34.2 {rel}: no top-level extensions health_check")
+
+    tf_rel = "infra/terraform/collector.tf"
+    tf_path = repo_root / tf_rel
+    if not tf_path.is_file():
+        return failures + [f"C34.2 {tf_rel}: missing"]
+    pins = re.findall(r'^\s*collector_image\s*=\s*"([^"]+)"', tf_path.read_text(encoding="utf-8"), re.MULTILINE)
+    if len(pins) != 1:
+        failures.append(f"C34.2 {tf_rel}: {len(pins)} collector_image lines, want 1")
+    else:
+        match = re.fullmatch(r"public\.ecr\.aws/aws-observability/aws-otel-collector:([^:/]+)", pins[0])
+        if not match or match.group(1) == "latest":
+            failures.append(f"C34.2 {tf_rel}: collector_image {pins[0]}, want "
+                            "public.ecr.aws/aws-observability/aws-otel-collector:<tag>, tag not latest")
 
     return failures
 
@@ -1953,6 +2050,11 @@ def main():
     failures.extend(check_c34_1(repo_root))
     checks_run.append("trace names")
     criteria_ran.append("C34.1")
+
+    # C34.2: the collector's configuration and its image pin (no plan needed)
+    failures.extend(check_c34_2(repo_root))
+    checks_run.append("collector configuration")
+    criteria_ran.append("C34.2")
 
     # C34.8: the telemetry defaults of the five JVM services, and compose's traces endpoint (no plan needed)
     failures.extend(check_c34_8(repo_root))
