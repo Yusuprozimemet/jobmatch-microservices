@@ -27,6 +27,9 @@ module "service" {
   # The frontend only calls out, so it is a Service Connect client and is not registered.
   register = each.key != "frontend"
 
+  # The five JVM services run a collector beside them; the frontend exports nothing.
+  collector = each.value.collector ? local.collector : null
+
   # Through the listener, so the service waits until the target group is attached to the ALB:
   # ECS rejects a target group with no load balancer.
   target_group_arns = each.key == "frontend" ? [aws_lb_listener.https.default_action[0].target_group_arn] : []

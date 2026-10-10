@@ -8,7 +8,8 @@ in the LocalStack state), C32.8 (alarms), C32.9 (score table on LocalStack), C36
 repositories), C36.2 (ECS cluster and services), C36.3 (secrets), C36.4 (task roles),
 C36.5 (ALB and certificate), C36.6 (security groups), C36.7 (health checks), C36.8 (Service
 Connect and the compose variables), C36.9 (the service variables), C36.10 (the one-off tasks),
-C36.11 (the scaling) and C34.8 (the five services' telemetry defaults).
+C36.11 (the scaling), C34.3 (the collector sidecar and the telemetry variables), C34.5 (the metrics
+log group) and C34.8 (the five services' telemetry defaults).
 Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
@@ -1052,8 +1053,7 @@ C36_COMPOSE_ONLY = {
     r"^SCORES_DYNAMODB_ENDPOINT$": "the emulator's endpoint; the task role reaches the table",
     r"^AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)$": "the emulator's dummy keys; the task role replaces them",
     r"^SCORES_CREATE_TABLE$": "Terraform creates the table",
-    r"^TRACING_EXPORT_ENABLED$": "Day 34's collector, H36.6",
-    r"^OTEL_TRACES_ENDPOINT$": "Day 34's collector, H36.6",
+    r"^OTEL_TRACES_ENDPOINT$": "the default is the sidecar (Day 34)",
 }
 
 
@@ -1780,6 +1780,16 @@ C34_OTEL_DEFAULTS = {
 }
 
 
+# The variables each JVM service sets for the sidecar. The endpoints stay unset: the defaults are
+# the sidecar. Micrometer's OTLP registry sends cumulative counts, so the aggregation is delta.
+C34_TELEMETRY_ENV = {
+    "TRACING_EXPORT_ENABLED": "true",
+    "OTEL_METRICS_ENABLED": "true",
+    "TRACING_PROBABILITY": "1.0",
+    "MANAGEMENT_OTLP_METRICS_EXPORT_AGGREGATIONTEMPORALITY": "delta",
+}
+
+
 # The one metric collector.yaml sends to JobMatch and its dimension sets; C34.7's dashboard check will reuse them.
 C34_METRIC_SELECTOR = r"^http\.server\.requests$"
 C34_DIMENSION_SETS = [["service.name"], ["service.name", "uri"], ["service.name", "outcome"]]
@@ -1836,6 +1846,15 @@ def check_c34_1(repo_root: Path) -> list[str]:
                 failures.append(f"C34.1 observability/grafana/jobmatch.json: uid is {uid}, want jobmatch")
 
     return failures
+
+
+def collector_pin(repo_root: Path) -> str | None:
+    """The image collector.tf pins, or None if the file is missing or has no single collector_image line."""
+    tf_path = repo_root / "infra/terraform/collector.tf"
+    if not tf_path.is_file():
+        return None
+    pins = re.findall(r'^\s*collector_image\s*=\s*"([^"]+)"', tf_path.read_text(encoding="utf-8"), re.MULTILINE)
+    return pins[0] if len(pins) == 1 else None
 
 
 def check_c34_2(repo_root: Path) -> list[str]:
@@ -1915,19 +1934,130 @@ def check_c34_2(repo_root: Path) -> list[str]:
         failures.append(f"C34.2 {rel}: no top-level extensions health_check")
 
     tf_rel = "infra/terraform/collector.tf"
-    tf_path = repo_root / tf_rel
-    if not tf_path.is_file():
+    if not (repo_root / tf_rel).is_file():
         return failures + [f"C34.2 {tf_rel}: missing"]
-    pins = re.findall(r'^\s*collector_image\s*=\s*"([^"]+)"', tf_path.read_text(encoding="utf-8"), re.MULTILINE)
-    if len(pins) != 1:
-        failures.append(f"C34.2 {tf_rel}: {len(pins)} collector_image lines, want 1")
+    pin = collector_pin(repo_root)
+    if pin is None:
+        failures.append(f"C34.2 {tf_rel}: no single collector_image line")
     else:
-        match = re.fullmatch(r"public\.ecr\.aws/aws-observability/aws-otel-collector:([^:/]+)", pins[0])
+        match = re.fullmatch(r"public\.ecr\.aws/aws-observability/aws-otel-collector:([^:/]+)", pin)
         if not match or match.group(1) == "latest":
-            failures.append(f"C34.2 {tf_rel}: collector_image {pins[0]}, want "
+            failures.append(f"C34.2 {tf_rel}: collector_image {pin}, want "
                             "public.ecr.aws/aws-observability/aws-otel-collector:<tag>, tag not latest")
 
     return failures
+
+
+def check_c34_3(plan: dict, repo_root: Path) -> list[str]:
+    """Check the collector each JVM service runs beside it (the pinned image, the container's settings,
+    its configuration and log group), that only the five JVM services declare one, and the telemetry
+    variables each of them sets with no endpoint."""
+    failures = []
+    services = services_output(plan) or {}
+    tasks = tasks_output(plan)
+
+    collector = plan.get("planned_values", {}).get("outputs", {}).get("collector", {}).get("value")
+    if collector is None:
+        failures.append("C34.3 no collector output")
+    else:
+        image = collector.get("image")
+        pin = collector_pin(repo_root)
+        if pin is None or image != pin or image.endswith(":latest"):
+            failures.append(f"C34.3 collector image {image}, want the collector.tf pin {pin}, not latest")
+        if collector.get("essential") is not False:
+            failures.append(f"C34.3 collector essential {collector.get('essential')}, want false")
+        if collector.get("restart") is not True:
+            failures.append(f"C34.3 collector restart {collector.get('restart')}, want true")
+        if collector.get("log_stream_prefix") != "collector":
+            failures.append(f"C34.3 collector log_stream_prefix {collector.get('log_stream_prefix')}, want collector")
+
+        memory = collector.get("memory")
+        if type(memory) is not int or memory <= 0:
+            failures.append(f"C34.3 collector memory {memory}, want an integer above 0")
+        else:
+            for name in C34_JVM_SERVICES:
+                task_memory = services.get(name, {}).get("memory")
+                if not isinstance(task_memory, int) or memory >= task_memory:
+                    failures.append(f"C34.3 collector memory {memory} is not below {name}'s task memory {task_memory}")
+
+        environment = collector.get("environment") or {}
+        rel = "infra/terraform/collector.yaml"
+        text_path = repo_root / rel
+        want_text = text_path.read_text(encoding="utf-8").replace("\r\n", "\n") if text_path.is_file() else None
+        got_text = environment.get("AOT_CONFIG_CONTENT")
+        if not isinstance(got_text, str) or want_text is None or got_text.replace("\r\n", "\n") != want_text:
+            failures.append(f"C34.3 collector AOT_CONFIG_CONTENT is not the text of {rel}")
+        region = plan.get("variables", {}).get("region", {}).get("value")
+        if environment.get("AWS_REGION") != region:
+            failures.append(f"C34.3 collector AWS_REGION {environment.get('AWS_REGION')}, want {region}")
+
+    # The task definitions are unknown in the plan, so the call must choose by each entry's flag:
+    # local.collector passed to every service would give the frontend one too.
+    collector_refs = config_refs(plan, "module.service", "collector")
+    for ref in ("local.collector", "each.value.collector"):
+        if ref not in collector_refs:
+            failures.append(f"C34.3 module service: collector does not reference {ref}")
+    container_refs = config_refs(plan, "module.service.aws_ecs_task_definition.service", "container_definitions")
+    for address in ("var.collector", "aws_cloudwatch_log_group.service"):
+        if not refers_to(container_refs, address):
+            failures.append(f"C34.3 the task definition's container_definitions does not refer to {address}")
+
+    if not services:
+        failures.append("C34.3 no services output")
+    else:
+        with_collector = {name for name, entry in services.items() if entry.get("collector") is True}
+        if with_collector != set(C34_JVM_SERVICES):
+            failures.append(f"C34.3 services declaring a collector {sorted(with_collector)}, want the five JVM services")
+        for name in C34_JVM_SERVICES:
+            environment = services.get(name, {}).get("environment", {})
+            for key, want in C34_TELEMETRY_ENV.items():
+                if environment.get(key) != want:
+                    failures.append(f"C34.3 {name} {key} {environment.get(key)}, want {want}")
+            for key in environment:
+                if re.search(r"^OTEL_.*ENDPOINT$", key):
+                    failures.append(f"C34.3 {name} sets {key}, the default is the sidecar")
+
+    if not tasks:
+        failures.append("C34.3 no tasks output")
+    else:
+        failures.extend(f"C34.3 task {name} declares a collector" for name, entry in tasks.items() if "collector" in entry)
+    if config_refs(plan, "module.task", "collector"):
+        failures.append("C34.3 module task passes a collector")
+
+    for key in C34_TELEMETRY_ENV:
+        if any(re.search(pattern, key) for pattern in C36_COMPOSE_ONLY):
+            failures.append(f"C34.3 C36_COMPOSE_ONLY matches {key}, which the services set")
+
+    return failures
+
+
+def check_c34_5(plan: dict, repo_root: Path) -> list[str]:
+    """Check that the log group awsemf writes to, named in collector.yaml, is one aws_cloudwatch_log_group
+    in the plan with 14 days' retention."""
+    import yaml
+
+    rel = "infra/terraform/collector.yaml"
+    path = repo_root / rel
+    if not path.is_file():
+        return [f"C34.5 {rel}: missing"]
+    try:
+        config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        return [f"C34.5 {rel}: not valid YAML: {e}"]
+
+    exporters = config.get("exporters") if isinstance(config, dict) else None
+    emf = exporters.get("awsemf") if isinstance(exporters, dict) else None
+    name = emf.get("log_group_name") if isinstance(emf, dict) else None
+    if not isinstance(name, str) or not name:
+        return [f"C34.5 {rel}: no exporters.awsemf.log_group_name"]
+
+    groups = [r for r in resources(plan) if r["type"] == "aws_cloudwatch_log_group" and r["values"].get("name") == name]
+    if len(groups) != 1:
+        return [f"C34.5 {name}: {len(groups)} aws_cloudwatch_log_group resources with that name in the plan, want 1"]
+    retention = groups[0]["values"].get("retention_in_days")
+    if retention != 14:
+        return [f"C34.5 {name}: retention_in_days {retention}, want 14"]
+    return []
 
 
 def check_c34_8(repo_root: Path) -> list[str]:
@@ -2088,6 +2218,13 @@ def main():
         failures.extend(check_c36_11(main_plan))
         checks_run.append("ECS")
         criteria_ran.extend(f"C36.{n}" for n in range(1, 12))
+
+    # C34.3, C34.5: the collector sidecar and the metrics log group (main plan)
+    if args.main_plan and main_plan:
+        failures.extend(check_c34_3(main_plan, repo_root))
+        failures.extend(check_c34_5(main_plan, repo_root))
+        checks_run.append("collector sidecar")
+        criteria_ran.extend(["C34.3", "C34.5"])
 
     # C32.5: Secret sweep on bootstrap plan
     if args.bootstrap_plan and bootstrap_plan:
