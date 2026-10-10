@@ -24,6 +24,9 @@ module "service" {
   region             = var.region
   namespace_arn      = aws_service_discovery_http_namespace.main.arn
 
+  # Nothing runs until an apply sets start_services (Day 35).
+  started = var.start_services
+
   # The group a collector's task role may write metrics to; only tasks with a collector get the policy.
   metrics_log_group_arn = aws_cloudwatch_log_group.metrics.arn
 

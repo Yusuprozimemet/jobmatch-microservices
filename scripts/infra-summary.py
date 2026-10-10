@@ -2,7 +2,8 @@
 """
 Summarises one infra-ci run for the dashboard: the criteria that ran and failed (infra-checks.py
 --summary), the step outcomes, what the main plan creates by AWS service, and an estimate of what
-it costs an hour. Any input may be missing; the summary still has what exists.
+it costs an hour, priced from the started plan since the default plan starts no tasks. Any input
+may be missing; the summary still has what exists.
 """
 
 import argparse
@@ -101,15 +102,19 @@ def steps(pairs):
 def main():
     ap = argparse.ArgumentParser(description="Summarise an infra-ci run for the dashboard")
     ap.add_argument("--main-plan", help="the main root plan JSON (terraform show -json)")
+    ap.add_argument("--started-plan",
+                    help="the main root plan JSON with -var start_services=true; priced instead of --main-plan when given")
     ap.add_argument("--checks", help="the JSON that infra-checks.py --summary wrote")
     ap.add_argument("--step", action="append", default=[], help="name=outcome of a workflow step")
     ap.add_argument("--out", required=True, help="where to write the summary JSON")
     args = ap.parse_args()
 
     changes = creates(load(args.main_plan))
+    started = load(args.started_plan)
+    priced = creates(started) if started is not None else changes
     summary = dict(criteria=criteria(load(args.checks)), steps=steps(args.step),
                    resources=resource_counts(changes),
-                   cost=cost(changes))
+                   cost=cost(priced))
     Path(args.out).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 

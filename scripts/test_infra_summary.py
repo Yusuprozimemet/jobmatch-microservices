@@ -81,6 +81,31 @@ class InfraSummaryTest(unittest.TestCase):
         self.assertEqual(summary["cost"]["items"], [])
         self.assertEqual(summary["cost"]["per_hour"], 0)
 
+    def test_the_started_plan_is_priced_and_the_resources_come_from_the_main_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = {}
+            for name, desired in (("main", 0), ("started", 2)):
+                changes = [
+                    change('module.service["web"].aws_ecs_task_definition.this', "aws_ecs_task_definition",
+                           {"cpu": "512", "memory": "1024"}),
+                    change('module.service["web"].aws_ecs_service.this', "aws_ecs_service",
+                           {"desired_count": desired, "network_configuration": [{"assign_public_ip": False}]})]
+                if name == "started":
+                    changes.append(change('module.service["web"].aws_appautoscaling_target.service[0]',
+                                          "aws_appautoscaling_target", {}))
+                plan = {"resource_changes": changes}
+                paths[name] = os.path.join(tmp, f"{name}.json")
+                with open(paths[name], "w", encoding="utf-8") as f:
+                    json.dump(plan, f)
+            out = os.path.join(tmp, "summary.json")
+            argv = ["infra-summary.py", "--main-plan", paths["main"], "--started-plan", paths["started"], "--out", out]
+            with mock.patch.object(sys, "argv", argv):
+                sd.main()
+            with open(out, encoding="utf-8") as f:
+                summary = json.load(f)
+        self.assertEqual(summary["cost"]["items"], [{"name": "Fargate tasks", "count": 2, "per_hour": 0.0494}])
+        self.assertEqual(summary["resources"], {"ecs": 2})
+
 
 if __name__ == "__main__":
     unittest.main()
