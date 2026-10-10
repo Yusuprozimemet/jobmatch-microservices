@@ -1,0 +1,46 @@
+# The OpenTelemetry collector each JVM task runs beside its service, at the image collector.tf pins.
+# The sidecar gets this file as AOT_CONFIG_CONTENT. The receivers listen on localhost, so no other
+# task can push into a service's collector.
+
+extensions:
+  health_check: {}
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: localhost:4318
+      grpc:
+        endpoint: localhost:4317
+
+processors:
+  batch: {}
+
+exporters:
+  awsxray: {}
+  awsemf:
+    namespace: JobMatch
+    log_group_name: /jobmatch/metrics
+    log_stream_name: "{TaskId}"
+    # Without NoDimensionRollup awsemf adds a rollup set per attribute on top of the declared
+    # dimension sets, and each set is a metric CloudWatch bills.
+    dimension_rollup_option: NoDimensionRollup
+    # Lets service.name, a resource attribute, be a dimension.
+    resource_to_telemetry_conversion:
+      enabled: true
+    metric_declarations:
+      # The selector is anchored, so http.server.requests.active is not taken.
+      - dimensions: [[service.name], [service.name, uri], [service.name, outcome]]
+        metric_name_selectors: ['^http\.server\.requests$']
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [awsxray]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [awsemf]
