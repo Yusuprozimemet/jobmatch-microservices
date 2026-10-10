@@ -126,8 +126,8 @@ management:
       enabled: false
   tracing:
     sampling:
-      # Every request, while we are still learning what the traces look like. The default is
-      # 0.1, and Phase 7 is where sampling becomes a cost decision rather than a learning one.
+      # Every request, not the default 0.1. On ECS that is a cost decision, and Day 34
+      # (specs/day-34-observability.md) kept it: X-Ray's free tier covers a day of traffic.
       probability: ${TRACING_PROBABILITY:1.0}
     export:
       # Off unless somewhere to send spans is configured, the same rule as the metrics

@@ -12,8 +12,9 @@ resource "aws_ecs_task_definition" "service" {
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
-  # Only the JVM services have a probe, so the healthCheck key is merged in only when one is set.
-  container_definitions = jsonencode([merge({
+  # Only the JVM services have a probe, so the healthCheck key is merged in only when one is set. The
+  # collector is a second container in the same task, so it reaches the service on localhost.
+  container_definitions = jsonencode(concat([merge({
     name      = var.name
     image     = var.image
     essential = true
@@ -40,7 +41,22 @@ resource "aws_ecs_task_definition" "service" {
       retries     = var.service.health_check.retries
       startPeriod = var.service.health_check.start_period
     }
-  })])
+    })], var.collector == null ? [] : [{
+    name          = "collector"
+    image         = var.collector.image
+    essential     = var.collector.essential
+    memory        = var.collector.memory
+    restartPolicy = { enabled = var.collector.restart }
+    environment   = [for k, v in var.collector.environment : { name = k, value = v }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.service.name
+        "awslogs-region"        = var.region
+        "awslogs-stream-prefix" = var.collector.log_stream_prefix
+      }
+    }
+  }]))
 }
 
 resource "aws_ecs_service" "service" {

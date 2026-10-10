@@ -11,6 +11,7 @@ variable "service" {
     environment      = optional(map(string), {})
     environment_from = optional(map(string), {})
     secrets          = optional(map(string), {})
+    collector        = optional(bool, false)
 
     task_policy = optional(list(object({
       actions   = list(string)
@@ -86,4 +87,18 @@ variable "register" {
 # The value behind each key that a service's environment_from names.
 variable "environment_values" {
   type = map(string)
+}
+
+# The collector beside a JVM service's container, from collector.tf. Null leaves the task with one
+# container: the frontend and the one-off tasks have none.
+variable "collector" {
+  type = object({
+    image             = string
+    essential         = bool
+    restart           = bool
+    memory            = number
+    log_stream_prefix = string
+    environment       = map(string)
+  })
+  default = null
 }

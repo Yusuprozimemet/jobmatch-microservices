@@ -10,8 +10,9 @@ locals {
       memory        = 1024
       desired_count = 1
       health_check  = local.jvm_health_check
+      collector     = true
 
-      environment = {
+      environment = merge(local.telemetry_environment, {
         DB_PORT          = "5432"
         DB_NAME          = "identity_db"
         DB_USER          = "app_user"
@@ -28,7 +29,7 @@ locals {
 
         # The one-off migrate task runs the migrations, not the service.
         MIGRATE_ON_START = "false"
-      }
+      })
 
       environment_from = {
         DB_HOST                       = "database-address"
@@ -55,8 +56,9 @@ locals {
       memory        = 1024
       desired_count = 1
       health_check  = local.jvm_health_check
+      collector     = true
 
-      environment = {
+      environment = merge(local.telemetry_environment, {
         DB_PORT      = "5432"
         DB_NAME      = "jobs_db"
         DB_JOBS_USER = "jobs_user"
@@ -67,7 +69,7 @@ locals {
         APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL = "http://matching-service:8080/.well-known/service-jwks.json"
         APP_INTERNAL_TRUSTEDISSUERS_1_NAME      = "jobmatch-application-service"
         APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL = "http://application-service:8080/.well-known/service-jwks.json"
-      }
+      })
 
       environment_from = {
         DB_HOST = "database-address"
@@ -87,8 +89,9 @@ locals {
       memory        = 1024
       desired_count = 1
       health_check  = local.jvm_health_check
+      collector     = true
 
-      environment = {
+      environment = merge(local.telemetry_environment, {
         AWS_REGION            = var.region
         INTERNAL_IDENTITY_URL = "http://identity-service:8080"
         INTERNAL_JOBS_URL     = "http://job-service:8080"
@@ -97,7 +100,7 @@ locals {
 
         # Set here rather than left to the default: a profile change reaches the ranking within this window.
         PROFILE_CACHE_WINDOW = "10s"
-      }
+      })
 
       # Scales on CPU. Its profile cache is per task, so PROFILE_CACHE_WINDOW bounds how stale a task is.
       scaling = { min_capacity = 1, max_capacity = 3, cpu_target = 70 }
@@ -129,8 +132,9 @@ locals {
       memory        = 1024
       desired_count = 1
       health_check  = local.jvm_health_check
+      collector     = true
 
-      environment = {
+      environment = merge(local.telemetry_environment, {
         DB_PORT              = "5432"
         DB_NAME              = "apps_db"
         DB_APPLICATIONS_USER = "applications_user"
@@ -143,7 +147,7 @@ locals {
 
         # The one-off migrate task runs the migrations, not the service.
         MIGRATE_ON_START = "false"
-      }
+      })
 
       environment_from = {
         DB_HOST                       = "database-address"
@@ -168,8 +172,9 @@ locals {
       memory        = 1024
       desired_count = 1
       health_check  = local.jvm_health_check
+      collector     = true
 
-      environment = {
+      environment = merge(local.telemetry_environment, {
         IDENTITY_SERVICE_URL    = "http://identity-service:8080"
         JOB_SERVICE_URL         = "http://job-service:8080"
         MATCHING_SERVICE_URL    = "http://matching-service:8080"
@@ -178,7 +183,7 @@ locals {
         # The ALB and the frontend run in the public subnets, not the private ones: RateLimit trusts a
         # forwarded client address only when the connecting address matches this.
         GATEWAY_TRUSTED_PROXIES = "10\\.0\\.([0-9]|[1-9][0-9]|1[01][0-9]|12[0-7])\\.[0-9]{1,3}"
-      }
+      })
 
       secrets     = {}
       task_policy = []
@@ -189,6 +194,7 @@ locals {
       cpu           = 256
       memory        = 512
       desired_count = 1
+      collector     = false
 
       environment = {
         BACKEND_API_URL = "http://api-gateway:8081"
