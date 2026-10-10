@@ -16,7 +16,7 @@ variable "alert_email" {
 variable "image_tag" {
   type        = string
   default     = "latest"
-  description = "Tag of every service image in ECR; Day 35's deploy sets it"
+  description = "Tag of every service image in ECR; stays latest: the deploy job pushes latest and forces a new deployment, so no task definition changes"
 }
 
 variable "start_services" {

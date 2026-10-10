@@ -6,6 +6,7 @@ name: db-setup.py runs twice and matches its pin
 # The same script is the image the db-setup task runs (Day 36), so that image must build and print its help.
 # The image also holds seed-mart.py and the two fixtures (the jobs-seed task): the seed runs against the
 # Postgres after db-setup, and its second run must refuse.
+# With DEPLOY_ENABLED on, a push to main (or a dispatch) sends the image to ECR; off, it pushes nothing.
 
 on:
   pull_request:
@@ -30,6 +31,7 @@ on:
       - services/identity-service/app/src/test/resources/fixtures/analytics-schema.sql
       - services/identity-service/app/src/test/resources/fixtures/analytics-seed.sql
       - .github/workflows/db-setup-tests.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -38,6 +40,10 @@ jobs:
   test:
     name: db-setup.py runs twice and matches its pin
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The deploy role is assumed through OIDC; no environment: here, or its token's sub would change.
+      id-token: write
     services:
       postgres:
         image: postgres:18.4-alpine
@@ -72,3 +78,24 @@ jobs:
           POSTGRES_PASSWORD: ${{ format('dbsetup-{0}-{1}', github.run_id, github.run_attempt) }}
           SEED_IMAGE: jobmatch-db-setup:ci
       - run: docker run --rm jobmatch-db-setup:ci --help
+
+      - name: Assume the deploy role
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Log in to ECR
+        id: ecr
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push to ECR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+        run: |
+          image=${{ steps.ecr.outputs.registry }}/jobmatch/db-setup
+          for tag in "${GITHUB_SHA::7}" latest; do
+            docker tag jobmatch-db-setup:ci "$image:$tag"
+            docker push "$image:$tag"
+          done
