@@ -20,8 +20,46 @@ extract before building what replaces the extracted code, and assume a test harn
 a service credential and a deletion path nobody builds. The course correction below
 changes their order and scope.
 
-Phases 3–5 are done too (Day 28): five services, no monolith. The course correction after
-Phase 5, next, decides what follows.
+Phases 3–5 are done too (Day 28): five services, no monolith. Phase 7 is done (Day 35): the
+system was deployed once to AWS, served the five public surfaces, and was destroyed. Phase 6 is
+cut. One close-out day remains, then the migration ends (*Phase 7 outcome*, below).
+
+---
+
+## Phase 7 outcome
+
+Day 35 deployed the system once (2026-10-11, eu-west-1), ran the live checks, and destroyed it:
+151 resources, nothing left but the bootstrap. Five audits ran before the destroy, on Opus, each
+from a fresh context. The maintainer chose:
+
+- **No domain.** The frontend is served at the load balancer's own address, with a self-signed
+  certificate that Terraform generates and imports into ACM. HTTPS and the `Secure` cookie hold,
+  and Google accepted the load balancer's address as the redirect URI. The domain path (DNS
+  validation, a hosted zone) stays in the code and was checked only on the plan.
+- **ECR or GHCR, behind `DEPLOY_ENABLED`.** The service workflows push to ECR and deploy while the
+  switch is on, and push to GHCR while it is off, so merges after the destroy do not fail. It is
+  off.
+- **The bootstrap is kept:** the state bucket and the budget it guards. So the destroy leaves
+  something behind, on purpose: a few cents a month. Removing it is the maintainer's
+  (`docs/audit-findings.md`).
+- **Phase 6 is cut.** Days 29–31 are still drafts for Azure (an `uploads` container, SAS URLs),
+  no upload or CV code exists to move, so they add only features (scope rule), and their Lambdas
+  would re-enter through a load balancer that no longer exists: nothing deploys again. The specs
+  stay, marked cut, so history and links hold. Mail on AWS was Phase 6's (`mailer`); the deployed
+  identity-service had no mail settings, a known limit.
+- **One close-out day, the last** (numbered after the last day). The audits' findings are its
+  backlog: [`docs/audit-findings.md`](docs/audit-findings.md) lists every one with its outcome,
+  either fixed in a track, a known limit with its reason, the maintainer's own action, or rejected
+  by the maintainer. The day fixes what is fixable without an account; the plan-auditor then reads
+  the whole plan, and checks that every row is closed or accepted.
+- **identity-service takes the other services' shape** on the close-out day: one `pom.xml`, one
+  `src/`, an entry class in its own package, none of the monolith's dotfiles or docs. The reason
+  recorded after Phase 5 ("renaming moves every file") was wrong for the modules: folding moves
+  files as renames and counts close to zero lines. It still holds for the `backend.*` packages
+  (about 1,040 counted lines in identity alone, and the same packages in three other services),
+  so they stay, as in the siblings. The contract suite and V1–V16 move unedited, as on Day 28.
+- **Pace:** 252 track PRs against 185 estimated over 38 days (1.36×). Day 35 took 15 against 13,
+  plus two fix PRs the deployment found (#404, #405).
 
 ---
 
@@ -300,7 +338,8 @@ foreign key that deletes saved jobs with their user still exists; then the table
 - **Day 28 (identity-service) is the stopping point.** Evaluate before Phase 6.
 
 ### Phase 6 — Functions + uploads bucket
-**Deferred until after Phase 7** (course correction after Phase 5); cut if it adds only features.
+**Cut** after Phase 7 (*Phase 7 outcome*): it adds only features, and nothing deploys again.
+What follows is the phase as it was planned.
 - New private S3 `uploads` bucket. The pipeline's landing zone stays on Azure.
 - `identity-service` issues short-lived presigned PUT URLs; the browser uploads directly.
 - `cv-parse` Lambda: triggered by the S3 upload, extracts skills, PUTs them to identity-service.
@@ -334,7 +373,8 @@ and before Phase 7, which split Day 36 from Day 33).
 - The existing-database runbooks are rehearsed against the deployment or retired (Day 35).
 - **Done when:** one real deployment serves the five public API surfaces, with `jobs_db`
   seeded from the test mart, under a budget alarm, and `terraform destroy` leaves nothing
-  billable behind.
+  billable behind. Done (Day 35), but for the bootstrap's bucket and budget, kept on purpose
+  (*Phase 7 outcome*).
 
 ---
 
@@ -368,12 +408,12 @@ did on Day 16.
 | 2 gateway + JWT | medium, high risk |
 | platform step | medium: harness, service credential, grants, compose |
 | 3–5 extractions | medium each, low risk only seam-first |
-| 6 functions | small |
+| 6 functions | small; cut |
 | 7 ECS + Terraform | large, mostly new skills; smaller than the Kubernetes phase it replaces |
 
 Measured so far: 1.5× the estimated track PRs in each of Phases 0–2. From the platform step on,
 the README's Day entries record two estimates, the provisional spec's and the rewritten one's
-(Day 20: 3 and 5; took 5).
+(Day 20: 3 and 5; took 5). At the end of Phase 7: 1.36× over 38 days (*Phase 7 outcome*).
 
 ---
 
@@ -382,17 +422,19 @@ the README's Day entries record two estimates, the provisional spec's and the re
 All seven phases, the platform step and the cleanup day are broken into 41 day specs in
 [`specs/`](specs/). Read [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-28 and 38-42 (Phases 0-5, the platform step and the cleanup day) are done. Days 29-36
-are **provisional**: written from this plan before the course correction, so each is
-rewritten against the code, with the spec-auditor, when it is reached, not before. Days keep their numbers, so history and
-links hold; they run in this order, and the dashboard follows it:
+Days 1-28, 32-36 and 38-42 (Phases 0-5 and 7, the platform step and the cleanup day) are done.
+Days 29-31 (Phase 6) are cut: Azure drafts written before the course corrections, never
+rewritten. The close-out day is the last. Days keep their numbers, so history and links hold;
+they ran in this order, and the dashboard follows it:
 
 1. The record fix and the platform step (new day specs, numbered from 38).
 2. Phase 3: Days 18, 19, 17, 20.
 3. Phase 4: Day 41 (the profile endpoint and user id, split out of Day 24) first, then Days 21,
    22 (no dual write), 23, 24.
 4. Phase 5: Days 26, 27, 25, 28. **Stop and evaluate.**
-5. The cleanup day (course correction after Phase 5), numbered after the last; done.
+5. The cleanup day (course correction after Phase 5), Day 42; done.
 6. Phase 7 for ECS on Fargate, in this order: Days 32, 33 (the code before ECS),
-   36 (the services on ECS), 34, 35.
-7. Phase 6 (Days 29–31), after Phase 7, or cut.
+   36 (the services on ECS), 34, 35; done.
+7. Phase 6 (Days 29–31): **cut** after Phase 7 (*Phase 7 outcome*).
+8. The close-out day, numbered after the last: the end-of-Phase-7 audits' findings
+   (`docs/audit-findings.md`). Then the plan-auditor reads the whole plan, and the migration ends.

@@ -93,7 +93,9 @@ PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Re
 PLATFORM = "platform"
 # The cleanup day after Phase 5 (plan.md, "Course correction after Phase 5"), numbered after the last day.
 CLEANUP = "cleanup"
-PLACEHOLDERS = (PLATFORM, CLEANUP)
+# The close-out day after Phase 7 (plan.md, "Phase 7 outcome"), numbered after the last day too.
+CLOSEOUT = "close-out"
+PLACEHOLDERS = (PLATFORM, CLEANUP, CLOSEOUT)
 # plan.md's target services ("Target repo structure"), by the monolith packages each one takes.
 # shared, config and the gateway are no service's, so depending on them crosses nothing.
 SERVICE = dict(auth="identity", user="identity", profile="identity", identity="identity",
@@ -511,8 +513,9 @@ def run_order(plan, spec_days):
     stops to be evaluated. Days the list does not name (the finished ones) come first. A day named
     twice runs at its last mention: Day 24's profile endpoint comes first, the rest of it last.
     "Numbered after the last" is a day not yet written, after every day the list names. A stop is
-    lifted once plan.md has the course correction for its phase."""
-    listed, stop = [], None
+    lifted once plan.md has the course correction for its phase. An item marked **cut** takes its
+    days out of the order: Phase 6's Days 29-31, cut after Phase 7, run nowhere."""
+    listed, cut, stop = [], [], None
     lines = re.findall(r"^\d+\.\s+(.*(?:\n {3}.*)*)", section(plan, "Day-by-day specs"), re.M)
     last = max((int(n) for line in lines for n in re.findall(r"\d+", line) if int(n) >= 10), default=0)
     for line in (" ".join(line.split()) for line in lines):  # an item may wrap mid-phrase
@@ -525,14 +528,17 @@ def run_order(plan, spec_days):
             else:
                 days += range(int(a), int(b or a) + 1)
         if "numbered after the last" in line:
-            days = sorted(d for d in spec_days if d > last) or [CLEANUP]
+            days = sorted(d for d in spec_days if d > last) or [CLOSEOUT if "close-out" in line else CLEANUP]
+        if "**cut**" in line:
+            cut += days
+            continue
         listed += days
         phase = re.search(r"Phase (\d+)", line)
         if "Stop and evaluate" in line and days and not (
                 phase and section(plan, f"Course correction after Phase {phase.group(1)}")):
             stop = days[-1]
     listed = [d for i, d in enumerate(listed) if d not in listed[i + 1:]]
-    return [d for d in sorted(spec_days) if d not in listed] + listed, stop
+    return [d for d in sorted(spec_days) if d not in listed + cut] + listed, stop
 
 
 def out_of_order(order):
@@ -735,6 +741,7 @@ def roadmap(snaps, prs, blobs):
         title = re.search(r"^# Day \d+ — (.+)$", text, re.M)
         ev = criteria(crit)
         status = ("done" if total and ticked == total
+                  else "cut" if "**Status:** cut" in text
                   else "provisional" if "**Status:** provisional" in text else "ready")
         days.append(dict(day=d, file=path, title=title.group(1) if title else path, phase=int(phase.group(1)) if phase else None,
                          status=status, expected=int(exp.group(1)) if exp else None,
@@ -1043,14 +1050,15 @@ def build(data):
 
 
 def unwritten(days, order):
-    """The cleanup day before its spec exists: its number, and the phase of the day it follows in
-    the run order, so the roadmap shows it where it runs."""
-    if CLEANUP not in order:
+    """The cleanup or close-out day before its spec exists: its number, and the phase of the day it
+    follows in the run order, so the roadmap shows it where it runs."""
+    which = next((p for p in (CLEANUP, CLOSEOUT) if p in order), None)
+    if which is None:
         return None
     phase = {d["day"]: d.get("phase") for d in days}
-    before = [d for d in order[:order.index(CLEANUP)] if d not in PLACEHOLDERS]
-    return dict(day=max(d for d in order if d not in PLACEHOLDERS) + 1,
-                phase=phase.get(before[-1]) if before else None, title="The cleanup day")
+    before = [d for d in order[:order.index(which)] if d not in PLACEHOLDERS]
+    return dict(day=max(d["day"] for d in days) + 1,
+                phase=phase.get(before[-1]) if before else None, title=f"The {which} day")
 
 
 def next_step(days, open_prs, order, stop):
@@ -1064,6 +1072,8 @@ def next_step(days, open_prs, order, stop):
         return "The platform step: write its day spec, numbered from 38 (plan.md, Course correction after Phase 2)"
     if left[0] == CLEANUP:
         return f"The cleanup day: write its day spec, Day {unwritten(days, order)['day']:02d} (plan.md, Course correction after Phase 5)"
+    if left[0] == CLOSEOUT:
+        return f"The close-out day: write its day spec, Day {unwritten(days, order)['day']:02d} (plan.md, Phase 7 outcome)"
     if stop is not None and order.index(left[0]) > order.index(stop):
         return f"Day {stop:02d} is done: stop and evaluate before going on (plan.md)"
     day = by_day[left[0]]
