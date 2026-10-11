@@ -1,21 +1,20 @@
 # Architecture: what Day 35 deploys
 
 This drawing is read from the Terraform under [infra/terraform](../infra/terraform): one AWS region,
-and the hosted zone for the domain is made outside Terraform, so it stays. The bootstrap root's state
+and no domain, so the browser reaches the ALB by its own DNS name. The bootstrap root's state
 bucket and monthly budget are kept after the main root's destroy, because the budget keeps watching.
 A fix PR that changes the Terraform updates this file.
 
 ```mermaid
 flowchart LR
   browser(["Browser"])
-  r53["Route 53 alias: domain"]
   gha["GitHub Actions"]
   oidc["OIDC provider: GitHub"]
   role["jobmatch-deploy role"]
 
   subgraph vpc["VPC: public subnets, no NAT; private subnets"]
     subgraph alb["ALB jobmatch"]
-      https["HTTPS 443 listener + ACM certificate"]
+      https["HTTPS 443 listener + self-signed certificate in ACM"]
       http["HTTP 80 listener: redirect"]
       tg["Target group: frontend 3000"]
     end
@@ -59,7 +58,7 @@ flowchart LR
     budget["Monthly budget"]
   end
 
-  browser --> r53 --> https
+  browser -->|"ALB DNS name"| https
   https --> tg --> frontend
   http -->|"301 to HTTPS"| https
   frontend -->|"BACKEND_API_URL"| gateway
@@ -93,9 +92,8 @@ flowchart LR
 | Box | Declared in |
 |---|---|
 | Browser | outside Terraform: the user's browser |
-| Route 53 alias: domain | [alb.tf](../infra/terraform/alb.tf) |
 | ALB jobmatch | [alb.tf](../infra/terraform/alb.tf) |
-| HTTPS 443 listener + ACM certificate | [alb.tf](../infra/terraform/alb.tf) |
+| HTTPS 443 listener + self-signed certificate in ACM | [alb.tf](../infra/terraform/alb.tf) |
 | HTTP 80 listener: redirect | [alb.tf](../infra/terraform/alb.tf) |
 | Target group: frontend 3000 | [alb.tf](../infra/terraform/alb.tf) |
 | VPC: public subnets, no NAT; private subnets | [modules/network/main.tf](../infra/terraform/modules/network/main.tf) |
@@ -141,7 +139,9 @@ flowchart LR
   URLs in [locals.tf](../infra/terraform/locals.tf).
 - The deploy role's `ecs:RunTask` on the two migrate tasks, and the scopes of its other statements
   ([deploy.tf](../infra/terraform/deploy.tf)).
-- The RDS-managed master secret that `db-setup` reads, and the DNS records that validate the certificate.
+- The RDS-managed master secret that `db-setup` reads.
+- The path with `domain` set, not this deployment's: a Route 53 alias to the ALB and an ACM certificate
+  validated by DNS records, in a hosted zone made outside Terraform ([alb.tf](../infra/terraform/alb.tf)).
 - The metric sources of the dashboard (ALB, ECS, SQS and the JobMatch namespace): read, not drawn as edges.
 - The security group rules: the VPC box names the groups; their rules are in
   [modules/network/main.tf](../infra/terraform/modules/network/main.tf).

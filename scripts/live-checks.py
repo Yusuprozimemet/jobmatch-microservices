@@ -1,9 +1,10 @@
-"""Checks the deployed site through its domain (Day 35, C35.16 and C35.17): the certificate, the pages
+"""Checks the deployed site through its host (Day 35, C35.16 and C35.17): the certificate, the pages
 and the redirect, the task ports closed to the internet, and a new user's path through the API.
 Every check runs even after one fails; a check that needs an earlier result records a skip.
 Google sign-in (C35.17) is checked by hand, and C35.18-C35.20 are not this script's.
 
-    python scripts/live-checks.py --domain <d> [--out docs/dashboard/deployment.json]
+    python scripts/live-checks.py --host <ALB DNS name or domain> [--insecure]
+                                  [--out docs/dashboard/deployment.json]
                                   [--task-ip IP ...] [--ports 3000,8080,8081,9090]
 
 Prints one line per check and exits 1 when any check fails.
@@ -32,8 +33,16 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-OPENER = urllib.request.build_opener(
-    NoRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+def make_opener(insecure):
+    # --insecure is for the self-signed certificate made when the domain is empty: no client trusts it
+    context = ssl.create_default_context()
+    if insecure:
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    return urllib.request.build_opener(NoRedirect, urllib.request.HTTPSHandler(context=context))
+
+
+OPENER = make_opener(False)
 
 
 def now():
@@ -68,16 +77,18 @@ def expect(code, low=200, high=200):
     return f"HTTP {code}"
 
 
-def certificate(domain):
+def certificate(host, insecure):
     arns = [c["CertificateArn"] for c in aws("acm", "list-certificates")["CertificateSummaryList"]
-            if c["DomainName"] == domain]
+            if c["DomainName"] == host]
     if not arns:
-        raise RuntimeError("no certificate for the domain")
-    status = aws("acm", "describe-certificate", "--certificate-arn", arns[0],
-                 "--query", "Certificate.Status")
+        raise RuntimeError("no certificate for the host")
+    status, kind = aws("acm", "describe-certificate", "--certificate-arn", arns[0],
+                       "--query", "Certificate.[Status,Type]")
     if status != "ISSUED":
         raise RuntimeError(f"certificate status {status}, wanted ISSUED")
-    return status
+    if insecure and kind != "IMPORTED":
+        raise RuntimeError(f"certificate type {kind}, wanted IMPORTED with --insecure")
+    return f"ISSUED, {kind}" if insecure else status
 
 
 def jobs(base, state):
@@ -189,13 +200,18 @@ def saved_list(base, state):
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--domain", required=True)
+    parser.add_argument("--host", required=True, help="the ALB's DNS name or a domain")
+    parser.add_argument("--insecure", action="store_true",
+                        help="accept a certificate no client trusts, the self-signed one made "
+                             "when domain is empty")
     parser.add_argument("--out", default="docs/dashboard/deployment.json")
     parser.add_argument("--task-ip", action="append", help="repeatable; default: found in ECS")
     parser.add_argument("--ports", type=lambda text: [int(p) for p in text.split(",")],
                         default="3000,8080,8081,9090")
     args = parser.parse_args(argv)
-    base = f"https://{args.domain}"
+    global OPENER
+    OPENER = make_opener(args.insecure)
+    base = f"https://{args.host}"
     state = {}
     results = []
     passed = set()
@@ -215,10 +231,10 @@ def main(argv):
                         "at": now()})
         print(f"{'ok  ' if ok else 'FAIL'} {criterion} {name}: {detail}")
 
-    check("C35.16", "certificate", lambda: certificate(args.domain))
+    check("C35.16", "certificate", lambda: certificate(args.host, args.insecure))
     check("C35.16", "root page", lambda: expect(request(base + "/")[0]))
     check("C35.16", "jobs total", lambda: jobs(base, state))
-    check("C35.16", "http redirects to https", lambda: redirect(args.domain))
+    check("C35.16", "http redirects to https", lambda: redirect(args.host))
     check("C35.16", "task ports closed", lambda: ports_closed(args))
     check("C35.17", "register", lambda: register(base, state))
     check("C35.17", "login", lambda: login(base, state), needs=("register",))
@@ -238,7 +254,7 @@ def main(argv):
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8", newline="\n") as f:
-        f.write(json.dumps({"domain": args.domain, "checkedAt": now(), "checks": results},
+        f.write(json.dumps({"domain": args.host, "checkedAt": now(), "checks": results},
                            indent=2) + "\n")
     return 0 if all(r["ok"] for r in results) else 1
 

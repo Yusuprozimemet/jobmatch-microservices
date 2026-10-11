@@ -13,10 +13,9 @@ working directory stays put.
 The maintainer supplies:
 
 - AWS credentials for the account, with rights to create the resources in `infra/terraform`.
-- A domain, and a Route 53 public hosted zone for it, with the name servers delegated to that zone.
 - The address that receives the alarms (`alert_email`).
-- A Google OAuth client, with `https://<domain>/login/oauth2/code/google` as an authorised
-  redirect URI.
+- A Google OAuth client. Its redirect URI names the load balancer's DNS name, which exists only
+  after the apply in step 4, so it is added there.
 - An LLM API key.
 - A second network address for the rate-limit check in step 12 (AWS CloudShell, or a phone's
   hotspot).
@@ -39,11 +38,12 @@ it, then run the step again.
 
 ```bash
 cp infra/terraform/deploy.tfvars.example infra/terraform/deploy.tfvars
-# Edit infra/terraform/deploy.tfvars: alert_email, domain and route53_zone_id
+# Edit infra/terraform/deploy.tfvars: alert_email; domain and route53_zone_id stay empty
 scripts/deploy-preflight.sh
 ```
 
-**Check:** five `ok` lines and exit 0 (C35.12). The script reads `infra/terraform/deploy.tfvars` by
+**Check:** five `ok` lines and exit 0 (C35.12). With no domain, the delegation line reads
+`no domain: skipped`. The script reads `infra/terraform/deploy.tfvars` by
 default. If its OIDC line says the account already has a GitHub OIDC provider, step 4 imports it.
 The [deploy.tfvars.example](../../infra/terraform/deploy.tfvars.example) file explains each value.
 
@@ -90,8 +90,16 @@ terraform -chdir=infra/terraform apply tfplan
 gh variable set AWS_DEPLOY_ROLE_ARN --body "$(terraform -chdir=infra/terraform output -raw deploy_role_arn)"
 ```
 
-The apply waits for the certificate's DNS validation, so it can take a few minutes. `start_services`
-is still `false` in `deploy.tfvars`.
+With no domain there is no zone and no DNS validation to wait for: the certificate is self-signed for
+the load balancer's DNS name and imported to ACM. `start_services` is still `false` in
+`deploy.tfvars`.
+
+Add the redirect URI to the Google OAuth client by hand, in the Google Cloud console:
+
+```bash
+ALB="$(aws elbv2 describe-load-balancers --names jobmatch --query 'LoadBalancers[0].DNSName' --output text)"
+echo "https://$ALB/api/login/oauth2/code/google"
+```
 
 **Check:** the apply completes. Then each service's desired count is 0:
 
@@ -237,18 +245,19 @@ every secret ARN resolved (C35.18, first part). Services are started only now, a
 ## 12. The live checks
 
 ```bash
-DOMAIN="$(sed -n 's/^domain *= *"\(.*\)"/\1/p' infra/terraform/deploy.tfvars)"
-python scripts/live-checks.py --domain "$DOMAIN" --out docs/dashboard/deployment.json
+ALB="$(aws elbv2 describe-load-balancers --names jobmatch --query 'LoadBalancers[0].DNSName' --output text)"
+python scripts/live-checks.py --host "$ALB" --insecure --out docs/dashboard/deployment.json
 ```
 
-The script writes `docs/dashboard/deployment.json`, which does not exist before this step. Run
+`--insecure` accepts the self-signed certificate, and the certificate check then also wants ACM's
+type `IMPORTED`. Without it, every HTTPS check fails on the certificate. The script writes `docs/dashboard/deployment.json`, which does not exist before this step. Run
 the break C35.16 asks for once: point the check at the ALB's port 443 as if it were a task's port.
 It must report that port open. Record that result as `broken: live-checks against the ALB's 443 as
 a task → <what it reported>`.
 
 Then check by hand, and record each result with its time:
 
-- Google sign-in at `https://<domain>`, and the other surfaces C35.17 lists (C35.17).
+- Google sign-in at `https://$ALB`, past the browser's warning about the certificate, and the other surfaces C35.17 lists (C35.17).
 - `DELETE /api/users/me` from the app, with both dead-letter queues empty afterwards. The rate limit
   from two addresses (C35.18).
 - A trace in X-Ray, the metrics and the dashboard. The frontend task stopped by hand, and the alarm
@@ -290,6 +299,5 @@ variable stays. It names a role that the destroy removes.
 scripts/teardown-check.sh
 ```
 
-**Check:** the script exits 0. What stays is the hosted zone, the bootstrap's bucket and budget, and
-X-Ray's traces (C35.21). On the first full day after the destroy, Cost Explorer by service shows no
+**Check:** the script exits 0. What stays is the bootstrap's bucket and budget, and X-Ray's traces (C35.21). On the first full day after the destroy, Cost Explorer by service shows no
 ECS, ELB, RDS, EC2 or VPC charge (C35.22).

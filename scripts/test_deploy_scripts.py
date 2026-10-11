@@ -4,16 +4,20 @@ against the repository.
 
     python scripts/test_deploy_scripts.py
 """
+import http.server
 import importlib.util
 import json
 import os
 import re
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+import urllib.error
 import uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -142,11 +146,12 @@ class DeployScriptsTest(unittest.TestCase):
         run = self.calls("run-task")[0]
         self.assertEqual(run[run.index("--task-definition") + 1], "jobmatch-db-setup")
 
-    def preflight(self, alert_email="ops@jobmatch.example.org", **stub):
+    def preflight(self, alert_email="ops@jobmatch.example.org", domain="jobmatch.example.org", **stub):
         var_file = os.path.join(self.root, "deploy.tfvars")
+        zone = "Z0123456789ABC" if domain else ""
         with open(var_file, "w", encoding="utf-8", newline="\n") as f:
-            f.write(f'alert_email = "{alert_email}"\ndomain = "jobmatch.example.org"\n'
-                    'route53_zone_id = "Z0123456789ABC"\n')
+            f.write(f'alert_email = "{alert_email}"\ndomain = "{domain}"\n'
+                    f'route53_zone_id = "{zone}"\n')
         return self.run_script("deploy-preflight.sh", "--var-file", posix(var_file), **stub)
 
     def test_preflight_answers_five_questions_and_passes_when_all_are_good(self):
@@ -155,6 +160,18 @@ class DeployScriptsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(len(lines), 5, result.stdout)
         self.assertTrue(all(line.startswith("ok") for line in lines), result.stdout)
+
+    def test_preflight_skips_the_delegation_question_when_there_is_no_domain(self):
+        result = self.preflight(domain="")
+        lines = result.stdout.splitlines()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(lines), 5, result.stdout)
+        self.assertTrue(all(line.startswith("ok") for line in lines), result.stdout)
+        self.assertTrue(any("no domain: skipped" in line for line in lines), result.stdout)
+        self.assertEqual(self.calls("get-hosted-zone"), [])
+        with open(self.log, encoding="utf-8") as f:
+            logged = f.read()
+        self.assertFalse(any(line.startswith("dig\t") for line in logged.splitlines()), logged)
 
     def assert_one_failure(self, result, question):
         lines = result.stdout.splitlines()
@@ -279,6 +296,49 @@ class DeployScriptsTest(unittest.TestCase):
             port = listener.getsockname()[1]
             self.assertEqual(live.open_ports(["127.0.0.1"], [port], timeout=1), [f"127.0.0.1:{port}"])
         self.assertEqual(live.open_ports(["127.0.0.1"], [port], timeout=1), [])
+
+    def test_live_checks_help_names_the_host_and_the_insecure_flag(self):
+        result = subprocess.run([sys.executable, os.path.join(HERE, "live-checks.py"), "--help"],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("--host", result.stdout)
+        self.assertIn("--insecure", result.stdout)
+
+    @unittest.skipUnless(shutil.which("openssl"), "needs openssl to make a self-signed certificate")
+    def test_live_checks_refuses_a_self_signed_certificate_unless_insecure(self):
+        # The certificate and its key are made here, per run: none is kept in the repository
+        subprocess.run([shutil.which("openssl"), "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                        "-days", "1", "-subj", "/CN=localhost", "-keyout", "key.pem", "-out", "cert.pem"],
+                       cwd=self.root, check=True, capture_output=True)
+
+        class Ok(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"ok")
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Ok)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(os.path.join(self.root, "cert.pem"), os.path.join(self.root, "key.pem"))
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        self.addCleanup(server.server_close)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+
+        spec = importlib.util.spec_from_file_location("live_checks", os.path.join(HERE, "live-checks.py"))
+        live = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(live)
+        url = f"https://127.0.0.1:{server.server_address[1]}/"
+        live.OPENER = live.make_opener(False)
+        with self.assertRaises(urllib.error.URLError):
+            live.request(url)
+        live.OPENER = live.make_opener(True)
+        code, _, text = live.request(url)
+        self.assertEqual((code, text), (200, "ok"))
 
 
 # The fifteen steps of docs/runbooks/deploy.md, by their titles without the numbers

@@ -2,8 +2,8 @@
 # Lists what is left in the account and region that still bills after the main root's destroy
 # (Day 35, C35.21). Each kind with anything left prints `left: <kind>: <names>`, and the last line
 # counts the kinds. A failed aws call exits 1: an error is not "nothing left". Deliberately not
-# listed, because they stay: the hosted zone, the bootstrap's state bucket and budget, and X-Ray's
-# traces (30 days, free, not deletable).
+# listed, because they stay: the bootstrap's state bucket and budget, and X-Ray's traces (30 days,
+# free, not deletable).
 #
 #   usage: scripts/teardown-check.sh
 #

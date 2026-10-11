@@ -84,19 +84,24 @@ else
 fi
 
 domain=$(tfvar domain)
-delegated=$(aws route53 get-hosted-zone --region "$region" --id "$(tfvar route53_zone_id)" \
-    --query 'DelegationSet.NameServers' --output text)
-if command -v dig > /dev/null; then
-    public=$(dig +short NS "$domain")
+if [ -z "$domain" ]; then
+    # Without a domain there is no zone to delegate: the ALB's own name serves the site
+    answer ok "NS delegation" "no domain: skipped"
 else
-    public=$(nslookup -type=NS "$domain" | sed -n 's/.*nameserver = //p')
-fi
-want=$(printf '%s\n' "$delegated" | normalise)
-have=$(printf '%s\n' "$public" | normalise)
-if [ -n "$want" ] && [ "$want" = "$have" ]; then
-    answer ok "NS delegation for $domain" "$want"
-else
-    answer FAIL "NS delegation for $domain" "zone: $want; public: ${have:-none}"
+    delegated=$(aws route53 get-hosted-zone --region "$region" --id "$(tfvar route53_zone_id)" \
+        --query 'DelegationSet.NameServers' --output text)
+    if command -v dig > /dev/null; then
+        public=$(dig +short NS "$domain")
+    else
+        public=$(nslookup -type=NS "$domain" | sed -n 's/.*nameserver = //p')
+    fi
+    want=$(printf '%s\n' "$delegated" | normalise)
+    have=$(printf '%s\n' "$public" | normalise)
+    if [ -n "$want" ] && [ "$want" = "$have" ]; then
+        answer ok "NS delegation for $domain" "$want"
+    else
+        answer FAIL "NS delegation for $domain" "zone: $want; public: ${have:-none}"
+    fi
 fi
 
 [ "$fails" -eq 0 ]
