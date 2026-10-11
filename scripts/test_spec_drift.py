@@ -603,6 +603,76 @@ class HandOffTest(unittest.TestCase):
                    tracks_unopened=sd.unopened_tracks(prs))
         self.assertEqual(sd.next_step([day], [], [25], None), "Day 25 Track E1c: announced in #298, no branch names it")
 
+    def test_a_criterion_id_is_not_a_track(self):
+        self.assertEqual(sd.unopened_tracks([dict(number=1, headRefName="day-32/track-c1-x", body="Ticks C32.5 and H32.1.")]), [])
+
+    def test_a_day_numbered_name_is_not_a_track(self):
+        body = 'It read `C32.x` as "C32", a track C32: wrong.'
+        self.assertEqual(sd.unopened_tracks([dict(number=1, headRefName="day-32/track-c1-x", body=body)]), [])
+
+    def test_a_hand_off_range_names_every_id_in_it(self):
+        self.assertEqual(sd.hand_off_ids("H34.1–H34.3 and H35.2-4, H36.7"),
+                         {"H34.1", "H34.2", "H34.3", "H35.2", "H35.3", "H35.4", "H36.7"})
+
+    def test_a_hand_off_range_picks_up_each_id_in_it(self):
+        repo = Repo().merge({
+            "specs/day-01-a.md": "## Notes\n- **Hand-off** H01.2 → the maintainer: the middle one.\n",
+            "specs/day-02-b.md": "# Day 02\n\nPicks up H01.1–H01.3.\n",
+            "src/App.java": "// Day 01 wrote this.\n",  # git grep fails on a tree with no day in its code
+        })
+        days = [dict(day=1, file="specs/day-01-a.md", status="done"),
+                dict(day=2, file="specs/day-02-b.md", status="ready")]
+        try:
+            found = repo.inside(lambda blobs: sd.hand_offs(days, [1, 2], repo.snaps[-1]["sha"], blobs))
+        finally:
+            repo.close()
+        self.assertEqual(found, [])  # Day 02's range cites H01.2, so no hand-off is left open
+
+    def test_a_code_comment_is_not_handed_to_the_day_whose_pr_wrote_it(self):
+        repo = Repo().merge({
+            "specs/day-01-a.md": "# Day 01\n",
+            "specs/day-02-b.md": "# Day 02\n",
+            "specs/day-03-c.md": "# Day 03\n",
+            "src/Foo.java": "// Day 02 finishes this.\n// Day 03 removes this.\n",
+        })
+        repo.git("commit", "--amend", "-q", "-m", "Merge pull request #7 from o/day-02/track-a-x")
+        repo.snaps[-1]["sha"] = repo.git("rev-parse", "--short", "HEAD").strip()
+        days = [dict(day=n, file=f"specs/day-0{n}-{c}.md", status="done" if n < 2 else "ready")
+                for n, c in zip(range(1, 4), "abc")]
+        try:
+            found = repo.inside(lambda blobs: sd.hand_offs(days, [1, 2, 3], repo.snaps[-1]["sha"], blobs))
+        finally:
+            repo.close()
+        self.assertEqual([(h["to"], h["source"]) for h in found], [(3, "src/Foo.java:2")])
+
+
+class OwnerAndCaveatTest(unittest.TestCase):
+    """Only the owner's PRs are read (SO-12), and the dashboard says what name coverage cannot see."""
+
+    def test_only_the_owners_prs_are_kept(self):
+        listed = [dict(number=1, author=dict(login="Yusuprozimemet")),
+                  dict(number=2, author=dict(login="app/dependabot")),
+                  dict(number=3)]
+        self.assertEqual([p["number"] for p in sd.owners_prs(listed, "Yusuprozimemet")], [1])
+
+    def test_another_authors_pr_is_not_the_next_step(self):
+        mine = dict(number=50, title="Day 25 track A", state="OPEN", author=dict(login="Yusuprozimemet"))
+        theirs = dict(number=51, title="Bump x", state="OPEN", author=dict(login="app/dependabot"))
+        day = a_day(25, kinds=["spec"])
+        everyone = sd.next_step([day], [mine, theirs], [25], None)
+        mine_only = [p for p in sd.owners_prs([mine, theirs], "Yusuprozimemet") if p["state"] == "OPEN"]
+        self.assertIn("#51", everyone)
+        self.assertEqual(sd.next_step([day], mine_only, [25], None), "Waiting on #50 Day 25 track A")
+
+    def test_another_authors_body_names_no_track(self):
+        theirs = dict(number=51, headRefName="day-25/track-e1a-x", title="x", body="Ticks E1c.",
+                      author=dict(login="app/dependabot"))
+        self.assertEqual(sd.unopened_tracks([theirs]), [dict(track="E1c", pr=51)])
+        self.assertEqual(sd.unopened_tracks(sd.owners_prs([theirs], "Yusuprozimemet")), [])
+
+    def test_the_coverage_caveat_says_tests_and_tooling_count(self):
+        self.assertTrue(any("test" in c and "tooling" in c and "0.433" in c for c in sd.CAVEATS))
+
 
 def a_day(n, ticked=1, total=1, kinds=()):
     return dict(day=n, status="provisional", criteria=dict(ticked=ticked, total=total),
