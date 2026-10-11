@@ -98,7 +98,7 @@ Add the redirect URI to the Google OAuth client by hand, in the Google Cloud con
 
 ```bash
 ALB="$(aws elbv2 describe-load-balancers --names jobmatch --query 'LoadBalancers[0].DNSName' --output text)"
-echo "https://$ALB/login/oauth2/code/google"
+echo "https://$ALB/api/login/oauth2/code/google"
 ```
 
 **Check:** the apply completes. Then each service's desired count is 0:
