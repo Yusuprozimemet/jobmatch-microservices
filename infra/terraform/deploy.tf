@@ -1,6 +1,8 @@
 # The deploy job's credentials (Day 35): GitHub's OIDC provider and one role, jobmatch-deploy, that
 # only main of this repository can assume. In the main root, so terraform destroy removes them. If
 # the account already has GitHub's provider (deploy-preflight.sh says), import it instead.
+# The sub is GitHub's immutable form, owner@id/repo@id: the default for repositories made after
+# July 15, 2026, this one among them.
 # The trust and the statements are literals, read through the deploy output by infra-checks.py
 # (C35.5); the role's documents are built from them, so the two cannot differ.
 locals {
@@ -10,7 +12,7 @@ locals {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "token.actions.githubusercontent.com:sub" = "repo:Yusuprozimemet/jobmatch-microservices:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = "repo:Yusuprozimemet@82045682/jobmatch-microservices@1378649657:ref:refs/heads/main"
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
       }
