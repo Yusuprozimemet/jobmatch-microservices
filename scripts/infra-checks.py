@@ -2058,7 +2058,7 @@ def check_c35_4(plan: dict, repo_root: Path) -> list[str]:
 
 
 # The deploy role's trust and what it may do, each action with the one resource key it reaches (C35.5).
-C35_DEPLOY_SUB = "repo:Yusuprozimemet/jobmatch-microservices:ref:refs/heads/main"
+C35_DEPLOY_SUB = "repo:Yusuprozimemet@82045682/jobmatch-microservices@1378649657:ref:refs/heads/main"
 C35_DEPLOY_POLICY = {
     "ecr:BatchCheckLayerAvailability": "repositories",
     "ecr:InitiateLayerUpload": "repositories",

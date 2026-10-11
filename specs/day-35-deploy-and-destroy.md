@@ -92,7 +92,7 @@ Not work for a track; the deployment does not start without them:
 - **The deploy's credentials.** In the main root (so the destroy removes them): GitHub's OIDC
   provider, `token.actions.githubusercontent.com`, and one role, `jobmatch-deploy`. Its trust
   policy has `StringEquals` on both `token.actions.githubusercontent.com:sub` =
-  `repo:Yusuprozimemet/jobmatch-microservices:ref:refs/heads/main` and `:aud` =
+  `repo:Yusuprozimemet@82045682/jobmatch-microservices@1378649657:ref:refs/heads/main` and `:aud` =
   `sts.amazonaws.com`, so no deploy job may name an `environment:` (it would change `sub`). It may:
   - push to the seven `jobmatch/*` repositories: `ecr:BatchCheckLayerAvailability`,
     `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage`,
