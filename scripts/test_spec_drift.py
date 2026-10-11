@@ -649,7 +649,7 @@ Days keep their numbers; they run in this order:
             plan = f.read()
         days = sorted({sd.day_of(n) for n in os.listdir(os.path.join(HERE, os.pardir, "specs")) if sd.day_of(n)})
         order, stop = sd.run_order(plan, days)
-        self.assertEqual(sorted(d for d in order if d not in sd.PLACEHOLDERS), days)
+        self.assertEqual(sorted(d for d in order if d not in sd.PLACEHOLDERS), [d for d in days if d not in (29, 30, 31)])
         self.assertIsNone(stop)  # evaluated: plan.md has the course correction after Phase 5
 
     def test_the_cleanup_day_comes_after_the_stop_once_it_is_evaluated(self):
@@ -669,6 +669,22 @@ Days keep their numbers; they run in this order:
         order, _ = sd.run_order(plan, list(range(1, 40)))
         self.assertEqual(order[order.index(28) + 1], 39)  # written: the day takes the placeholder's place
         self.assertEqual(sd.run_order(plan.split("\n## Course correction")[0], list(range(1, 42)))[1], 28)
+
+    def test_a_cut_phase_leaves_the_order_and_the_close_out_day_comes_last(self):
+        plan = self.PLAN.replace("5. Phases 6–7 (Days 29–37): rewritten after the evaluation, or not started.",
+                                 "5. Phase 7: Days 32-35.\n"
+                                 "6. Phase 6 (Days 29–31): **cut** after Phase 7.\n"
+                                 "7. The close-out day, numbered after the last.") + "\n## Course correction after Phase 5\n"
+        order, stop = sd.run_order(plan, list(range(1, 36)))
+        self.assertNotIn(29, order)  # not first, as a day the list does not name would be
+        self.assertEqual(order[-2:], [35, sd.CLOSEOUT])
+        days = sd.settle([a_day(35, kinds=["close"]), a_day(36)], [35, sd.CLOSEOUT])
+        days[0]["phase"] = 7
+        self.assertIn("close-out day: write its day spec, Day 37", sd.next_step(days, [], [35, sd.CLOSEOUT], None))
+        self.assertEqual(sd.unwritten(days, [35, sd.CLOSEOUT]), dict(day=37, phase=7, title="The close-out day"))
+        order, _ = sd.run_order(plan, list(range(1, 36)) + [39])  # after the last named, Day 38
+        self.assertEqual(order[-1], 39)  # written: the day takes the placeholder's place
+        self.assertEqual(sd.run_order(plan.replace("**cut**", "cut"), list(range(1, 36)))[0][-4:-1], [29, 30, 31])
 
     def test_a_higher_number_does_not_finish_a_day_that_runs_later(self):
         days = sd.settle([a_day(17), a_day(18, kinds=["code"])], [18, 17])

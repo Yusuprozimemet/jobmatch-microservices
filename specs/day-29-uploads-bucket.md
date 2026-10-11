@@ -1,7 +1,8 @@
 # Day 29 — Uploads bucket and direct browser upload
 
 **Phase:** 6 · **Depends on:** Day 28 · **Expected PRs:** 3
-**Status:** provisional — re-read and revise before starting.
+**Status:** cut — after Phase 7, with Phase 6 (`plan.md`, Phase 7 outcome): an Azure draft never
+rewritten, adding only features, for a deployment that no longer exists. Kept as it was.
 
 ## Goal
 A user can upload a CV straight to private storage. The file never passes through a service.
