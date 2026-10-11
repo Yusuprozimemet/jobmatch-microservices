@@ -75,7 +75,7 @@ specs/
 | 42 | cleanup day | What Phases 3–5 left behind, before Phase 7 | ready |
 | 32, 33, 36, 34, 35 | 7 — ECS on Fargate | Terraform, the code before ECS, the services on ECS, observability, one deployment and its teardown | ready |
 | 29–31 | 6 — functions + uploads bucket | CV parsing, email off the request path | cut after Phase 7 |
-| after the last | close-out day | The end-of-Phase-7 audits' findings ([`docs/audit-findings.md`](../docs/audit-findings.md)); the last day | not written |
+| 43 | close-out day | The end-of-Phase-7 audits' findings ([`docs/audit-findings.md`](../docs/audit-findings.md)); the last day | ready |
 
 ## Provisional specs
 
