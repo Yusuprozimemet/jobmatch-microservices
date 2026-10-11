@@ -1,17 +1,17 @@
 # Day 35 — Deploy once, then `terraform destroy`
 
-**Phase:** 7 · **Depends on:** Day 34 · **Expected PRs:** 11, and one per fix the deployment needs
+**Phase:** 7 · **Depends on:** Day 34 · **Expected PRs:** 13, and one per fix the deployment needs
 
 Rewritten from the Helm draft `day-35-remaining-charts.md` for ECS (`plan.md`). Phase 7's last day.
 
 ## Goal
 One real deployment, applied from `main` under the budget alarm, serves the five public API
-surfaces at `https://<domain>` with `jobs_db` seeded from the test mart, every hand-off that needs
-an account is checked on it, and `terraform destroy` leaves nothing billable but the hosted zone
-and the bootstrap.
+surfaces over HTTPS at the load balancer's address (no domain, 2026-10-11) with `jobs_db` seeded
+from the test mart, every hand-off that needs an account is checked on it, and `terraform destroy`
+leaves nothing billable but the bootstrap.
 
 ## How the day runs
-First the code the deployment needs (Tracks A1–E, checked in CI without an account). Then the
+First the code the deployment needs (Tracks A1–F, checked in CI without an account). Then the
 deployment (no track), on `main` after E, by `docs/runbooks/deploy.md`; its evidence (commands and
 output) goes in the closing PR. A defect it finds gets a PR `day-35/fix-<slug>`, `Day 35 fix: <what
 was wrong>`, and the step is run again (`plan.md`: "again, if a fix needs it"). Priority if time or
@@ -21,19 +21,54 @@ done. Cost per hour: the dashboard's $0.227 plus Day 34's metrics (~$0.03), abou
 ## Preconditions the maintainer supplies
 Not work for a track; the deployment does not start without them:
 - An AWS account, with credentials on the maintainer's machine for `terraform apply`.
-- A domain and its Route 53 zone (`domain`, `route53_zone_id`), NS records delegated to it, or the
-  apply waits on `aws_acm_certificate_validation` until it times out. The zone is made outside
-  Terraform and stays ($0.50 a month). Chosen later (2026-10-10); the code tracks do not wait.
+- No domain (the maintainer's, 2026-10-11). `domain` and `route53_zone_id` stay optional
+  variables: set, the code still makes the alias record and the DNS-validated certificate, with NS
+  records delegated to the zone; empty, as on this deployment, Track F's self-signed certificate
+  serves the load balancer's address.
 - `alert_email` (H32.4): the maintainer's address, for the budget and the alarm topic. The budget's
   limit stays 20 USD.
-- Google's OAuth client with `https://<domain>/login/oauth2/code/google` as a redirect URI, and an
-  LLM API key (H36.1).
+- Google's OAuth client and an LLM API key (H36.1), read by `write-secrets.sh` from `.env`. Once the
+  main root's first apply has made the load balancer, the maintainer adds
+  `https://<the ALB's DNS name>/api/login/oauth2/code/google` (`application.yaml:63`) to the client's redirect URIs by hand in
+  Google Cloud Console. Google may refuse the address; C35.17 records it if so.
 - A second network address for C35.18's rate-limit check (AWS CloudShell, or a phone's hotspot).
 
 ## In scope
 - **The domain's record.** An `aws_route53_record` alias, `domain` → the ALB, in
-  `route53_zone_id`. Today only the certificate's validation records exist, so the certificate
-  would validate and `https://<domain>` would not resolve.
+  `route53_zone_id`, when `domain` is set. Today only the certificate's validation records exist,
+  so the certificate would validate and `https://<domain>` would not resolve.
+- **No domain** (F1, F2; the maintainer's, 2026-10-11). `domain` and `route53_zone_id` default to
+  `""`; a variable validation refuses a `domain` without a zone. With `domain` empty (F1):
+  - `alb.tf` makes a `tls_private_key` and a `tls_self_signed_cert` (subject and DNS name the
+    ALB's DNS name, `server_auth`) and imports it as `aws_acm_certificate.main` (`private_key`,
+    `certificate_body`). No `aws_route53_record` and no `aws_acm_certificate_validation` (they take
+    a `count`); the 443 listener takes the imported certificate. `hashicorp/tls` joins
+    `versions.tf` and the lock file.
+  - identity's `APP_BASE_URL` leaves `local.services`, which stays literal (`locals.tf:2-3`: a
+    partly unknown output loses its value in the plan JSON, and C35.3 and C36.11 read it). It
+    reaches the container through `environment_from`, from a `base_url` entry in the service
+    module call's `environment_values` (`ecs.tf`): `https://` and `var.domain`, or the ALB's DNS
+    name when `domain` is empty.
+  - `config_expressions()` matches an address with its index stripped (`[0]`), so C35.1's and
+    C36.5's configuration reads still find the counted resources.
+  - The certificate's private key is in the state (in a fresh plan it is unknown). The C32.5 sweep
+    exempts that key and nothing else: the private-key attributes of a `tls_private_key`, the
+    `private_key_pem` of a `tls_self_signed_cert`, and the `private_key` of an
+    `aws_acm_certificate` whose state `dependencies` name `tls_self_signed_cert`. It guards a
+    certificate no client trusts, and the destroy removes it (the maintainer's choice over a
+    certificate made outside Terraform).
+  - infra-ci's started plan (`-var start_services=true`) drops `domain` and `route53_zone_id`, the
+    shape this deployment applies; the default plan keeps `example.com`, so both paths are planned.
+    `infra-checks.py` runs C35.1, C36.5 and C36.9 on both plans.
+- With `domain` empty (F2):
+  - `deploy-preflight.sh`'s fifth answer is `no domain: skipped`, a pass.
+  - `live-checks.py` takes `--host` (the ALB's DNS name or a domain) in place of `--domain`, and
+    `--insecure` to accept a certificate no client trusts; without it, the self-signed one fails.
+    With `--insecure` its certificate check also wants `Type` `IMPORTED`. `deployment.json` keeps
+    its `domain` key, holding the host, so the panel and its fixture do not change.
+  - The runbook, `deploy.tfvars.example`, `docs/architecture.md` and `teardown-check.sh`'s comment
+    follow: no zone, no DNS wait, the redirect URI added by hand inside step 4 (the runbook keeps
+    its fifteen steps), `--host "$ALB" --insecure`, nothing left but the bootstrap.
 - **Rollback.** `deployment_circuit_breaker { enable = true, rollback = true }` on the service in
   `modules/service` (the maintainer's, 2026-10-09). Migrations stay forward-only, so each must work
   with the previous image: the rollback swaps images, never the schema.
@@ -93,7 +128,7 @@ Not work for a track; the deployment does not start without them:
     the region (`aws rds describe-orderable-db-instance-options`, Day 32's Notes); the state
     bucket's name is free or already the maintainer's (H32.3); whether the account has a GitHub
     OIDC provider; `alert_email` is not `alerts@example.com`; the domain's NS records are the
-    zone's.
+    zone's, or no domain (F).
   - `scripts/write-secrets.sh`: writes the fourteen values (H36.1) with `aws secretsmanager
     put-secret-value`, from a file outside the repository: role passwords generated
     (`openssl rand`), the four signing keys made with `scripts/jwt-key.sh`, Google's and the LLM's
@@ -103,8 +138,8 @@ Not work for a track; the deployment does not start without them:
     non-zero unless the code is 0.
   - `infra-checks.py --state <state.json>`: the C32.5 secret sweep on a pulled state, and nothing
     else.
-  - `scripts/live-checks.py --domain <d> --out docs/dashboard/deployment.json`: the checks of C35.16
-    and C35.17, each a result and a time.
+  - `scripts/live-checks.py --host <h> [--insecure] --out docs/dashboard/deployment.json`: the
+    checks of C35.16 and C35.17, each a result and a time (`--domain` until F).
   - `scripts/teardown-check.sh`: lists what is left in the account and region that bills (C35.21),
     and exits non-zero if anything is.
 - **The runbook** `docs/runbooks/deploy.md` (D1b), in this order, each step with how to check it
@@ -152,18 +187,30 @@ Not work for a track; the deployment does not start without them:
 | D2a | | `live-checks.py`, `teardown-check.sh`, their stub tests (C35.7) |
 | D2b | | The Deployment panel (C35.9) |
 | E | | Runbooks retired, the architecture drawing, the bootstrap comment (C35.8) |
+| F1 | | No domain in Terraform: the self-signed certificate, `base_url`, the counted DNS resources, the sweep's exemption, the started plan without a domain, C35.1/C36.5/C36.9 on both plans (C35.1, C35.7's state fixture) |
+| F2 | | No domain in the scripts and docs: preflight, `live-checks.py --host --insecure`, the runbook, the tfvars example, the drawing (C35.7) |
 
 In the table's order: A1 first (A2 and C1 edit what it edits), C1 before C2a (the role's ARN), B
-and C2b before D1b. Then the deployment, its fixes, and the closing PR.
+and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's variables). Then the deployment, its fixes, and the closing PR.
 
 ## Acceptance criteria
 
 ### The code (checked in CI without an account)
 
-- [ ] C35.1 **new** — The plan has one `aws_route53_record` of type `A` named by `var.domain` in
-      `var.route53_zone_id`, whose `alias` refers to the ALB (`configuration`). `infra-checks.py
-      --main-plan` (`check_c35_1`). Red today: the plan's only record is
-      `certificate_validation["example.com"]`.
+- [ ] C35.1 **new** — With `domain` set (the default plan), the plan has one `aws_route53_record`
+      of type `A` named by `var.domain` in `var.route53_zone_id`, whose `alias` refers to the ALB
+      (`configuration`). Without it (the started plan, F1), no `aws_route53_record` and no
+      `aws_acm_certificate_validation`; `aws_acm_certificate.main`'s `certificate_body` and
+      `private_key` refer to `tls_self_signed_cert` and `tls_private_key`, the self-signed
+      certificate's DNS name to the ALB, and the 443 listener's `certificate_arn` to the imported
+      certificate; identity's `environment_from` maps `APP_BASE_URL` to `base_url`, an
+      `environment_values` key of the module call, and that map's references (one flat list in the
+      plan JSON) include `var.domain` and `aws_lb.main`, which nothing else in it refers to (on
+      both plans: the container definitions are unknown, `DB_HOST` is). The started plan keeps a
+      `services` output with a value, so C35.3 and C36.11 still read it. `infra-checks.py
+      --main-plan --started-plan` (`check_c35_1` on both). Red today: without `domain` no plan can
+      be made, `No value for required variable` (`variables.tf:28-31`, no default); the check's
+      red is shown by F1's break.
 - [ ] C35.2 **new** — Every `aws_ecs_service` in the plan has `deployment_circuit_breaker` with
       `enable` and `rollback` both `true` (`check_c35_2`). Red today: all six have
       `deployment_circuit_breaker: []`.
@@ -200,6 +247,16 @@ and C2b before D1b. Then the deployment, its fixes, and the closing PR.
       non-zero when one fails; `infra-checks.py --state` fails on a state fixture holding a secret's
       value and passes on one without. `docs/runbooks/deploy.md` has every step In scope lists, in
       that order (`check-links.py` over it). Red today: none of the scripts exists.
+      F1 adds: `infra-checks.py --state` passes on a fixture holding a key header in a
+      `tls_private_key`, a `tls_self_signed_cert`'s `private_key_pem` and an `aws_acm_certificate`
+      whose `dependencies` name `tls_self_signed_cert`, and fails on the same header in any other
+      resource (a fake header, no real key: GitGuardian). F2 adds: `deploy-preflight.sh` with
+      `domain = ""` prints `no domain: skipped` and exits 0 with the other four passing;
+      `live-checks.py --help` names `--host` and `--insecure`, and against a local HTTPS stub with a
+      certificate made at test time by `openssl` its request fails without `--insecure` and
+      succeeds with it. Red today: the sweep fails on any key header (`infra-checks.py:489`, `:494-495`), the
+      preflight always queries Route 53 (`deploy-preflight.sh:86-99`), and `live-checks.py`
+      requires `--domain` (`:192`).
 - [ ] C35.8 **new** — The three retired files each open with the retired line; `docs/architecture.md`
       exists and every `\b[\w/.-]+\.tf\b` it names exists under `infra/terraform/` (a check in
       infra-ci, as well as `check-links.py`); `bootstrap/main.tf` no longer says "destroyed last".
@@ -210,8 +267,13 @@ and C2b before D1b. Then the deployment, its fixes, and the closing PR.
       scripts/test_spec_drift.py` → 0 and 0.
 - [ ] C35.10 **hold** — Every check `infra-checks.py` ran before the day (C32.*, C33.*, C36.*,
       C34.*) still runs and passes in infra-ci, each on the plan it read before, except C36.11 on
-      the started plan and C36.10's task count, both changed above; `terraform fmt` and `validate`
-      pass for the three roots.
+      the started plan and C36.10's task count, both changed above, and F's three: C36.5 accepts
+      the imported certificate when `domain` is empty, C36.9 reads `APP_BASE_URL` through
+      `base_url` on both plans, as C35.1 does, and wants `GOOGLE_REDIRECT_URI` unset (identity
+      builds it from `APP_BASE_URL`, `application.yaml:63`; today's fallback to `""` would pass any
+      path) (C36.5 and C36.9 run on the started plan as well), and C32.5's sweep has the one exemption In
+      scope names; `terraform fmt` and
+      `validate` pass for the three roots.
       broken: (each track that touches `infra/terraform/` breaks one existing check once) → (what
       it reported)
 - [ ] C35.11 **hold** — No Day 1–4 test is edited, and the five services' suites pass unedited in
@@ -232,18 +294,21 @@ and C2b before D1b. Then the deployment, its fixes, and the closing PR.
 - [ ] C35.14 **new** — Secrets (H36.1, `secrets.tf:16`): `aws secretsmanager
       list-secret-version-ids` shows an `AWSCURRENT` version for each of the fourteen, written by
       `write-secrets.sh`; `terraform state list | grep -c secret_version` prints 0, and
-      `infra-checks.py --state` on the pulled state passes. Red today: no account.
+      `infra-checks.py --state` on the pulled state passes (with F's exemption for the self-signed
+      key, and no other). Red today: no account.
 - [ ] C35.15 **new** — Migrations before services (H36.3, `ecs.tf:57`, `locals.tf:222`): `run-once.sh
       db-setup` exits 0; then `identity-service-migrate` exits 0 with Flyway at V16 (`db/migration`)
       and V4 (`identity`), and `application-service-migrate` at V1; then `jobs-seed` exits 0; only
       then `start_services=true`. Red today: no account.
       broken: `identity-service-migrate` run before the first `db-setup` → (its exit code and the
       error `run-once.sh` printed)
-- [ ] C35.16 **new** — Reachability (H36.2): `aws acm describe-certificate` shows `ISSUED`;
-      `https://<domain>/` returns 200 with the certificate verified; `https://<domain>/api/jobs?size=100`
-      returns `totalElements` 24; `http://<domain>/` redirects to HTTPS; each task's public IP on
-      3000, 8080, 8081 and 9090 does not answer from outside (`live-checks.py`). Red today: the
-      domain does not resolve.
+- [ ] C35.16 **new** — Reachability (H36.2), at the ALB's DNS name (`$ALB`, from `aws elbv2
+      describe-load-balancers`): `aws acm describe-certificate` shows the certificate for `$ALB`
+      with `Type` `IMPORTED` and `Status` `ISSUED`; `https://$ALB/` returns 200 with `--insecure`
+      (`curl -k`), and plain `curl https://$ALB/`, by hand, fails certificate verification (the
+      self-signed certificate is the one served; its output recorded); `https://$ALB/api/jobs?size=100` returns `totalElements` 24; `http://$ALB/`
+      redirects to HTTPS; each task's public IP on 3000, 8080, 8081 and 9090 does not answer from
+      outside (`live-checks.py --host "$ALB" --insecure`). Red today: no load balancer.
       broken: `live-checks.py` pointed at the ALB's 443 as if it were a task → (it reports the port
       open)
 - [ ] C35.17 **new** — The five surfaces (`plan.md`, Phase 0) through the ALB, for a new user
@@ -251,8 +316,10 @@ and C2b before D1b. Then the deployment, its fixes, and the closing PR.
       `Secure; HttpOnly; SameSite=Lax`; `GET /api/profile` 200 and `PUT /api/profile` 200; `GET
       /api/jobs?q=<a seeded title word>` 200 with results; `POST /api/saved-jobs` then `GET
       /api/saved-jobs` holding it and `PATCH /api/saved-jobs/{postingId}` 200; `GET
-      /api/jobs/top-matches` 200. Google sign-in completes at `https://<domain>` by hand. Red
-      today: no account.
+      /api/jobs/top-matches` 200 (`live-checks.py --host "$ALB" --insecure`; password login
+      carries these). Google sign-in is tried by hand at `https://$ALB`, past the browser's
+      certificate warning: it completes, or what Google refused (the redirect URI in the console, or
+      the sign-in) is recorded and the criterion stands on password login. Red today: no account.
 - [ ] C35.18 **new** — What the plan could not show (H36.5): every service reaches `RUNNING` with
       its desired count, so every secret ARN resolved; `DELETE /api/users/me` publishes one
       `user.deleted` that both consumers process (matching's scores and the saved jobs gone, both
@@ -280,9 +347,10 @@ and C2b before D1b. Then the deployment, its fixes, and the closing PR.
       `teardown-check.sh` exits 0: no ECS cluster, service or task, load balancer or target group,
       RDS instance, snapshot or automated backup, Elastic IP, VPC or ENI, ECR repository, secret,
       DynamoDB table, SNS topic, SQS queue, CloudWatch alarm or dashboard, `/ecs/jobmatch/*` or
-      `/jobmatch/*` log group, or OIDC provider is left. What stays: the hosted zone, the bootstrap's
-      bucket and budget, X-Ray's traces (30 days, free, not deletable). Red today:
-      `teardown-check.sh` does not exist.
+      `/jobmatch/*` log group, or OIDC provider is left. What stays: the bootstrap's bucket and
+      budget, X-Ray's traces (30 days, free, not deletable); no hosted zone was made. The imported
+      certificate is not billed and the destroy removes it (`aws acm list-certificates` empty,
+      recorded; `teardown-check.sh` does not list ACM). Red today: `teardown-check.sh` does not exist.
       broken: `teardown-check.sh` run while the deployment is up → (what it listed, and its exit
       code)
 - [ ] C35.22 **new** — Cost: Cost Explorer's daily cost for each day of the deployment, by service,
@@ -291,7 +359,8 @@ and C2b before D1b. Then the deployment, its fixes, and the closing PR.
 
 ## Verify
 ```bash
-# Without an account; the plans as infra-ci's "Plan" step makes them (+ -var start_services=true).
+# Without an account; the plans as infra-ci's "Plan" step makes them (the started plan:
+# -var start_services=true, and no domain or zone).
 python scripts/infra-checks.py --bootstrap-plan bootstrap-plan.json --main-plan main-plan.json \
   --started-plan started-plan.json
 python scripts/test_spec_drift.py
@@ -300,20 +369,33 @@ python scripts/check-links.py docs/architecture.md docs/runbooks/*.md
 # The deployment half: docs/runbooks/deploy.md, step by step. Its checks:
 scripts/deploy-preflight.sh
 scripts/run-once.sh db-setup
-python scripts/live-checks.py --domain "$DOMAIN" --out docs/dashboard/deployment.json
+ALB="$(aws elbv2 describe-load-balancers --names jobmatch --query 'LoadBalancers[0].DNSName' --output text)"
+python scripts/live-checks.py --host "$ALB" --insecure --out docs/dashboard/deployment.json
 scripts/teardown-check.sh
 ```
 
 ## Notes
 - **Decisions (the maintainer's, 2026-10-10):** an OIDC role, not access keys; runbooks retired,
   not rehearsed; the domain later, a variable until then; the audit agents' PR outside the day.
+- **Decision (the maintainer's, 2026-10-11): no domain.** The deployment runs at the ALB's address
+  with a self-signed certificate Terraform generates and imports (Track F, after E); the domain
+  path stays in the code for whoever has one. The key in the state is exempted from C32.5's sweep
+  by name, chosen over a certificate made with `openssl` outside Terraform (more steps, and one
+  more thing the destroy would not remove).
+- **H36.2 is half picked up:** Day 36 handed on "the ACM certificate validated against the real
+  domain and zone" (`day-36-ecs-services.md:260`). Without a domain, DNS validation never runs on
+  an account; C35.16 checks the imported certificate, and the validation path is checked only in
+  the plan (C35.1, C36.5). Dropped, not deferred: nothing after Phase 7 deploys again.
 - **Departures from `plan.md`, recorded here:**
+  - "That needs a domain and an ACM certificate" (`plan.md`, the frontend behind the ALB): the
+    certificate is ACM's, imported and self-signed; HTTPS and the `Secure` cookie hold, Google
+    sign-in may not (C35.17).
   - "The service workflows push there instead of GHCR" (`plan.md`, course correction before
     Phase 7): they push to ECR while the switch is on and to GHCR while it is off, since "the push
     from the service workflows switches with Day 35's deploy job" (same section) and an
     unconditional ECR push would fail after the destroy.
-  - "`terraform destroy` leaves nothing billable behind" (Phase 7's Done when): the hosted zone
-    ($0.50 a month) and the bootstrap's bucket stay, and the budget with them (2026-10-09).
+  - "`terraform destroy` leaves nothing billable behind" (Phase 7's Done when): the bootstrap's
+    bucket stays, and the budget with it (2026-10-09); with no domain there is no hosted zone.
 - **The five end-of-phase audits run before the destroy** (2026-10-09), on Opus: the plan-auditor
   on Phase 7 and on the whole plan (CLAUDE.md's step 6), then the three new auditors.
 - **`start_services` defaults to `false`** so a bare apply cannot start services before their
@@ -337,3 +419,14 @@ scripts/teardown-check.sh
   bucket; infra-ci never ran on the workflows `check_c35_6` reads; deploys skipped migrations;
   `db-setup-tests.yml` has no GHCR push to keep.
 - **Defect** — found: auditor · cause: spec · the draft's six blocking findings. Fixed here.
+- **Audit (spec-auditor, Opus, on the no-domain change, 2026-10-11):** 8 findings, 3 blocking, all
+  taken in. Blocking: `APP_BASE_URL` from the ALB in `local.services` would have emptied the
+  started plan's `services` output (C35.3, C36.11); the exemption missed `tls_self_signed_cert`'s
+  copy of the key; C36.5 and C36.9 ran on the default plan only, so their no-domain halves never
+  ran. Also: the redirect URI's path is `/api/login/...`; counted resources need the index-free
+  configuration match; H36.2's DNS half recorded as dropped; the `domain` key kept; F split in
+  two for the 400-line limit.
+  Its re-check: one more blocking claim (identity's task definition is unknown in any plan, so
+  `APP_BASE_URL` is read from the module call's references), and C36.9's redirect check. Fixed.
+- **Defect** — found: auditor · cause: spec · the no-domain draft's three blocking findings, and
+  the re-check's one. Fixed here.
