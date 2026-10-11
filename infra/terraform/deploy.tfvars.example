@@ -5,6 +5,9 @@
 # alert_email: the maintainer's address; preflight fails on this placeholder. No comment after a
 # quoted value: preflight's sed would not read it.
 alert_email     = "alerts@example.com"
-domain          = "example.com"
-route53_zone_id = "Z0000000000000000000"
+
+# domain and route53_zone_id stay empty: the ALB serves its own DNS name with a self-signed
+# certificate, and preflight skips the delegation check. A domain needs its hosted zone's id.
+domain          = ""
+route53_zone_id = ""
 start_services  = false # the first apply; set true for step 11 and every apply after
