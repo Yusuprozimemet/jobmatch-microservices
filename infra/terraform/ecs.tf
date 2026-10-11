@@ -54,6 +54,8 @@ module "service" {
     user-deleted-topic            = module.bus.topic_arn
     matching-user-deleted-url     = module.bus.queue_urls["matching-user-deleted"]
     applications-user-deleted-url = module.bus.queue_urls["applications-user-deleted"]
+    # identity's links: the domain, or the ALB's address without one.
+    base_url = "https://${var.domain != "" ? var.domain : aws_lb.main.dns_name}"
   }
 }
 

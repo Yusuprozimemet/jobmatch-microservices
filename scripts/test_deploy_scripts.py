@@ -189,6 +189,40 @@ class DeployScriptsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("ok (state)", result.stdout)
 
+    def infra_checks_resources_state(self, resources):
+        path = os.path.join(self.root, "state.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"version": 4, "resources": resources}, f)
+        return subprocess.run([sys.executable, os.path.join(HERE, "infra-checks.py"), "--state", path],
+                              capture_output=True, text=True)
+
+    def test_infra_checks_state_exempts_the_self_signed_key_and_fails_the_same_header_elsewhere(self):
+        # A fake header, built by concatenation: no key is in the repository, and no scanner flags it
+        body = "fake-key-body-7731"
+        header = "-----BEGIN " + "RSA PRIVATE KEY-----\n" + body
+
+        def resource(kind, attributes, dependencies=()):
+            return {"type": kind, "name": "main",
+                    "instances": [{"attributes": attributes, "dependencies": list(dependencies)}]}
+
+        exempt = [resource("tls_private_key", {"private_key_pem": header, "private_key_pem_pkcs8": header,
+                                               "private_key_openssh": header}),
+                  resource("tls_self_signed_cert", {"private_key_pem": header}),
+                  resource("aws_acm_certificate", {"private_key": header},
+                           ["tls_self_signed_cert.main", "tls_private_key.main"])]
+        result = self.infra_checks_resources_state(exempt)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ok (state)", result.stdout)
+
+        elsewhere = [[resource("aws_acm_certificate", {"private_key": header})],
+                     [resource("tls_private_key", {"public_key_pem": header})],
+                     [resource("aws_secretsmanager_secret_version", {"secret_string": header})]]
+        for resources in elsewhere:
+            result = self.infra_checks_resources_state(resources)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("C32.5", result.stdout)
+            self.assertNotIn(body, result.stdout)
+
     def infra_checks_architecture(self, text):
         path = os.path.join(self.root, "architecture.md")
         with open(path, "w", encoding="utf-8") as f:
