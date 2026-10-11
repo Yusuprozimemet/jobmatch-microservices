@@ -85,9 +85,12 @@ DAY_REF = re.compile(r"\bDays? (\d+)((?:\s*(?:[–-]|,|and|or)\s*\d+)*)")
 # IDs, from Day 28's spec change on (specs/README.md): criterion 3 of Day 28 is C28.3, and the
 # first hand-off Day 28's Notes leave is H28.1. A spec picks a hand-off up by citing its ID.
 CRITERION_ID = re.compile(r"^C(\d+)\.(\d+)\s+")
-HAND_OFF_ID = re.compile(r"\bH(\d+)\.(\d+)\b")
-# A track a PR names ("**E1c** (next, ...)"), not a grep's -A3 or Day 14's A1.
-TRACK_NAMED = re.compile(r"(?<![-\w])(?<!Day \d\d's )(?<!Day \d\d )([A-Z]\d+[a-z]?|0[a-z])\b")
+# A spec may cite a range of them, H34.1–H34.3 or H35.2-4: the second end may leave its day out.
+HAND_OFF_RANGE = re.compile(r"\bH(\d+)\.(\d+)(?:\s*[–-]\s*(?:H\1\.)?(\d+)\b)?")
+# A track a PR names ("**E1c** (next, ...)"), not a grep's -A3 or Day 14's A1. A criterion ID
+# (C32.5) is not a track either, so a match followed by ".<digit>" is rejected.
+# A track number is one digit, as in a day's track table, so neither C32.5 nor a day-numbered C32 is one.
+TRACK_NAMED = re.compile(r"(?<![-\w])(?<!Day \d\d's )(?<!Day \d\d )([A-Z]\d[a-z]?|0[a-z])\b(?!\.\d)")
 PHASE_READ = re.compile(r"^\*\*Read [^*\n]*end of Phase (\d+)\.\*\*.*?(?=^\*\*Read |^## |\Z)", re.M | re.S)
 # The platform step's specs (plan.md, "Course correction after Phase 2") are numbered from here.
 PLATFORM = "platform"
@@ -117,6 +120,8 @@ CAVEATS = [
     "They match names, not meaning: prose is not understood, so a spec can name a thing the code has "
     "and still describe it wrongly.",
     "A name a spec says should disappear still counts as shared vocabulary while the code has it.",
+    "Name coverage counts test and tooling files as code: the architecture audit measured 0.871 over "
+    "all code and 0.433 over production code alone (docs/audit-findings.md, AR-8).",
 ]
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
 # What git said about each merge, kept between runs: every call cached here names commits only by
@@ -920,25 +925,42 @@ def days_named(text):
     return out
 
 
+def hand_off_ids(text):
+    """Every hand-off ID a text cites, a range (H34.1–H34.3, or H34.1–3) as each ID in it."""
+    out = set()
+    for day, a, b in HAND_OFF_RANGE.findall(text):
+        out.update(f"H{day}.{n}" for n in range(int(a), int(b or a) + 1))
+    return out
+
+
+def written_by_day(sha, path, number):
+    """The day whose PR added a line: its first-parent commit's subject names the day's branch."""
+    commit = run("git", "blame", "--first-parent", "--porcelain", "-L", f"{number},{number}",
+                 sha, "--", path).split()[0]
+    return day_of(run("git", "log", "-1", "--format=%s", commit))
+
+
 def hand_offs(days, order, sha, blobs):
     """What finished days hand to days not yet run, and whether the receiving spec picked it up.
     A Notes item with an ID of its day (H28.1) is picked up only by a spec that cites the ID; with
     no day ahead to take it and no spec citing it, it is listed with `to` None, as no later day
     picks it up. An item without one is picked up when the receiving spec names its day, or a
     finished day the item names (Day 39 points to Day 38's findings); a code comment, when the
-    spec names its file."""
+    spec names its file. A code comment is not handed to the day whose own PR wrote it: infra-ci.yaml's
+    "(Day 35)" was written by Day 35."""
     finished = {d["day"] for d in days if d["status"] in FINISHED}
     text = {d["day"]: blobs.read(sha, d["file"]) for d in days}
     ahead = {d: i for i, d in enumerate(order) if d in text and d not in finished}
+    cited = {t: hand_off_ids(text[t]) for t in text}
     out = []
     for d in days:
         if d["day"] not in finished:
             continue
         for item in re.split(r"\n(?=\s*- )", section(text[d["day"]], "Notes")):
             named = days_named(item)
-            ids = sorted({f"H{a}.{b}" for a, b in HAND_OFF_ID.findall(item) if int(a) == d["day"]})
+            ids = sorted(i for i in hand_off_ids(item) if int(i[1:].split(".")[0]) == d["day"])
             if ids:
-                cites = {t for t in text if t != d["day"] and any(re.search(rf"\b{re.escape(i)}\b", text[t]) for i in ids)}
+                cites = {t for t in text if t != d["day"] and set(ids) & cited[t]}
                 for t in named & set(ahead) - {d["day"]}:
                     out.append(dict(to=t, id=ids[0], source=f"Day {d['day']:02d} Notes", picked=t in cites, text=item))
                 if not cites and not named & set(ahead) - {d["day"]}:
@@ -954,7 +976,10 @@ def hand_offs(days, order, sha, blobs):
         stem = os.path.basename(path)
         stem = os.path.splitext(stem)[0] if stem.endswith((".java", ".sql", ".ts", ".py")) else stem
         if COMMENT_LINE.match(code):
-            for t in days_named(code) & set(ahead):
+            named = days_named(code) & set(ahead)
+            if named:
+                named -= {written_by_day(sha, path, number)}
+            for t in named:
                 out.append(dict(to=t, source=f"{path}:{number}", picked=stem in text[t], text=code))
     for h in out:
         h["text"] = excerpt(re.sub(r"^\s*(- |//|/\*+|\*|--|#|<!--)\s*", "", h["text"]), 160)
@@ -1095,6 +1120,12 @@ def provenance():
                 chance_draws=CHANCE_DRAWS)
 
 
+def owners_prs(listed, owner):
+    """Only PRs the repository's owner opened. Anyone can open a PR on a public repository, and its
+    body and title would reach the next step and an agent's context through this page (SO-12)."""
+    return [p for p in listed if (p.get("author") or {}).get("login") == owner]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     out = ap.add_mutually_exclusive_group()
@@ -1105,7 +1136,9 @@ def main():
     args = ap.parse_args()
     if not args.no_cache:
         load_cache(args.cache)
-    listed = gh_list(PR_LIMIT, "pr", "list", "--state", "all", "--json", "number,title,headRefName,state,url,body")
+    owner = run("gh", "repo", "view", "--json", "owner", "-q", ".owner.login").strip()
+    listed = owners_prs(gh_list(PR_LIMIT, "pr", "list", "--state", "all", "--json",
+                                "number,title,headRefName,state,url,body,author"), owner)
     runs = gh_list(RUN_LIMIT, "run", "list", "--json", "headBranch,headSha,conclusion,event,workflowName")
     prs = {p["number"]: p for p in listed}
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
