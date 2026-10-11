@@ -10,11 +10,14 @@ C36.5 (ALB and certificate), C36.6 (security groups), C36.7 (health checks), C36
 Connect and the compose variables), C36.9 (the service variables), C36.10 (the one-off tasks),
 C36.11 (the scaling), C34.3 (the collector sidecar and the telemetry variables), C34.4 (the task
 role's telemetry policy), C34.5 (the metrics log group) and C34.8 (the five services' telemetry defaults).
-Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus.
+Track B checks C32.4; Track C1 adds scores; Track C2 adds the bus. Day 35 (F1) adds C35.1 for the
+self-signed certificate of a deployment with no domain: C36.5, C36.9 and C35.1 also read the started
+plan, and a state's self-signed certificate key is exempt from the C32.5 sweep.
 Exits 1 with a list of failures, each prefixed with criterion ID.
 """
 
 import argparse
+import copy
 import ipaddress
 import json
 import re
@@ -479,7 +482,10 @@ def check_skip_flags(directory: str) -> list[str]:
 
 
 def check_c32_5_sweep(plan: dict, path_label: str) -> list[str]:
-    """Sweep for secrets: AWS access key IDs, private key headers, and password values."""
+    """Sweep for secrets: AWS access key IDs, private key headers, and password values. A state holds the
+    key of the self-signed certificate (Day 35, F1), which no plan can show: no client trusts that
+    certificate and the destroy removes it, so the header of that key is exempt in a state, and nothing
+    else is. The access key and password rules still read those attributes."""
     failures = []
 
     # AWS access key ID pattern: AKIA or ASIA followed by 16 chars
@@ -487,6 +493,24 @@ def check_c32_5_sweep(plan: dict, path_label: str) -> list[str]:
 
     # Private key header pattern
     private_key_pattern = re.compile(r'-----BEGIN.*PRIVATE KEY-----')
+
+    # A state has resources and no planned_values; a plan is the other way round
+    if "resources" in plan and "planned_values" not in plan:
+        plan = copy.deepcopy(plan)
+        for resource in plan["resources"]:
+            for instance in resource.get("instances", []):
+                attributes = instance.get("attributes", {})
+                if resource["type"] == "tls_private_key":
+                    names = ("private_key_pem", "private_key_pem_pkcs8", "private_key_openssh")
+                elif resource["type"] == "tls_self_signed_cert":
+                    names = ("private_key_pem",)
+                elif resource["type"] == "aws_acm_certificate" and any(d.startswith("tls_self_signed_cert.") for d in instance.get("dependencies", [])):
+                    names = ("private_key",)
+                else:
+                    names = ()
+                for name in names:
+                    if isinstance(attributes.get(name), str):
+                        attributes[name] = private_key_pattern.sub("", attributes[name])
 
     def sweep_value(value: Any, path: str):
         if isinstance(value, str):
@@ -1169,6 +1193,11 @@ def refers_to(references: list[str], address: str) -> bool:
     return any(ref.split("[")[0] == address or ref.split("[")[0].startswith(address + ".") for ref in references)
 
 
+def no_domain(plan: dict) -> bool:
+    """True if the plan was made with domain = "" (Day 35, F1): the certificate is the self-signed one."""
+    return plan["variables"]["domain"]["value"] == ""
+
+
 def check_c36_3(plan: dict) -> list[str]:
     """Check the secrets: the fourteen secrets with no version in the plan, every name a service
     reads, and no environment variable that holds a secret or a PEM block."""
@@ -1330,7 +1359,10 @@ def check_c36_4(plan: dict) -> list[str]:
 
 def config_expressions(plan: dict, address: str) -> tuple[tuple, dict]:
     """The module path and the expressions of the configuration resource at a full address
-    (module.network.aws_security_group.tasks), or of a module call (module.service)."""
+    (module.network.aws_security_group.tasks), or of a module call (module.service). A trailing count
+    or for_each index is stripped first: aws_route53_record.domain[0] is the configuration of
+    aws_route53_record.domain, and a planned instance has the same expressions."""
+    address = re.sub(r"\[[^\]]*\]$", "", address)
     path, module, parts = (), plan["configuration"]["root_module"], address.split(".")
     while parts[0] == "module" and len(parts) > 2:
         path += (parts[1],)
@@ -1357,7 +1389,8 @@ def check_c36_5(plan: dict) -> list[str]:
     """Check the ALB: one application load balancer on the public subnets, a DNS-validated certificate
     for var.domain with its records in var.route53_zone_id, a 443 listener forwarding to the frontend's
     target group, a 80 listener redirecting to 443, and the frontend's service as the only one with a
-    load balancer."""
+    load balancer. With no domain (Day 35, F1) the certificate is the imported self-signed one: its body
+    comes from tls_self_signed_cert, and no record and no validation are planned."""
     failures = []
 
     lbs = [r for r in resources(plan) if r["type"] == "aws_lb"]
@@ -1375,15 +1408,24 @@ def check_c36_5(plan: dict) -> list[str]:
     if len(certs) != 1:
         failures.append(f"C36.5 expected exactly 1 aws_acm_certificate, got {len(certs)}")
     for cert in certs:
-        if cert["values"].get("validation_method") != "DNS" or not refers_to(config_refs(plan, cert["address"], "domain_name"), "var.domain"):
+        if no_domain(plan):
+            if not refers_to(config_refs(plan, cert["address"], "certificate_body"), "tls_self_signed_cert.main"):
+                failures.append(f"C36.5 {cert['address']}: certificate_body not from tls_self_signed_cert.main")
+        elif cert["values"].get("validation_method") != "DNS" or not refers_to(config_refs(plan, cert["address"], "domain_name"), "var.domain"):
             failures.append(f"C36.5 {cert['address']}: want DNS validation of var.domain")
 
     records = [r for r in resources(plan) if r["type"] == "aws_route53_record"]
-    if not any(refers_to(config_refs(plan, r["address"].split("[")[0], "zone_id"), "var.route53_zone_id") for r in records):
+    if no_domain(plan):
+        if records:
+            failures.append(f"C36.5 {len(records)} aws_route53_record with no domain, want none")
+    elif not any(refers_to(config_refs(plan, r["address"].split("[")[0], "zone_id"), "var.route53_zone_id") for r in records):
         failures.append("C36.5 no planned aws_route53_record with zone_id from var.route53_zone_id")
 
     validations = [r for r in resources(plan) if r["type"] == "aws_acm_certificate_validation"]
-    if len(validations) != 1:
+    if no_domain(plan):
+        if validations:
+            failures.append(f"C36.5 {len(validations)} aws_acm_certificate_validation with no domain, want none")
+    elif len(validations) != 1:
         failures.append(f"C36.5 expected exactly 1 aws_acm_certificate_validation, got {len(validations)}")
     for validation in validations:
         if not refers_to(config_refs(plan, validation["address"], "validation_record_fqdns"), "aws_route53_record.certificate_validation"):
@@ -1602,9 +1644,10 @@ def check_c36_8(plan: dict, repo_root: Path) -> list[str]:
 
 
 def check_c36_9(plan: dict) -> list[str]:
-    """Check the variables that differ from compose: identity's cookie and links are on the domain,
-    the migrations run only as one-off tasks, matching does not create the table and sets its profile
-    cache window, and the gateway's trusted proxies match an address in each public subnet and in no
+    """Check the variables that differ from compose: identity's cookie is Secure and its links come from
+    base_url (the domain, or the ALB's name with none), GOOGLE_REDIRECT_URI is unset (identity builds it
+    from APP_BASE_URL), the migrations run only as one-off tasks, matching does not create the table and
+    sets its profile cache window, and the gateway's trusted proxies match an address in each public subnet and in no
     private one."""
     failures = []
 
@@ -1613,16 +1656,12 @@ def check_c36_9(plan: dict) -> list[str]:
         return ["C36.9 no services output"]
 
     identity = services.get("identity-service", {}).get("environment", {})
-    domain = plan.get("variables", {}).get("domain", {}).get("value")
-    if domain is None:
-        failures.append("C36.9 no domain variable in the plan")
-    elif identity.get("APP_BASE_URL") != f"https://{domain}":
-        failures.append(f"C36.9 identity-service APP_BASE_URL {identity.get('APP_BASE_URL')}, want https://{domain}")
+    identity_from = services.get("identity-service", {}).get("environment_from", {})
+    failures.extend(f"C36.9 {message}" for message in base_url_failures(plan))
     if identity.get("SESSION_COOKIE_SECURE") != "true":
         failures.append(f"C36.9 identity-service SESSION_COOKIE_SECURE {identity.get('SESSION_COOKIE_SECURE')}, want true")
-    redirect = identity.get("GOOGLE_REDIRECT_URI")
-    if redirect is not None and not redirect.startswith(identity.get("APP_BASE_URL", "") + "/"):
-        failures.append(f"C36.9 identity-service GOOGLE_REDIRECT_URI {redirect}, want unset or under APP_BASE_URL")
+    if "GOOGLE_REDIRECT_URI" in identity or "GOOGLE_REDIRECT_URI" in identity_from:
+        failures.append("C36.9 identity-service GOOGLE_REDIRECT_URI set, want unset: identity builds it from APP_BASE_URL")
 
     for name in ("identity-service", "application-service"):
         value = services.get(name, {}).get("environment", {}).get("MIGRATE_ON_START")
@@ -1791,8 +1830,18 @@ def check_c36_11(plan: dict) -> list[str]:
 
 
 def check_c35_1(plan: dict) -> list[str]:
-    """Check the domain's record: one A record named by var.domain in var.route53_zone_id, whose alias
-    refers to the ALB (read from the configuration, the plan shows only the resolved name and zone)."""
+    """Check the domain's entry point and identity's links. With var.domain set: one A record named by it
+    in var.route53_zone_id, whose alias refers to the ALB. With it empty (Day 35, F1): no record and no
+    validation, and the imported self-signed certificate instead. On both: APP_BASE_URL comes from
+    base_url, which the module call sets from the domain or from the ALB's DNS name."""
+    failures = check_c35_1_no_domain(plan) if no_domain(plan) else check_c35_1_record(plan)
+    return failures + [f"C35.1 {message}" for message in base_url_failures(plan)]
+
+
+def check_c35_1_record(plan: dict) -> list[str]:
+    """The domain's A record, read with var.domain set: one A record named by var.domain in
+    var.route53_zone_id, whose alias refers to the ALB (read from the configuration, the plan shows only
+    the resolved name and zone)."""
     failures = []
 
     records = [r for r in resources(plan) if r["type"] == "aws_route53_record"]
@@ -1821,6 +1870,56 @@ def check_c35_1(plan: dict) -> list[str]:
         if not refers_to(refs, "aws_lb.main"):
             failures.append(f"C35.1 {address} alias {attr} refers to {refs or 'nothing'}, want aws_lb.main")
 
+    return failures
+
+
+def check_c35_1_no_domain(plan: dict) -> list[str]:
+    """With no domain: no record and no validation are planned, and the 443 listener takes the imported
+    certificate, whose body and key are the self-signed ones for the ALB's DNS name."""
+    failures = []
+
+    for kind in ("aws_route53_record", "aws_acm_certificate_validation"):
+        planned = [r["address"] for r in resources(plan) if r["type"] == kind]
+        if planned:
+            failures.append(f"C35.1 no domain, want no {kind} planned; the plan has {planned}")
+
+    certificate = "aws_acm_certificate.main"
+    for attr, source in (("certificate_body", "tls_self_signed_cert.main"), ("private_key", "tls_private_key.main")):
+        if not refers_to(config_refs(plan, certificate, attr), source):
+            failures.append(f"C35.1 {certificate} {attr} not from {source}")
+
+    if len([r for r in resources(plan) if r["type"] == "tls_self_signed_cert"]) != 1:
+        failures.append("C35.1 want exactly one planned tls_self_signed_cert")
+    if not refers_to(config_refs(plan, "tls_self_signed_cert.main", "dns_names"), "aws_lb.main"):
+        failures.append("C35.1 tls_self_signed_cert.main dns_names not from aws_lb.main")
+
+    listeners = [r for r in resources(plan) if r["type"] == "aws_lb_listener" and r["values"].get("port") == 443]
+    if len(listeners) != 1:
+        failures.append(f"C35.1 expected exactly 1 aws_lb_listener on 443, got {len(listeners)}")
+    for listener in listeners:
+        if not refers_to(config_refs(plan, listener["address"], "certificate_arn"), certificate):
+            failures.append(f"C35.1 {listener['address']} certificate_arn not from {certificate}")
+
+    return failures
+
+
+def base_url_failures(plan: dict) -> list[str]:
+    """identity's links (Day 35, F1): APP_BASE_URL reaches the container through environment_from, from the
+    base_url the module call gets, and is not in the literal environment. No criterion ID in the messages."""
+    services = services_output(plan)
+    if services is None:
+        return ["no services output"]
+    identity = services.get("identity-service", {})
+    failures = []
+    source = identity.get("environment_from", {}).get("APP_BASE_URL")
+    if source != "base_url":
+        failures.append(f"identity-service environment_from APP_BASE_URL {source}, want base_url")
+    if "APP_BASE_URL" in identity.get("environment", {}):
+        failures.append("identity-service environment has APP_BASE_URL, want it from base_url")
+    refs = config_refs(plan, "module.service", "environment_values")
+    for want in ("var.domain", "aws_lb.main"):
+        if not refers_to(refs, want):
+            failures.append(f"module service environment_values does not refer to {want}")
     return failures
 
 
@@ -3112,6 +3211,11 @@ def main():
         checks_run.append("started plan")
         criteria_ran.append("C36.11")
 
+    # The started plan is the shape this deployment applies (no domain): its certificate and base URL too
+    if started_plan:
+        failures.extend(f"started plan: {failure}" for failure in check_c35_1(started_plan) + check_c36_5(started_plan) + check_c36_9(started_plan))
+        criteria_ran.extend([c for c in ("C35.1", "C36.5", "C36.9") if c not in criteria_ran])
+
     # C34.3, C34.4, C34.5: the collector sidecar, its telemetry policy and the metrics log group (main plan)
     if args.main_plan and main_plan:
         failures.extend(check_c34_3(main_plan, repo_root))
@@ -3201,7 +3305,7 @@ def main():
 
     # The summary (scripts/infra-summary.py) reads these before the exit below
     if args.summary:
-        failed = sorted({m.group(1) for f in failures if (m := re.match(r"^(C\d+\.\d+)", f))}, key=criterion_key)
+        failed = sorted({m.group(1) for f in failures if (m := re.match(r"^(?:started plan: )?(C\d+\.\d+)", f))}, key=criterion_key)
         ran = sorted(set(criteria_ran), key=criterion_key)
         with open(args.summary, "w", encoding="utf-8") as f:
             json.dump({"ran": ran, "failed": failed}, f)

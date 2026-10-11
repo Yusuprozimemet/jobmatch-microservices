@@ -23,9 +23,8 @@ locals {
         APP_INTERNAL_TRUSTEDISSUERS_1_NAME      = "jobmatch-application-service"
         APP_INTERNAL_TRUSTEDISSUERS_1_KEYSETURL = "http://application-service:8080/.well-known/service-jwks.json"
 
-        # Behind the ALB over HTTPS: the session cookie is Secure and links use the domain.
+        # Behind the ALB over HTTPS: the session cookie is Secure. Links come from base_url.
         SESSION_COOKIE_SECURE = "true"
-        APP_BASE_URL          = "https://${var.domain}"
 
         # The one-off migrate task runs the migrations, not the service.
         MIGRATE_ON_START = "false"
@@ -34,6 +33,7 @@ locals {
       environment_from = {
         DB_HOST                       = "database-address"
         EVENTS_USER_DELETED_TOPIC_ARN = "user-deleted-topic"
+        APP_BASE_URL                  = "base_url"
       }
 
       secrets = {

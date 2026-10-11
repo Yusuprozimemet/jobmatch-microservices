@@ -27,10 +27,17 @@ variable "start_services" {
 
 variable "domain" {
   type        = string
-  description = "Public domain the ALB serves; its certificate is validated in route53_zone_id"
+  default     = ""
+  description = "Public domain the ALB serves; its certificate is validated in route53_zone_id. Empty: a self-signed certificate imported to ACM serves the ALB's DNS name"
+
+  validation {
+    condition     = var.domain == "" || var.route53_zone_id != ""
+    error_message = "A domain needs route53_zone_id: the certificate is validated in that zone."
+  }
 }
 
 variable "route53_zone_id" {
   type        = string
-  description = "Route 53 hosted zone that holds domain"
+  default     = ""
+  description = "Route 53 hosted zone that holds domain. Empty when domain is empty"
 }
