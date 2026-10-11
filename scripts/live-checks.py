@@ -25,6 +25,12 @@ import uuid
 
 REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "eu-west-1"
 TIMEOUT = 10
+# The profile the checks save: UpdateProfileRequest wants 5-20 distinct skills, and top matches
+# wants a saved profile
+PROFILE = {
+    "skills": ["Java", "SQL", "Docker", "Spring Boot", "PostgreSQL"], "category": "software_engineering",
+    "preferredCity": "Amsterdam", "workMode": "hybrid", "experienceLevel": "medior",
+    "employmentType": "full_time", "salaryPreference": 45000.00}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -172,10 +178,7 @@ def login(base, state):
 
 
 def profile_write(base, state):
-    code, _, _ = request(base + "/api/profile", "PUT", {
-        "skills": ["Java", "SQL", "Docker"], "category": "software_engineering",
-        "preferredCity": "Amsterdam", "workMode": "hybrid", "experienceLevel": "medior",
-        "employmentType": "full_time", "salaryPreference": 45000.00}, cookie=state["cookie"])
+    code, _, _ = request(base + "/api/profile", "PUT", PROFILE, cookie=state["cookie"])
     return expect(code)
 
 

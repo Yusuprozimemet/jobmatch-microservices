@@ -297,6 +297,19 @@ class DeployScriptsTest(unittest.TestCase):
             self.assertEqual(live.open_ports(["127.0.0.1"], [port], timeout=1), [f"127.0.0.1:{port}"])
         self.assertEqual(live.open_ports(["127.0.0.1"], [port], timeout=1), [])
 
+    def test_live_checks_profile_has_as_many_skills_as_the_api_accepts(self):
+        # The bounds are the ones the API documents for the field, read from its request record
+        spec = importlib.util.spec_from_file_location("live_checks", os.path.join(HERE, "live-checks.py"))
+        live = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(live)
+        dto = os.path.join(HERE, "..", "services", "identity-service", "identity", "src", "main", "java",
+                           "nl", "hackyourfuture", "project", "backend", "identity", "profile", "dto",
+                           "UpdateProfileRequest.java")
+        with open(dto, encoding="utf-8") as f:
+            low, high = map(int, re.search(r"between (\d+) and (\d+) of them", f.read()).groups())
+        distinct = {skill.strip().lower() for skill in live.PROFILE["skills"]}
+        self.assertTrue(low <= len(distinct) <= high, f"{len(distinct)} skills, the API wants {low}-{high}")
+
     def test_live_checks_help_names_the_host_and_the_insecure_flag(self):
         result = subprocess.run([sys.executable, os.path.join(HERE, "live-checks.py"), "--help"],
                                 capture_output=True, text=True)
