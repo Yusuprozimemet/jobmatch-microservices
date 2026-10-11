@@ -1,0 +1,104 @@
+{
+  "domain": "jobmatch-383544930.eu-west-1.elb.amazonaws.com",
+  "checkedAt": "2026-10-11T14:16:29Z",
+  "checks": [
+    {
+      "criterion": "C35.16",
+      "name": "certificate",
+      "ok": true,
+      "detail": "ISSUED, IMPORTED",
+      "at": "2026-10-11T14:15:09Z"
+    },
+    {
+      "criterion": "C35.16",
+      "name": "root page",
+      "ok": true,
+      "detail": "HTTP 200",
+      "at": "2026-10-11T14:15:10Z"
+    },
+    {
+      "criterion": "C35.16",
+      "name": "jobs total",
+      "ok": true,
+      "detail": "24 jobs",
+      "at": "2026-10-11T14:15:10Z"
+    },
+    {
+      "criterion": "C35.16",
+      "name": "http redirects to https",
+      "ok": true,
+      "detail": "HTTP 301 to https",
+      "at": "2026-10-11T14:15:10Z"
+    },
+    {
+      "criterion": "C35.16",
+      "name": "task ports closed",
+      "ok": true,
+      "detail": "6 task IPs, every port closed",
+      "at": "2026-10-11T14:16:26Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "register",
+      "ok": true,
+      "detail": "HTTP 201",
+      "at": "2026-10-11T14:16:26Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "login",
+      "ok": true,
+      "detail": "cookie with Secure, HttpOnly, SameSite=Lax",
+      "at": "2026-10-11T14:16:26Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "profile read",
+      "ok": true,
+      "detail": "HTTP 200",
+      "at": "2026-10-11T14:16:26Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "profile write",
+      "ok": true,
+      "detail": "HTTP 200",
+      "at": "2026-10-11T14:16:26Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "search",
+      "ok": true,
+      "detail": "jobs for 'Backend'",
+      "at": "2026-10-11T14:16:26Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "save a job",
+      "ok": true,
+      "detail": "HTTP 201",
+      "at": "2026-10-11T14:16:27Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "saved list",
+      "ok": true,
+      "detail": "1 saved",
+      "at": "2026-10-11T14:16:27Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "move saved job to applied",
+      "ok": true,
+      "detail": "HTTP 200",
+      "at": "2026-10-11T14:16:27Z"
+    },
+    {
+      "criterion": "C35.17",
+      "name": "top matches",
+      "ok": true,
+      "detail": "HTTP 200",
+      "at": "2026-10-11T14:16:29Z"
+    }
+  ]
+}

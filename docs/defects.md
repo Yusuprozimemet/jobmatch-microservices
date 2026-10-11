@@ -42,9 +42,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 20: 1 container path Git Bash rewrote
 - Day 36: 1 Docker Hub pull limit, then a timeout, that kept a check red through three runs
 
-## In the agent's own work (412)
+## In the agent's own work (434)
 
-### Spec and plan premises wrong about the code, or work they missed (155)
+### Spec and plan premises wrong about the code, or work they missed (163)
 
 - Days 1-13: 8 specs that could not be met
 - Days 1-13: 1 plan that missed a cross-module read
@@ -181,8 +181,16 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 34: 1 logs permission on the group's ARN without the `:*` stream form
 - Day 34: 1 draft that said the gateway tags every call `/api/**`
 - Day 34: 1 "public ECR: no limit" premise; its anonymous pulls throttle, and a CI run failed on it
+- Day 35: 1 draft that put the seven images after the tasks that run them
+- Day 35: 1 `db-setup` image whose `ENTRYPOINT` would have swallowed the seed's command
+- Day 35: 1 draft whose deploy jobs skipped the migrations
+- Day 35: 1 draft that kept a GHCR push `db-setup-tests.yml` does not have
+- Day 35: 1 no-domain draft whose `APP_BASE_URL` from the ALB would have emptied the started plan's `services` output
+- Day 35: 1 no-domain draft that read identity's task definition as known in a plan
+- Day 35: 1 deploy role trusting the mutable OIDC subject; GitHub sends this repository the immutable one (#404)
+- Day 35: 1 premise that `user.deleted` removes matching's scores, which name no user since Day 27
 
-### Spec checks that could not fail, could not pass, or proved the wrong thing (108)
+### Spec checks that could not fail, could not pass, or proved the wrong thing (113)
 
 - Days 1-13: 1 spec check that could not fail
 - Days 1-13: 1 gate that does not pin what its spec says
@@ -276,8 +284,13 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 34: 1 start check on a health port that listens only inside the container
 - Day 34: 1 alarm check on dimension keys that neither the plan nor `configuration` gives
 - Day 34: 1 brief whose start step discarded the stderr that `/healthcheck` prints its status to
+- Day 35: 1 rate-limit check that one client's 429 passes on a shared bucket
+- Day 35: 1 check on workflows that infra-ci's paths never ran it on
+- Day 35: 1 key exemption that missed `tls_self_signed_cert`'s copy of the key
+- Day 35: 1 pair of checks (C36.5, C36.9) whose no-domain halves never ran
+- Day 35: 1 healthy-hosts alarm (2 × 60 s) that a 39 s task replacement cannot trip
 
-### Code drafts that review or a break changed, and lost work (79)
+### Code drafts that review or a break changed, and lost work (87)
 
 - Day 38: 1 metric tag unlike the backend's
 - Day 40: 1 default interval that made a wait slow
@@ -352,6 +365,14 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 36: 1 two breaks of the main session's whose checks read the previous break's plan
 - Day 34: 1 module call by `lookup()` whose check could not tell it from the collector on every task
 - Day 34: 1 check that read `count` from `expressions`, where `terraform show -json` has `count_expression`
+- Day 35: 1 summary test that could not fail, both plans having the same resources
+- Day 35: 1 check that grepped `main.tf`'s source, which a comment could satisfy
+- Day 35: 1 amd64-only `cache-to` that would have overwritten the multi-arch cache
+- Day 35: 1 example comment after `alert_email` that preflight's `sed` read as an empty address, and a NAT gateway in the cost paragraph
+- Day 35: 1 live check calling an undefined `expect_2xx`, which would have failed every live run
+- Day 35: 1 fixture label that named C35.17 for what it does not check
+- Day 35: 1 live check that saved three skills where the API wants 5–20, found on the first live run (#405)
+- Day 35: 1 test with fixed secret values that GitGuardian flagged
 
 ### Tests a spec would break without naming, or behaviour it left untested (32)
 
@@ -397,7 +418,7 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 compose check that `-p` would not have isolated from the maintainer's stack
 - Day 34: 1 draft that cited `--repo-root`, which `infra-checks.py` does not have
 
-### Bugs in the migration's own tooling (dashboard, commit keys) (17)
+### Bugs in the migration's own tooling (dashboard, commit keys) (18)
 
 - Day 39: 1 dashboard that could not read a split track
 - Day 17: 1 dashboard that could not read a three-way split
@@ -416,3 +437,4 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 33: 1 dashboard next step that read tracks A1 and B1 as all of A and B, twice
 - Day 36: 1 dashboard next step that skipped a split track, and again read a criterion id as a track
 - Day 34: 1 dashboard next step that again read a criterion id as a track, and named a split track's sibling as next
+- Day 35: 1 dashboard next step that read `C32.5` in #394's body as a Track C32, still unfixed

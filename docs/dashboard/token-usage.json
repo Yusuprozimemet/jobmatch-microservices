@@ -116,8 +116,14 @@
 {"date":"2026-10-09","day":33,"model":"claude-opus-5-5","input":150,"cache_write":122406,"cache_read":8626860,"output":64641,"replies":73},
 {"date":"2026-10-09","day":36,"model":"claude-haiku-5-5","input":324,"cache_write":637688,"cache_read":14544526,"output":7577,"replies":162},
 {"date":"2026-10-09","day":36,"model":"claude-opus-5-5","input":352,"cache_write":529463,"cache_read":16916502,"output":156514,"replies":176},
-{"date":"2026-10-10","day":null,"model":"claude-opus-5-5","input":374,"cache_write":607752,"cache_read":13501201,"output":96314,"replies":187},
+{"date":"2026-10-10","day":null,"model":"claude-haiku-5-5","input":52,"cache_write":207285,"cache_read":1845420,"output":915,"replies":26},
+{"date":"2026-10-10","day":null,"model":"claude-opus-5-5","input":1028,"cache_write":1605314,"cache_read":40463979,"output":260041,"replies":513},
 {"date":"2026-10-10","day":34,"model":"claude-haiku-5-5","input":274,"cache_write":479601,"cache_read":7349903,"output":1053,"replies":137},
-{"date":"2026-10-10","day":34,"model":"claude-opus-5-5","input":470,"cache_write":472333,"cache_read":22584638,"output":142378,"replies":234},
-{"date":"2026-10-10","day":36,"model":"claude-opus-5-5","input":80,"cache_write":53801,"cache_read":3855083,"output":31547,"replies":40}
+{"date":"2026-10-10","day":34,"model":"claude-opus-5-5","input":488,"cache_write":483894,"cache_read":23607206,"output":147518,"replies":243},
+{"date":"2026-10-10","day":35,"model":"claude-haiku-5-5","input":550,"cache_write":969478,"cache_read":15399242,"output":3838,"replies":274},
+{"date":"2026-10-10","day":35,"model":"claude-opus-5-5","input":748,"cache_write":713936,"cache_read":37608274,"output":243826,"replies":373},
+{"date":"2026-10-10","day":36,"model":"claude-opus-5-5","input":80,"cache_write":53801,"cache_read":3855083,"output":31547,"replies":40},
+{"date":"2026-10-11","day":null,"model":"claude-opus-5-5","input":1228,"cache_write":1356599,"cache_read":56316631,"output":154904,"replies":605},
+{"date":"2026-10-11","day":35,"model":"claude-haiku-5-5","input":130,"cache_write":180889,"cache_read":4259417,"output":482,"replies":64},
+{"date":"2026-10-11","day":35,"model":"claude-opus-5-5","input":304,"cache_write":312193,"cache_read":16041972,"output":107833,"replies":149}
 ]

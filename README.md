@@ -246,8 +246,8 @@ each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
   extractions, the contract suite in `contract/` needed two edits, both approved in advance: a
   test of the monolith's own actuator moved out (Day 40), and the account-deletion test taught to
   wait for an event (Day 25, +13 −13). The harness around it (`support/`) grew instead.
-- **The agent's errors far outnumber the system's.** Of 432 defects recorded on Days 1–42, 20
-  were in the system being migrated; 412 were in the agent's own specs, drafts and tooling,
+- **The agent's errors far outnumber the system's.** Of 454 defects recorded on Days 1–42, 20
+  were in the system being migrated; 434 were in the agent's own specs, drafts and tooling,
   caught by an auditor, a review, a break on purpose or the close. Most were wrong premises in
   specs, and checks that could not fail.
 - **Specs need revising once work starts, nearly always.** Almost every day worked needed at least

@@ -197,7 +197,7 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
 
 ### The code (checked in CI without an account)
 
-- [ ] C35.1 **new** — With `domain` set (the default plan), the plan has one `aws_route53_record`
+- [x] C35.1 **new** — With `domain` set (the default plan), the plan has one `aws_route53_record`
       of type `A` named by `var.domain` in `var.route53_zone_id`, whose `alias` refers to the ALB
       (`configuration`). Without it (the started plan, F1), no `aws_route53_record` and no
       `aws_acm_certificate_validation`; `aws_acm_certificate.main`'s `certificate_body` and
@@ -211,27 +211,41 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       --main-plan --started-plan` (`check_c35_1` on both). Red today: without `domain` no plan can
       be made, `No value for required variable` (`variables.tf:28-31`, no default); the check's
       red is shown by F1's break.
-- [ ] C35.2 **new** — Every `aws_ecs_service` in the plan has `deployment_circuit_breaker` with
+      Met (#388, #402). `check_c35_1` on both plans, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`).
+      broken: alias `zone_id = var.route53_zone_id` → `C35.1 aws_route53_record.domain alias zone_id refers to ['var.route53_zone_id'], want aws_lb.main` (#388)
+      broken: `tls_self_signed_cert.main`'s `dns_names` set to `["jobmatch.invalid"]` → `started plan: C35.1 tls_self_signed_cert.main dns_names not from aws_lb.main` (#402)
+- [x] C35.2 **new** — Every `aws_ecs_service` in the plan has `deployment_circuit_breaker` with
       `enable` and `rollback` both `true` (`check_c35_2`). Red today: all six have
       `deployment_circuit_breaker: []`.
-- [ ] C35.3 **new** — On the default plan every `aws_ecs_service` has `desired_count` 0 and there
+      Met (#388). `check_c35_2`, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`).
+      broken: `rollback = false` → `C35.2 module.service["api-gateway"].aws_ecs_service.service deployment_circuit_breaker [{'enable': True, 'rollback': False}], want enable and rollback true`, for all six (#388)
+- [x] C35.3 **new** — On the default plan every `aws_ecs_service` has `desired_count` 0 and there
       is no `aws_appautoscaling_target` or `_policy`; on the `--started-plan` (`-var
       start_services=true`) the desired counts equal `local.services`' and C36.11 passes
       (`check_c35_3`); infra-ci's summary prices the started plan. Red today: `start_services` is
       not a variable and all six desired counts are 1.
-- [ ] C35.4 **new** — `local.tasks` has `jobs-seed` on the `db-setup` image with an `entry_point`
+      Met (#387). `check_c35_3` on the default and started plans, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`).
+      broken: scaling `count` without `var.started &&` → `C35.3 module.service["matching-service"].aws_appautoscaling_policy.service[0]: want none while start_services is false` (#387)
+      broken: `infra-summary.py` counting resources from the started plan → `AssertionError: {'appautoscaling': 1, 'ecs': 2} != {'ecs': 2}` (#387)
+- [x] C35.4 **new** — `local.tasks` has `jobs-seed` on the `db-setup` image with an `entry_point`
       to `seed-mart.py`, as `analytics_user` on `jobs_db`, reading `db-password-analytics_user`
       (`check_c35_4`; C36.10 updated to four tasks). `db-setup-tests.yml` builds the image with the
       fixtures context, runs `db-setup.py` then the seed against a Postgres container, and
       `jobs_user` counts 24 rows in `analytics.fct_postings`; a second run of the seed exits
       non-zero and leaves 24. Red today: the tasks output is the three Day 36 tasks.
-- [ ] C35.5 **new** — The plan has one `aws_iam_openid_connect_provider` for
+      Met (#389). `check_c35_4`, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`); `db-setup-tests.yml` green on #389.
+      broken: the `entryPoint` merge removed from `modules/task/main.tf` → `C35.4 module.task container_definitions does not reference var.task.entry_point` (#389)
+      broken: the refusal disabled in `seed-mart.py` (`if False and existing:`) → `test_the_second_seed_refuses_and_leaves_24_listings` failed (#389)
+- [x] C35.5 **new** — The plan has one `aws_iam_openid_connect_provider` for
       `token.actions.githubusercontent.com` and the role `jobmatch-deploy`; the `deploy` output's
       trust has `StringEquals` on `:sub` (only `main` of this repository) and `:aud`, its actions are
       exactly In scope's list, `*` only on `ecr:GetAuthorizationToken`, and the role's documents
       refer to the locals (`configuration`). No `aws_iam_access_key` in any root (`check_c35_5`).
       Red today: no provider in the plan.
-- [ ] C35.6 **new** — `check_c35_6` reads the seven workflows: each has `workflow_dispatch`; its
+      Met (#390; the subject corrected in #404). `check_c35_5`, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`).
+      broken: the trust's `:sub` widened to `repo:Yusuprozimemet/jobmatch-microservices:*` → `C35.5 deploy trust Condition {...:*}, want {...refs/heads/main...}` (#390)
+      broken: deploy.tf's `sub` set back to the mutable form → `C35.5 deploy trust Condition {... 'repo:Yusuprozimemet/jobmatch-microservices:ref:refs/heads/main'}, want {... 'repo:Yusuprozimemet@82045682/jobmatch-microservices@1378649657:ref:refs/heads/main'}` (#404)
+- [x] C35.6 **new** — `check_c35_6` reads the seven workflows: each has `workflow_dispatch`; its
       ECR push, migrate step (identity, application-service) and `update-service` step run only on
       `refs/heads/main` (push or dispatch) with `vars.DEPLOY_ENABLED == 'true'`, and the migrate
       step comes before `update-service`; the job has `id-token: write` and no `environment:`; no
@@ -240,7 +254,11 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       paths. infra-ci's paths name all seven workflows. Red today: no workflow names
       `DEPLOY_ENABLED`, none of the seven has `workflow_dispatch`, and a change to
       `services/job-service/` alone pushes identity's image.
-- [ ] C35.7 **new** — infra-ci runs each new script's `--help`, and its stub tests: with a stub
+      Met (#391, #392, #393). `check_c35_6` over the seven workflows, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`).
+      broken: job-service's `workflow_dispatch:` deleted → `C35.6 job-service-ci-cd.yaml: no workflow_dispatch trigger` (#392)
+      broken: application-service's migrate step moved after `Deploy to ECS` → `C35.6 application-service-ci-cd.yaml step 'Run the migrations': no ECS update after it in its job` (#393)
+      broken: identity's `OWN` widened to `services/(identity-service|job-service)/` → `C35.6 identity-service-ci-cd.yaml: OWN matches services/job-service/pom.xml, so a change to it pushes identity's image` (#393)
+- [x] C35.7 **new** — infra-ci runs each new script's `--help`, and its stub tests: with a stub
       `aws`, `write-secrets.sh`'s output holds no value from its input file; `run-once.sh` exits
       non-zero when the stub reports exit code 1 and prints the code; `teardown-check.sh` exits 1 on
       a non-empty listing and 0 on an empty one; `deploy-preflight.sh` prints five answers and exits
@@ -257,15 +275,27 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       succeeds with it. Red today: the sweep fails on any key header (`infra-checks.py:489`, `:494-495`), the
       preflight always queries Route 53 (`deploy-preflight.sh:86-99`), and `live-checks.py`
       requires `--domain` (`:192`).
-- [ ] C35.8 **new** — The three retired files each open with the retired line; `docs/architecture.md`
+      Met (#394, #395, #396, #397, #402, #403). infra-ci's `--help` loop and `test_deploy_scripts.py`, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`); `RunbookTest` holds the runbook's order.
+      broken: run-once.sh always exiting 0 → `test_run_once_exits_with_the_container_and_prints_its_code` FAIL (code='1') (#394)
+      broken: write-secrets.sh printing each value after its name → `test_write_secrets_writes_the_fourteen_terraform_names_and_prints_no_value` FAIL (#395)
+      broken: steps 8 and 9 headings swapped → `test_runbook_has_every_step_in_order` FAIL (lists differ at 8) (#396)
+      broken: teardown-check.sh forced to exit 0 with kinds left → `test_teardown_check_fails_on_each_kind_left` failed all 18 subtests (#397)
+      broken: the state exemption switched off → `test_infra_checks_state_exempts_the_self_signed_key_and_fails_the_same_header_elsewhere` failed, `infra-checks: 5 failures` (#402)
+      broken: make_opener verifies even with insecure → `test_live_checks_refuses_a_self_signed_certificate_unless_insecure` ERROR: `CERTIFICATE_VERIFY_FAILED` (#403)
+- [x] C35.8 **new** — The three retired files each open with the retired line; `docs/architecture.md`
       exists and every `\b[\w/.-]+\.tf\b` it names exists under `infra/terraform/` (a check in
       infra-ci, as well as `check-links.py`); `bootstrap/main.tf` no longer says "destroyed last".
       Red today: `check-links.py docs/architecture.md` → `no such file`, exit 2; no retired line.
-- [ ] C35.9 **new** — `test_spec_drift.py`: with a `deployment.json` fixture the built data's
+      Met (#399). `check_c35_8_architecture` and `check-links.py`, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`).
+      broken: the drawing's `ecr.tf` link changed to `registry.tf` → `C35.8: docs/architecture.md names registry.tf, not under infra/terraform/`, exit 1 (#399)
+      broken: the existence test replaced with `if False:` → `test_infra_checks_architecture_fails_on_a_named_tf_file_that_does_not_exist` failed (#399)
+- [x] C35.9 **new** — `test_spec_drift.py`: with a `deployment.json` fixture the built data's
       `deployment` holds its checks, and without the file it is `None`; `dashboard.js` has the
       panel's "nothing deployed" text (grep). Red today: `grep -ic deployment scripts/spec-drift.py
       scripts/test_spec_drift.py` → 0 and 0.
-- [ ] C35.10 **hold** — Every check `infra-checks.py` ran before the day (C32.*, C33.*, C36.*,
+      Met (#398). `test_spec_drift.py` green on `main`; the panel shows this deployment's `deployment.json` (committed here).
+      broken: `deployment()` returns `{}` for a missing file → `test_the_deployment_is_its_checks_and_none_without_the_file`: `{} is not None` (#398)
+- [x] C35.10 **hold** — Every check `infra-checks.py` ran before the day (C32.*, C33.*, C36.*,
       C34.*) still runs and passes in infra-ci, each on the plan it read before, except C36.11 on
       the started plan and C36.10's task count, both changed above, and F's three: C36.5 accepts
       the imported certificate when `domain` is empty, C36.9 reads `APP_BASE_URL` through
@@ -274,44 +304,63 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       path) (C36.5 and C36.9 run on the started plan as well), and C32.5's sweep has the one exemption In
       scope names; `terraform fmt` and
       `validate` pass for the three roots.
-      broken: (each track that touches `infra/terraform/` breaks one existing check once) → (what
-      it reported)
-- [ ] C35.11 **hold** — No Day 1–4 test is edited, and the five services' suites pass unedited in
+      Met: every earlier check runs and passes, green in infra-ci on `main` at `8a15adc` (run 38146848750, `infra-checks: ok`); fmt and validate pass for the three roots there.
+      broken: `desired_count = var.started ? 2 : 0` → `C36.11 module.service["api-gateway"].aws_ecs_service.service desired_count 2, want 1` (#387)
+      broken: `ecr:BatchGetImage` added to the execution role's `*` statement → `C36.4 execution policy: * resource for ['ecr:GetAuthorizationToken', 'ecr:BatchGetImage'], want only ecr:GetAuthorizationToken` (#390)
+      broken: `aws_s3_bucket_versioning.state` removed from a copy of `bootstrap/` → `C32.2 aws_s3_bucket_versioning for bucket jobmatch-microservices-tfstate not found` (#399)
+      broken: `config_expressions`' index strip removed → `C36.5 aws_acm_certificate_validation.main[0]: validation_record_fqdns not from ...` (#402)
+- [x] C35.11 **hold** — No Day 1–4 test is edited, and the five services' suites pass unedited in
       their workflows; C2a and C2b change the workflows that run them, and their PRs show the suites
       ran.
-      broken: (in the first fix PR that touches service code; if none does, `broken: none → no PR
-      touched service code`)
+      Met: no file under `services/*/src/test` changed on Day 35; C2a's and C2b's PRs ran the suites
+      of the workflows they changed (#391, #393). The two fix PRs touched `infra/` and `scripts/` only.
+      broken: none → no PR touched service code
 
 ### The deployment (on the account, evidence in the closing PR)
 
-- [ ] C35.12 **new** — Before the main root's apply: `deploy-preflight.sh` exits 0 with its five
+- [x] C35.12 **new** — Before the main root's apply: `deploy-preflight.sh` exits 0 with its five
       answers, and `aws budgets describe-budgets` shows the bootstrap's budget at 20 USD notifying
       the maintainer's address (`plan.md`: "under a budget alarm"). Red today: no account.
-- [ ] C35.13 **new** — Images before tasks (H36.4, H28.11): with `DEPLOY_ENABLED=true`, each of the
+      Met (deployment, 2026-10-11, account 586631276757, eu-west-1). `deploy-preflight.sh`: five `ok`
+      (PostgreSQL 18 orderable on `db.t4g.micro`, state bucket free, no OIDC provider yet, the alert
+      address, `no domain: skipped`), exit 0; `describe-budgets`: `jobmatch-monthly-budget 20.0 USD
+      MONTHLY`, `EMAIL` to the maintainer's address.
+- [x] C35.13 **new** — Images before tasks (H36.4, H28.11): with `DEPLOY_ENABLED=true`, each of the
       seven workflows is dispatched on `main` and its run is green; `aws ecr describe-images` shows
       `latest` in all seven repositories; the seven run links are recorded. Red today: no workflow
       has the job.
-- [ ] C35.14 **new** — Secrets (H36.1, `secrets.tf:16`): `aws secretsmanager
+      Met after #404. The first dispatch failed in all seven at "Assume the deploy role": GitHub sends
+      this repository's immutable OIDC subject (#404). The second: five green; identity and
+      application-service failed at "Run the migrations" before `db-setup`, as the runbook expects,
+      and were green on attempt 2 after step 9. `describe-images` showed `latest` in all seven.
+      Runs (`gh run view <id>`): api-gateway 38144357831, identity 38144360619, job 38144362737, matching 38144364689, application 38144366623, frontend 38144368627, db-setup 38144370302.
+- [x] C35.14 **new** — Secrets (H36.1, `secrets.tf:16`): `aws secretsmanager
       list-secret-version-ids` shows an `AWSCURRENT` version for each of the fourteen, written by
       `write-secrets.sh`; `terraform state list | grep -c secret_version` prints 0, and
       `infra-checks.py --state` on the pulled state passes (with F's exemption for the self-signed
       key, and no other). Red today: no account.
-- [ ] C35.15 **new** — Migrations before services (H36.3, `ecs.tf:57`, `locals.tf:222`): `run-once.sh
+      Met. Fourteen `AWSCURRENT`, one per secret; `secret_version in state: 0`; `infra-checks: ok
+      (state)`.
+- [x] C35.15 **new** — Migrations before services (H36.3, `ecs.tf:57`, `locals.tf:222`): `run-once.sh
       db-setup` exits 0; then `identity-service-migrate` exits 0 with Flyway at V16 (`db/migration`)
       and V4 (`identity`), and `application-service-migrate` at V1; then `jobs-seed` exits 0; only
       then `start_services=true`. Red today: no account.
-      broken: `identity-service-migrate` run before the first `db-setup` → (its exit code and the
-      error `run-once.sh` printed)
-- [ ] C35.16 **new** — Reachability (H36.2), at the ALB's DNS name (`$ALB`, from `aws elbv2
+      Met. `db-setup` exit 0; Flyway `app` v16, `identity` v4, `applications` v1; `jobs-seed` loaded 24
+      listings, and a second run refused (`jobs_db already has 24 listings`, exit 1); then
+      `start_services=true` (2 added, 6 changed).
+      broken: `identity-service-migrate` run before the first `db-setup` → exit code 1; `run-once.sh`'s own log fetch failed under Git Bash (MSYS rewrote `/ecs/jobmatch/...`: `GetLogEvents ... logGroupName failed to satisfy constraint`), and the task's log, read separately, says `FATAL: password authentication failed for user "app_user"` (28P01)
+- [x] C35.16 **new** — Reachability (H36.2), at the ALB's DNS name (`$ALB`, from `aws elbv2
       describe-load-balancers`): `aws acm describe-certificate` shows the certificate for `$ALB`
       with `Type` `IMPORTED` and `Status` `ISSUED`; `https://$ALB/` returns 200 with `--insecure`
       (`curl -k`), and plain `curl https://$ALB/`, by hand, fails certificate verification (the
       self-signed certificate is the one served; its output recorded); `https://$ALB/api/jobs?size=100` returns `totalElements` 24; `http://$ALB/`
       redirects to HTTPS; each task's public IP on 3000, 8080, 8081 and 9090 does not answer from
       outside (`live-checks.py --host "$ALB" --insecure`). Red today: no load balancer.
-      broken: `live-checks.py` pointed at the ALB's 443 as if it were a task → (it reports the port
-      open)
-- [ ] C35.17 **new** — The five surfaces (`plan.md`, Phase 0) through the ALB, for a new user
+      Met. `live-checks.py --host "$ALB" --insecure`: certificate `ISSUED, IMPORTED`, root 200, 24 jobs,
+      HTTP 301 to HTTPS, task ports closed. Plain `curl https://$ALB/`: `curl: (60) schannel:
+      SEC_E_UNTRUSTED_ROOT ... not trusted`, exit 60; with `-k`, 200.
+      broken: `live-checks.py --task-ip <the ALB's IP> --ports 443` → `FAIL C35.16 task ports closed: RuntimeError: 54.77.203.127:443 open`, exit 1
+- [x] C35.17 **new** — The five surfaces (`plan.md`, Phase 0) through the ALB, for a new user
       (`live-checks.py`): `POST /api/auth/register` then `POST /api/auth/login` 200 with a cookie
       `Secure; HttpOnly; SameSite=Lax`; `GET /api/profile` 200 and `PUT /api/profile` 200; `GET
       /api/jobs?q=<a seeded title word>` 200 with results; `POST /api/saved-jobs` then `GET
@@ -320,14 +369,25 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       carries these). Google sign-in is tried by hand at `https://$ALB`, past the browser's
       certificate warning: it completes, or what Google refused (the redirect URI in the console, or
       the sign-in) is recorded and the criterion stands on password login. Red today: no account.
-- [ ] C35.18 **new** — What the plan could not show (H36.5): every service reaches `RUNNING` with
+      Met after #405. The first run had 12 of 14: the check saved a profile with three skills and the
+      API wants 5–20 (`HTTP 400`, then top matches `422`). With #405, 14 of 14 (`deployment.json`,
+      14:16Z). Google sign-in completed by hand at the ALB's address, past the certificate warning,
+      with the redirect URI `https://$ALB/api/login/oauth2/code/google`.
+- [x] C35.18 **new** — What the plan could not show (H36.5): every service reaches `RUNNING` with
       its desired count, so every secret ARN resolved; `DELETE /api/users/me` publishes one
       `user.deleted` that both consumers process (matching's scores and the saved jobs gone, both
       DLQs empty), so the task roles allow what the services do; client A past
       `RATE_LIMIT_AUTH_PER_MINUTE` (10) logins gets 429, and within that minute client B, from the
       second address, does not (Day 36's Service Connect limit: one shared bucket fails this). A
       denied call or a shared bucket is a fix PR. Red today: no account.
-- [ ] C35.19 **new** — Observability (H34.1–H34.5, `dashboard.tf:1`): one request shows in X-Ray as
+      Met, with the criterion's premise corrected. All six `ACTIVE 1/1`, rollouts `COMPLETED`.
+      `DELETE /api/users/me` 204; one `user.deleted` (94167a90) handled within 3 s by both consumers:
+      matching "evicted cached profile", application-service "removed 1 saved jobs"; all four queues
+      and DLQs 0. Matching has no scores to remove: they are keyed by skills hash and name no user
+      (Day 27), so "matching's scores ... gone" was a stale premise (Defect line in Notes). Rate limit:
+      client A (45.85.221.54) got its first 429 at request 16; client B (CloudShell, 13.60.219.87) got
+      401, 401, 401 at 14:59:53–55Z, inside A's limited window. No denied call, no shared bucket.
+- [x] C35.19 **new** — Observability (H34.1–H34.5, `dashboard.tf:1`): one request shows in X-Ray as
       one trace across the gateway and the service behind it under their C34.1 names, and its trace
       id in the logs finds it; the `JobMatch` metrics arrive with C34.2's dimensions as deltas and
       every dashboard widget has data, the custom-metric count recorded against the 70–90 estimate;
@@ -336,14 +396,32 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       memory, recorded. Whether a stopped collector is restarted cannot be checked without ECS Exec
       (one container of a task cannot be stopped by API): recorded as not checked. Red today: no
       account.
-- [ ] C35.20 **new** — Resilience: matching's task stopped by hand is replaced and top-matches
+      Met, with one departure (the maintainer's). Trace `1-96d31b1e...` spans the gateway and
+      identity under their C34.1 names; its id is in the gateway's access-log line (`PUT /api/profile
+      200`); identity writes no line for that request. Metrics: 38 series (against 70–90: only the
+      routes the checks touched made series), with C34.2's dimensions, as deltas (the gateway's
+      `SampleCount` per 10 minutes 15, 12, 10, 60, 31, 152, 14, 10); all eight widgets have data (ALB
+      5xx 1 of 2 series: no target 5xx happened). Collector memory: task peak 27.7–35.9% of 1024 MiB.
+      Departure: with the frontend's task stopped (14:44:31Z), ECS replaced it in about 39 s, shorter
+      than `HealthyHostCount`'s 2 × 60 s window, so that stop did not trip it; the ELB 5xx alarm did
+      (3 ELB 503s) and its email arrived. The healthy-hosts alarm did reach ALARM and ran its SNS action
+      at 13:18:53Z, while the services were at 0 after step 4, before the subscription was confirmed, so
+      its email is not shown. It cannot see an outage shorter than about 2 minutes.
+      Collector restart: not checked, as the criterion says.
+- [x] C35.20 **new** — Resilience: matching's task stopped by hand is replaced and top-matches
       answers again (the time recorded); an image that fails its health check, pushed by hand to
       `jobmatch/job-service:latest` and rolled out with `update-service`, is rolled back by the
       circuit breaker while `/api/jobs` stays up, then `latest` is restored to the good image's
       digest; `terraform plan -detailed-exitcode` with the same variables exits 0, or each change is a
       Defect line and a fix PR, or a named departure (matching's `desired_count` after a scale-out,
       Day 36). Red today: no account.
-- [ ] C35.21 **new** — Teardown (H34.4): `terraform destroy` of the main root completes, and
+      Partly met, one departure (the maintainer's). Matching's task stopped at 14:52:36Z: top-matches
+      502 from +18 s, 200 again at +139 s on a new task. `plan -detailed-exitcode` exit 0. The
+      bad-image rollback was not done: auto mode denied the ECR login and push, and the maintainer
+      chose not to push a broken image by hand. `latest` stayed at the good digest; only the circuit
+      breaker's configuration was read (`enable true, rollback true`). Whether it rolls back to the
+      earlier image is unverified, as is matching's `desired_count` after a scale-out (none happened).
+- [x] C35.21 **new** — Teardown (H34.4): `terraform destroy` of the main root completes, and
       `teardown-check.sh` exits 0: no ECS cluster, service or task, load balancer or target group,
       RDS instance, snapshot or automated backup, Elastic IP, VPC or ENI, ECR repository, secret,
       DynamoDB table, SNS topic, SQS queue, CloudWatch alarm or dashboard, `/ecs/jobmatch/*` or
@@ -351,11 +429,15 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       budget, X-Ray's traces (30 days, free, not deletable); no hosted zone was made. The imported
       certificate is not billed and the destroy removes it (`aws acm list-certificates` empty,
       recorded; `teardown-check.sh` does not list ACM). Red today: `teardown-check.sh` does not exist.
-      broken: `teardown-check.sh` run while the deployment is up → (what it listed, and its exit
-      code)
+      Met. `terraform destroy` from the saved plan: `151 destroyed` (15:37Z); `state list` empty;
+      `DEPLOY_ENABLED` set to `false`; `teardown-check: nothing left`, exit 0; `aws acm
+      list-certificates` → `[]`.
+      broken: `teardown-check.sh` run while the deployment is up → `teardown-check: 18 kinds left`, exit 1
 - [ ] C35.22 **new** — Cost: Cost Explorer's daily cost for each day of the deployment, by service,
       recorded against the per-hour estimate, and the first full day after the destroy shows no ECS,
       ELB, RDS, EC2 or VPC charge. Red today: no account.
+      Pending. Cost Explorer lags about 24 h; the first full day after the destroy is 2026-10-12, so
+      the check is completed after Cost Explorer shows that day, expected around 2026-10-13.
 
 ## Verify
 ```bash
@@ -430,3 +512,52 @@ scripts/teardown-check.sh
   `APP_BASE_URL` is read from the module call's references), and C36.9's redirect check. Fixed.
 - **Defect** — found: auditor · cause: spec · the no-domain draft's three blocking findings, and
   the re-check's one. Fixed here.
+- **The deployment (2026-10-11):** a classic AWS account on the Free plan, eu-west-1, the CLI
+  signed in with `aws login`, no access keys; AWS's "projects" sign-up could not be used (its SCPs
+  pin Europe to eu-north-1 and deny `iam:*Provider*`). Runbook steps 1–15 in one day.
+- **Defect** — found: deployment · cause: spec · the deploy role trusted the subject
+  `repo:<owner>/<repo>:ref:refs/heads/main`; GitHub sends this repository the immutable form
+  with the owner's and repository's numeric ids, so every first dispatch failed at "Assume the
+  deploy role". Fixed in #404, keeping the protection on. A wrong belief about the world, not the
+  code.
+- **Defect** — found: deployment · cause: implementation · `live-checks.py` saved a profile with
+  three skills where the API wants 5–20, so profile write (400) and top matches (422) failed on
+  the first live run; the stub tests never reached past login. Fixed in #405, with a test that
+  reads the bound from the request's `@Schema`.
+- **Defect** — found: auditor · cause: spec · C35.18 expected "matching's scores ... gone" on
+  `user.deleted`; since Day 27 scores name no user and matching's consumer only evicts the cached
+  profile. Ticked on what happened; the criterion's text is left as written.
+- **Defect** — found: deployment · cause: spec · Day 34's `HealthyHostCount < 1` for 2 × 60 s
+  cannot see a short outage either: the frontend was replaced in about 39 s and it did not fire.
+- **Defect** — found: review · cause: draft · six of thirteen implementer drafts: A1's summary
+  test that could not fail; B's check grepping `main.tf`'s source, which a comment could satisfy;
+  C2a's amd64-only `cache-to` that would overwrite the multi-arch cache; D1b's comment after
+  `alert_email`'s value, which preflight's `sed` reads as empty, and a NAT gateway in the cost
+  paragraph; D2a's undefined `expect_2xx`, which would have failed every live run; D2b's fixture
+  label.
+- **Defect** — found: CI · cause: implementation · #395's first push had fixed values for the
+  maintainer's three secrets in a test, and GitGuardian flagged one; the test now makes them per
+  run, and the commit was amended.
+- **Departures (the maintainer's):** C35.19's healthy-hosts alarm and C35.20's bad-image rollback,
+  as their ticks say; nothing after Phase 7 deploys again, so both stay unverified.
+- **Windows:** under Git Bash the AWS CLI needs `MSYS_NO_PATHCONV=1` (otherwise `run-once.sh`'s
+  `--log-group-name /ecs/jobmatch/...` becomes a Windows path and `GetLogEvents` refuses it) and
+  `PYTHONIOENCODING=utf-8` (otherwise printing a task's log fails on `charmap`). Not in the runbook.
+- **X-Ray:** 1,813 traces in about 15 minutes, 28 of them requests. 889 were the outbox relay's
+  `@Scheduled(fixedDelay = 1000)` and 896 the security filter chain's spans with no URL, all
+  sampled at 1.0: about 7,000 an hour, so X-Ray's 100,000 free a month last about 14 hours. Cents
+  here; a later deployment should not trace scheduled and security observations.
+- **Known limit found:** identity's task sets no `MAIL_*`, so the deployment could not send
+  password-reset mail (not in C35.17's surfaces, not tested).
+- **The five end-of-phase audits ran before the destroy,** on Opus, each from a fresh context:
+  the plan-auditor on Phase 7 and on the whole plan, the security-ops, agentic-engineering and
+  architecture auditors; their reports stay with the maintainer, who decides what becomes a PR.
+  Verdicts: Phase 7 delivered; `plan.md` needs an epilogue and a Phase 6 decision; "unsafe" for
+  more autonomy (the agent holds the maintainer's admin credentials, no review is required);
+  "promising" for the agentic record and the architecture.
+  During the audits a commit `x` by `a <a@b>` appeared on the maintainer's local `main`; the main
+  session did not make it, so most likely one of the "read-only" auditors did (each has Bash). It
+  was not pushed.
+- **Jira:** #404 and #405 have no sub-tasks; auto mode denied the writes.
+- *Estimated 13 pull requests; took 15,* the gate splitting C2a and D1a, plus two fix PRs found
+  by the deployment (#404, #405).
