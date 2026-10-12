@@ -127,12 +127,42 @@ jobs:
       - name: Build the gateway image
         run: docker build -t jobmatch-api-gateway:harness services/api-gateway
 
+      # The floor below counts the reports this run writes, so the first run's reports go first:
+      # left in place, they would count the whole suite again and the floor could never fail.
+      - name: Clear the first run's reports
+        working-directory: ./services/identity-service
+        run: find . -type d -name surefire-reports -prune -exec rm -rf {} +
+
       - name: Run the suite through the gateway
         working-directory: ./services/identity-service
         run: >-
           ../../mvnw -B verify -pl app -am -Dharness.gateway=true
           -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT,GoogleLinkClaimIT,PendingGoogleLinksIT'
           -Dsurefire.failIfNoSpecifiedTests=false
+
+      # 229 is the count in run 38153863761 (at #406). Narrowing the -Dtest list above must fail
+      # here, since the suite would then run fewer tests than the floor; raise the floor when
+      # tests are added, never lower it.
+      - name: Ran at least the floor of tests through the gateway
+        working-directory: ./services/identity-service
+        env:
+          GATEWAY_TEST_FLOOR: 229
+        run: |
+          python3 - <<'EOF'
+          import glob
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          floor = int(os.environ["GATEWAY_TEST_FLOOR"])
+          total = 0
+          for path in glob.glob("**/surefire-reports/TEST-*.xml", recursive=True):
+              total += int(ET.parse(path).getroot().get("tests", "0"))
+          print(f"Tests run through the gateway: {total} (floor {floor})")
+          if total < floor:
+              print(f"::error::{total} tests ran through the gateway, fewer than the floor of {floor}.")
+              sys.exit(1)
+          EOF
 
   # Identity's image changes only with its own directory, so a push runs the build only for
   # those paths; a pull request always builds, and the suite above covers the rest.

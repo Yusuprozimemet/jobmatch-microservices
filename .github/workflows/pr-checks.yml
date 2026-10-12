@@ -1,6 +1,6 @@
 name: PR checks
 
-# Two gates on every pull request:
+# Three gates on every pull request:
 #
 # 1. The description uses the template. GitHub only auto-fills the template in
 #    the web "compose" form and in `gh pr create` with no --body. A pull request
@@ -13,7 +13,12 @@ name: PR checks
 #    problem behind unreviewable AI-generated changes, so the limit is a number
 #    rather than an awkward conversation between teammates.
 #
-# Recovery is automatic for both: editing the description fires the `edited`
+# 3. The applied migrations and the Day 1-4 tests stay unedited. A migration that
+#    has run is never changed, and the Day 1-4 suite is what shows the monolith
+#    still behaves after a split. Additions and pure renames pass, so a move stays
+#    possible; an edit or a delete fails and names the file (scripts/invariants.py).
+#
+# Recovery is automatic for the first two: editing the description fires the `edited`
 # event and re-runs these checks. No new commit needed.
 
 on:
@@ -113,3 +118,17 @@ jobs:
           echo "  Oversized: <one sentence saying why>"
           echo "Editing the description re-runs this check."
           exit 1
+
+  invariants:
+    name: Applied migrations and the Day 1-4 tests stay unedited
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare with the base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/invariants.py "$BASE_SHA" "$HEAD_SHA"
