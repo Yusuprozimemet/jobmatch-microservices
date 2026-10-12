@@ -8,8 +8,9 @@ committed; the closing PR of each day refreshes it.
 
     python scripts/token-usage.py
 
-A reply is counted once: a transcript repeats a reply's usage on every content block it streamed,
-so replies are keyed by message and request id. The day is the branch the session was on
+A reply is counted once, from its last line: a transcript repeats a reply's usage on every content
+block it streamed, and the usage is complete only on the last of those lines, so replies are keyed
+by message and request id and the last line per key wins. The day is the branch the session was on
 (day-17/track-d-... is Day 17); anything else (main, tooling/, docs/) has no day. Claude Code
 deletes transcripts after cleanupPeriodDays (30 by default), so an entry already in the file is
 never lowered: each count keeps the larger of the file's and the transcripts'.
@@ -39,7 +40,8 @@ def transcripts(root):
 
 
 def count(files):
-    seen, totals = set(), collections.defaultdict(lambda: dict.fromkeys(FIELDS, 0))
+    # The usage is complete only on a reply's last line, so the last line per key overwrites the others.
+    replies, totals = {}, collections.defaultdict(lambda: dict.fromkeys(FIELDS, 0))
     for path in files:
         with open(path, encoding="utf-8") as f:
             for line in f:
@@ -50,18 +52,21 @@ def count(files):
                 msg = entry.get("message") if entry.get("type") == "assistant" else None
                 usage = msg and msg.get("usage")
                 model = msg and DATED.sub("", msg.get("model") or "")
-                key = msg and (msg.get("id"), entry.get("requestId"))
-                if not usage or not model.startswith("claude") or key in seen:
+                if not usage or not model.startswith("claude"):
                     continue
-                seen.add(key)
-                when = datetime.datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
-                day = DAY_BRANCH.match(entry.get("gitBranch") or "")
-                t = totals[(when.astimezone().date().isoformat(), int(day.group(1)) if day else None, model)]
-                t["input"] += usage.get("input_tokens", 0)
-                t["cache_write"] += usage.get("cache_creation_input_tokens", 0)
-                t["cache_read"] += usage.get("cache_read_input_tokens", 0)
-                t["output"] += usage.get("output_tokens", 0)
-                t["replies"] += 1
+                replies[(msg.get("id"), entry.get("requestId"))] = entry
+    for entry in replies.values():
+        msg = entry["message"]
+        usage = msg["usage"]
+        model = DATED.sub("", msg.get("model") or "")
+        when = datetime.datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
+        day = DAY_BRANCH.match(entry.get("gitBranch") or "")
+        t = totals[(when.astimezone().date().isoformat(), int(day.group(1)) if day else None, model)]
+        t["input"] += usage.get("input_tokens", 0)
+        t["cache_write"] += usage.get("cache_creation_input_tokens", 0)
+        t["cache_read"] += usage.get("cache_read_input_tokens", 0)
+        t["output"] += usage.get("output_tokens", 0)
+        t["replies"] += 1
     return totals
 
 
