@@ -9,16 +9,9 @@ name: db-setup.py runs twice and matches its pin
 # With DEPLOY_ENABLED on, a push to main (or a dispatch) sends the image to ECR; off, it pushes nothing.
 
 on:
+  # Every pull request, so the gate below always reports: a required check that never starts
+  # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
-    paths:
-      - scripts/db-setup.py
-      - scripts/db-setup.Dockerfile
-      - scripts/test_db_setup.py
-      - scripts/seed-mart.py
-      - scripts/test_seed_mart.py
-      - services/identity-service/app/src/test/resources/fixtures/analytics-schema.sql
-      - services/identity-service/app/src/test/resources/fixtures/analytics-seed.sql
-      - .github/workflows/db-setup-tests.yml
   push:
     branches:
       - main
@@ -37,8 +30,37 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      # A pull request's checkout is its merge commit, whose first parent is the base.
+      - name: Checkout
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # The same paths as the push trigger's filter, which has already decided on a push. A manual run
+      # has no base to compare with, so it always runs.
+      - name: Compare with the base
+        id: diff
+        env:
+          PATHS: '^(scripts/(db-setup\.py|db-setup\.Dockerfile|test_db_setup\.py|seed-mart\.py|test_seed_mart\.py)$|services/identity-service/app/src/test/resources/fixtures/analytics-(schema|seed)\.sql$|\.github/workflows/db-setup-tests\.yml$)'
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            files=$(git diff --name-only HEAD^1 HEAD)
+            if grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
+          else
+            run=true
+          fi
+          echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+
   test:
     name: db-setup.py runs twice and matches its pin
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,4 +120,22 @@ jobs:
           for tag in "${GITHUB_SHA::7}" latest; do
             docker tag jobmatch-db-setup:ci "$image:$tag"
             docker push "$image:$tag"
+          done
+
+  # The required check, named per workflow so they do not share one name. It runs even when a job
+  # before it failed or was skipped, since a skipped required check counts as passed: skipped jobs
+  # pass here, failed or cancelled ones do not.
+  gate:
+    name: db-setup tests gate
+    if: always()
+    needs: [changes, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or had nothing to do
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
           done

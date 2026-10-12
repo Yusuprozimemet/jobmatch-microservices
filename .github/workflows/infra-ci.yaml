@@ -5,36 +5,9 @@
 name: Infra checks
 
 on:
+  # Every pull request, so the gate below always reports: a required check that never starts
+  # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
-    paths:
-      - "infra/**"
-      - "scripts/bus-init/**"
-      - "scripts/infra-checks.py"
-      - "scripts/infra-summary.py"
-      - "scripts/test_infra_summary.py"
-      - "scripts/deploy-preflight.sh"
-      - "scripts/write-secrets.sh"
-      - "scripts/run-once.sh"
-      - "scripts/teardown-check.sh"
-      - "scripts/live-checks.py"
-      - "scripts/test_deploy_scripts.py"
-      - "docs/runbooks/deploy.md"
-      - "docs/architecture.md"
-      - "docker-compose.yml"
-      - "services/matching-service/**/ScoreStoreConfig.java"
-      - "services/*/Dockerfile"
-      - "services/*/src/main/resources/application.yaml"
-      - "services/identity-service/app/src/main/resources/application.yaml"
-      - "observability/**"
-      - "services/identity-service/**/support/EventBus.java"
-      - ".github/workflows/api-gateway-ci-cd.yaml"
-      - ".github/workflows/application-service-ci-cd.yaml"
-      - ".github/workflows/db-setup-tests.yml"
-      - ".github/workflows/frontend-ci-cd.yaml"
-      - ".github/workflows/identity-service-ci-cd.yaml"
-      - ".github/workflows/job-service-ci-cd.yaml"
-      - ".github/workflows/matching-service-ci-cd.yaml"
-      - ".github/workflows/infra-ci.yaml"
   push:
     branches:
       - main
@@ -72,8 +45,35 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      # A pull request's checkout is its merge commit, whose first parent is the base.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # The same paths as the push trigger's filter, which has already decided on a push.
+      - name: Compare with the base
+        id: diff
+        env:
+          PATHS: '^(infra/|observability/|docker-compose\.yml$|docs/(architecture\.md|runbooks/deploy\.md)$|scripts/(bus-init/|infra-checks\.py$|infra-summary\.py$|test_infra_summary\.py$|deploy-preflight\.sh$|write-secrets\.sh$|run-once\.sh$|teardown-check\.sh$|live-checks\.py$|test_deploy_scripts\.py$)|services/(matching-service/(.+/)?ScoreStoreConfig\.java|identity-service/(app/src/main/resources/application\.yaml|(.+/)?support/EventBus\.java)|[^/]+/Dockerfile|[^/]+/src/main/resources/application\.yaml)$|\.github/workflows/((api-gateway|application-service|frontend|identity-service|job-service|matching-service)-ci-cd\.yaml|db-setup-tests\.yml|infra-ci\.yaml)$)'
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            files=$(git diff --name-only HEAD^1 HEAD)
+            if grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
+          else
+            run=true
+          fi
+          echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+
   terraform:
     name: Terraform checks without an AWS account
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
 
     env:
@@ -339,3 +339,21 @@ jobs:
           name: infra-summary
           path: ${{ runner.temp }}/infra-summary.json
           retention-days: 90
+
+  # The required check, named per workflow so they do not share one name. It runs even when a job
+  # before it failed or was skipped, since a skipped required check counts as passed: skipped jobs
+  # pass here, failed or cancelled ones do not.
+  gate:
+    name: Infra checks gate
+    if: always()
+    needs: [changes, terraform]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or had nothing to do
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
+          done

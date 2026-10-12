@@ -1695,6 +1695,15 @@ def check_c36_9(plan: dict) -> list[str]:
     return failures
 
 
+def pull_request_filter(workflow: dict) -> str | None:
+    """The changes job's PATHS: the files a pull request must touch for the workflow's jobs to run (C43.8)."""
+    for step in (workflow.get("jobs") or {}).get("changes", {}).get("steps", []):
+        paths = (step.get("env") or {}).get("PATHS")
+        if paths:
+            return paths
+    return None
+
+
 def check_c36_10(plan: dict, repo_root: Path) -> list[str]:
     """Check the one-off tasks: four task definitions in module.task and no service for any of them,
     each migrate on its service's image with MIGRATE_ONLY, db-setup on its image with the master
@@ -1764,15 +1773,16 @@ def check_c36_10(plan: dict, repo_root: Path) -> list[str]:
     if not workflow_path.is_file():
         return failures + ["C36.10 .github/workflows/db-setup-tests.yml: missing"]
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    # YAML 1.1 reads the bare key "on" as True.
-    triggers = workflow.get("on") or workflow.get(True) or {}
     runs = [step.get("run", "") for job in workflow.get("jobs", {}).values() for step in job.get("steps", [])]
     if not any("-f scripts/db-setup.Dockerfile" in run for run in runs):
         failures.append("C36.10 db-setup-tests.yml: no step builds scripts/db-setup.Dockerfile")
     if not any(run.rstrip().endswith("--help") for run in runs):
         failures.append("C36.10 db-setup-tests.yml: no step runs --help")
-    if "scripts/db-setup.Dockerfile" not in (triggers.get("pull_request") or {}).get("paths", []):
-        failures.append("C36.10 db-setup-tests.yml: pull_request paths lack scripts/db-setup.Dockerfile")
+    paths = pull_request_filter(workflow)
+    if paths is None:
+        failures.append("C36.10 db-setup-tests.yml: no PATHS in the changes job")
+    elif not re.search(paths, "scripts/db-setup.Dockerfile"):
+        failures.append("C36.10 db-setup-tests.yml: the changes job's PATHS does not match scripts/db-setup.Dockerfile")
 
     return failures
 
@@ -2042,17 +2052,18 @@ def check_c35_4(plan: dict, repo_root: Path) -> list[str]:
     if not workflow_path.is_file():
         return failures + ["C35.4 .github/workflows/db-setup-tests.yml: missing"]
     workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-    # YAML 1.1 reads the bare key "on" as True.
-    triggers = workflow.get("on") or workflow.get(True) or {}
     runs = [step.get("run", "") for job in workflow.get("jobs", {}).values() for step in job.get("steps", [])]
     if not any(f"--build-context fixtures={fixtures}" in run for run in runs):
         failures.append(f"C35.4 db-setup-tests.yml: no step builds with --build-context fixtures={fixtures}")
     if not any("scripts/test_seed_mart.py" in run for run in runs):
         failures.append("C35.4 db-setup-tests.yml: no step runs scripts/test_seed_mart.py")
-    paths = (triggers.get("pull_request") or {}).get("paths", [])
-    for path in ["scripts/seed-mart.py", f"{fixtures}/analytics-schema.sql", f"{fixtures}/analytics-seed.sql"]:
-        if path not in paths:
-            failures.append(f"C35.4 db-setup-tests.yml: pull_request paths lack {path}")
+    paths = pull_request_filter(workflow)
+    if paths is None:
+        failures.append("C35.4 db-setup-tests.yml: no PATHS in the changes job")
+    else:
+        for path in ["scripts/seed-mart.py", f"{fixtures}/analytics-schema.sql", f"{fixtures}/analytics-seed.sql"]:
+            if not re.search(paths, path):
+                failures.append(f"C35.4 db-setup-tests.yml: the changes job's PATHS does not match {path}")
 
     return failures
 
@@ -2264,7 +2275,7 @@ def check_c35_6(repo_root: Path) -> list[str]:
     """Check the deploy job in the seven workflows: workflow_dispatch, the ECR push, the role, the migrate
     task and the ECS update only on main with DEPLOY_ENABLED on, the OIDC role without keys or an
     environment, the GHCR push that stays while the switch is off (db-setup pushes nothing), identity's
-    own paths, and infra-ci's paths for them."""
+    own paths, and infra-ci's filters for them (the changes job's PATHS on a pull request, its push paths)."""
     import yaml
 
     failures = []
@@ -2415,11 +2426,17 @@ def check_c35_6(repo_root: Path) -> list[str]:
         return failures + ["C35.6 infra-ci.yaml: missing"]
     infra = yaml.safe_load(infra_path.read_text(encoding="utf-8"))
     triggers = infra.get("on") or infra.get(True) or {}
-    for trigger in ("pull_request", "push"):
-        paths = (triggers.get(trigger) or {}).get("paths", [])
-        for file in C35_INFRA_CI_WORKFLOWS:
-            if f".github/workflows/{file}" not in paths:
-                failures.append(f"C35.6 infra-ci.yaml {trigger} paths lack .github/workflows/{file}")
+    pr_filter = pull_request_filter(infra)
+    if pr_filter is None:
+        failures.append("C35.6 infra-ci.yaml: no PATHS in the changes job")
+    for file in C35_INFRA_CI_WORKFLOWS:
+        path = f".github/workflows/{file}"
+        if pr_filter is not None and not re.search(pr_filter, path):
+            failures.append(f"C35.6 infra-ci.yaml pull_request: the changes job's PATHS does not match {path}")
+    push_paths = (triggers.get("push") or {}).get("paths", [])
+    for file in C35_INFRA_CI_WORKFLOWS:
+        if f".github/workflows/{file}" not in push_paths:
+            failures.append(f"C35.6 infra-ci.yaml push paths lack .github/workflows/{file}")
 
     return failures
 
