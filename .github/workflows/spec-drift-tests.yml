@@ -2,21 +2,43 @@ name: Dashboard metric tests
 
 # The dashboard's drift and gap are only worth reading if they move when they
 # should. scripts/test_spec_drift.py builds small repositories and checks that
-# they do; this runs it on every pull request that touches the script.
+# they do; this runs it on every pull request that touches the script. It also runs
+# scripts/test_token_usage.py, which checks the token counts the dashboard reads.
 
 on:
+  # Every pull request, so the gate below always reports: a required check that never starts
+  # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
-    paths:
-      - scripts/spec-drift.py
-      - scripts/test_spec_drift.py
-      - .github/workflows/spec-drift-tests.yml
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      # A pull request's checkout is its merge commit, whose first parent is the base.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # The files the tests read: a pull request runs them only when it touches one of these.
+      - name: Compare with the base
+        id: diff
+        env:
+          PATHS: '^(scripts/(spec-drift|test_spec_drift|token-usage|test_token_usage)\.py$|\.github/workflows/spec-drift-tests\.yml$)'
+        run: |
+          files=$(git diff --name-only HEAD^1 HEAD)
+          if grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
+          echo "run=$run" | tee -a "$GITHUB_OUTPUT"
+
   test:
     name: Drift and gap move when they should
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,3 +47,22 @@ jobs:
           python-version: "3.12"
       - run: pip install numpy
       - run: python scripts/test_spec_drift.py
+      - run: python scripts/test_token_usage.py
+
+  # The required check, named per workflow so they do not share one name. It runs even when a job
+  # before it failed or was skipped, since a skipped required check counts as passed: skipped jobs
+  # pass here, failed or cancelled ones do not.
+  gate:
+    name: Dashboard metric tests gate
+    if: always()
+    needs: [changes, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or had nothing to do
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
+          done
