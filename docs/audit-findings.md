@@ -128,7 +128,7 @@ deployment. Done by the maintainer, by hand; ticked here when done.
 
 | ID | Action | From | Outcome | Closed by |
 |---|---|---|---|---|
-| M-1 | Remove the deploying IAM user's administrator policy, or close the AWS account after C35.22 (recorded 2026-10-14: 0.40 USD) | SO-1 | c | |
+| M-1 | Remove the deploying IAM user's administrator policy, or close the AWS account after C35.22 (recorded 2026-10-14: 0.40 USD) | SO-1 | c | 2026-10-14: the administrator policy removed; the account kept |
 | M-2 | Give agent sessions a fine-grained token for this repository only, without admin or workflow rights | SO-2, AR-2 | c | 2026-10-11: a fine-grained token for this repository; the old one revoked |
 | M-3 | Require one review from an identity other than the agent's, and add CODEOWNERS (needs M-2 first) | SO-3, AR-2 | d: rejected, as SO-3 | 2026-10-11 |
 | M-4 | Deny rules and a PreToolUse hook in Claude Code's settings; auditors without Bash | SO-4 | c | 2026-10-11: deny rules and a PreToolUse guard hook |
