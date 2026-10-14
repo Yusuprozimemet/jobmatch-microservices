@@ -128,7 +128,7 @@ deployment. Done by the maintainer, by hand; ticked here when done.
 
 | ID | Action | From | Outcome | Closed by |
 |---|---|---|---|---|
-| M-1 | Remove the deploying IAM user's administrator policy, or close the AWS account after C35.22 | SO-1 | c | |
+| M-1 | Remove the deploying IAM user's administrator policy, or close the AWS account after C35.22 (recorded 2026-10-14: 0.40 USD) | SO-1 | c | |
 | M-2 | Give agent sessions a fine-grained token for this repository only, without admin or workflow rights | SO-2, AR-2 | c | 2026-10-11: a fine-grained token for this repository; the old one revoked |
 | M-3 | Require one review from an identity other than the agent's, and add CODEOWNERS (needs M-2 first) | SO-3, AR-2 | d: rejected, as SO-3 | 2026-10-11 |
 | M-4 | Deny rules and a PreToolUse hook in Claude Code's settings; auditors without Bash | SO-4 | c | 2026-10-11: deny rules and a PreToolUse guard hook |
@@ -136,7 +136,7 @@ deployment. Done by the maintainer, by hand; ticked here when done.
 | M-6 | Add the four gate jobs Track 43-B makes to branch protection's required checks: "Infra checks gate", "Dashboard metric tests gate", "db-setup tests gate" and "Applied migrations and the Day 1-4 tests stay unedited" (`invariants`) | AR-1 | c | |
 | M-7 | Delete the local secrets folder written for the deployment | WP-11 | c | 2026-10-11 |
 | M-8 | Remove the Google OAuth client's redirect URI that names the destroyed load balancer | WP-11 | c | 2026-10-11 |
-| M-9 | Destroy the bootstrap (state bucket and budget) once C35.22 is recorded, or keep it on purpose | WP-11, P7-7 | c | |
+| M-9 | Destroy the bootstrap (state bucket and budget) once C35.22 is recorded (2026-10-14: 0.40 USD), or keep it on purpose | WP-11, P7-7 | c | |
 | M-10 | Close the unused AWS account made through the "projects" sign-up | Day 35 Notes | c | 2026-10-11 |
 | M-11 | Tag `phase-7` on Day 35's closing merge and `phase-3` on Day 20's, or say why not | P7-6, WP-8 | c | 2026-10-11: `phase-3` on 5121a46 (#191), `phase-7` on 98a4c27 (#406) |
 | M-12 | Ask someone else to follow "Running it" from a fresh clone, or record that nobody did | WP-9 | c | |
