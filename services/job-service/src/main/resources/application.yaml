@@ -41,6 +41,12 @@ app:
 # /actuator/** path falls through to SecurityConfig's anyRequest().authenticated() and
 # answers 401. As the backend's, which says why.
 management:
+  observations:
+    enable:
+      # A scheduled task or a security filter chain is not a request. On Day 35 these spans
+      # were 98% of the traces, so the registry does not start them.
+      "[tasks.scheduled]": false
+      "[spring.security]": false
   server:
     port: ${MANAGEMENT_PORT:9090}
   endpoints:
