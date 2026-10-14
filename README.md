@@ -278,8 +278,8 @@ each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
   extractions, the contract suite in `contract/` needed two edits, both approved in advance: a
   test of the monolith's own actuator moved out (Day 40), and the account-deletion test taught to
   wait for an event (Day 25, +13 −13). The harness around it (`support/`) grew instead.
-- **The agent's errors far outnumber the system's.** Of 454 defects recorded on Days 1–42, 20
-  were in the system being migrated; 434 were in the agent's own specs, drafts and tooling,
+- **The agent's errors far outnumber the system's.** Of 475 defects recorded on Days 1–43, 20
+  were in the system being migrated; 455 were in the agent's own specs, drafts and tooling,
   caught by an auditor, a review, a break on purpose or the close. Most were wrong premises in
   specs, and checks that could not fail.
 - **Specs need revising once work starts, nearly always.** Almost every day worked needed at least
@@ -289,10 +289,10 @@ each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
   once its specs were rewritten, and took 29.
 - **Review changes the small model's drafts.** On Days 21–28, 30 of 63 tracks the implementer
   wrote had a defect that review found before merge.
-- **The 400-line gate held.** It forced a split forty-one times; it was overridden seven times:
+- **The 400-line gate held.** It forced a split forty-six times; it was overridden eight times:
   three before Day 3, two for the moves of whole modules their specs had planned, one to move this
   README's day-by-day record into the lab notebook, and one on Day 32 for a single new checking
-  script, my choice over a split.
+  script, my choice over a split, and one on Day 43 for two poms merged into one.
 - **The services deployed independently, once.** On Day 35 each of the seven workflows pushed
   its own image and updated its own ECS service from its own job. Not shown: a push-triggered
   deploy of one service alone; and identity's workflow still tests every service's image.
