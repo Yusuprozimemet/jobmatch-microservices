@@ -422,7 +422,7 @@ git grep -n -E "identity-service/(app|identity|shared|docs|README)|-pl app" -- .
 - **Left to the maintainer:** M-1, M-6 (the four new gates as required checks, `invariants`
   among them), M-9 and M-12
   (`docs/audit-findings.md`); the 34 Dependabot alerts on `data/uv.lock` and their PRs; C35.22's
-  cost read.
+  cost read (done after the day: 0.40 USD in all).
 - *Estimated 13 pull requests; took 16:* the spec PR (#408), 13 track PRs (#412–#422, #426,
   #427) and the close in two (#428, #429), the gate splitting B, D1 and the close; F2
   (#419, 516 lines) took the eighth `Oversized:` line, as these Notes expected.
