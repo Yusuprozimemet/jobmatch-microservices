@@ -38,10 +38,12 @@ the whole plan against the code (2026-10-14, on Opus) and found it delivered, wi
 defects: what this plan asked of Phases 0–5 and 7 is built, Phase 6 is cut, and the one
 deployment was made and destroyed.
 
-- **What is left is outside the repository or the maintainer's:** M-6 (the four gates
-  Day 43 added, `invariants` among them, as required checks), M-9 and M-12 in the ledger
-  (Day 35's cost, C35.22, which M-1 and M-9 waited on, was 0.40 USD in all; M-1 is done); the Dependabot alerts on
-  `data/uv.lock`, which this plan never owned (`data/` is unchanged).
+- **What is left is outside the repository or the maintainer's:** the maintainer's rows in the
+  ledger are all closed (2026-10-14: the four gates Day 43 added are required checks, the
+  bootstrap is gone after C35.22 read 0.40 USD, the AWS user is denied everything and a trail
+  watches the account), M-12 by recording that nobody else has followed "Running it" yet
+  (H28.18 stays open); the Dependabot alerts on `data/uv.lock`, which this plan never owned
+  (`data/` is unchanged).
 - **Pace:** 268 track PRs against 198 estimated over 39 days (1.35×). Day 43 took 16 against 13, the
   gate splitting three of them.
 
