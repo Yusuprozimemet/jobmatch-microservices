@@ -30,7 +30,7 @@ past that one is a list of overrides rather than an edited file.
 | File | Read by | Committed? |
 | --- | --- | --- |
 | [`.env`](../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
-| [`services/identity-service/.env`](../../services/identity-service/.env.example) | Loaded by hand for `../../mvnw spring-boot:run`. **Not** read by compose: the `identity-service` service has no `env_file` | No |
+| [`services/identity-service/.env`](../../services/identity-service/.env.example) | Loaded by hand for `../../mvnw spring-boot:run` ([running it by hand](#running-it-by-hand)). **Not** read by compose: the `identity-service` service has no `env_file` | No |
 | [`frontend/.env.local`](../../frontend/.env.example) | Next, in local development | No |
 | [`data/.env`](../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
 
@@ -243,6 +243,32 @@ No profile is active unless you ask for one:
 ../../mvnw spring-boot:run -Dspring-boot.run.profiles=dev   # from services/identity-service
 ```
 
+## Running it by hand
+
+Outside compose identity-service needs JDK 25, a Postgres and a signing key. The defaults above
+name a throwaway container (development only: one `admin` superuser):
+
+```bash
+docker run --name hyf-postgres -e POSTGRES_DB=identity_db -e POSTGRES_USER=admin \
+  -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18.4-alpine
+scripts/jwt-key.sh services/identity-service/.jwt/private.pem
+cd services/identity-service
+JWT_PRIVATE_KEY_FILE=.jwt/private.pem ../../mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+In a bare container Flyway stops at V12: Day 11's migrations need the module roles. Create them
+with [`db-setup.py`](../../scripts/db-setup.py) and run as the logins it prints (`DB_USER=app_user`,
+`DB_IDENTITY_USER=identity_user`, [section 6](#6-the-database-schemas-and-roles)), or start
+compose's `db` instead, which creates them on a fresh volume
+([`scripts/db-init/`](../../scripts/db-init)). The service then answers on 8080
+with its own endpoints only. The API reference is at `/api/docs` and the OpenAPI document at
+`/api/docs/openapi.yaml`, built at runtime from the controllers' annotations, so there is no
+`openapi.yaml` in the repository to edit.
+
+The tests never use this database: `../../mvnw verify` starts its own Postgres and the other
+services' containers, so Docker has to be running and the harness images of job-, matching- and
+application-service built first (the root README's "Running it"; the harness never pulls them).
+
 ---
 
 # 4. Frontend
@@ -316,7 +342,8 @@ cannot corrupt the marts" a fact rather than a promise.
 The third schema exists so a trainee building a mart never needs the credential that owns
 production. The script is idempotent, so a failed run can be repeated.
 
-A plain single-container setup skips all of this: one `admin` superuser. Fine for development, wrong for anything shared.
+The plain single-container setup in [running it by hand](#running-it-by-hand) skips all of this: one
+`admin` superuser. Fine for development, wrong for anything shared.
 
 ---
 

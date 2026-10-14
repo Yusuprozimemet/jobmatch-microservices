@@ -298,12 +298,19 @@ own database (Day 20). On a fresh database volume `/api/jobs` answers 500 until 
 them — see [`data/README.md`](data/README.md) — so the quickstart above loads the test suite's
 mart instead with `scripts/seed-jobs.sh`.
 
-Run the contract test suite (it needs a JDK 25; the Maven wrapper is at the root):
+Run the contract test suite (it needs a JDK 25 and Docker; the Maven wrapper is at the root). It
+starts its own Postgres and the other services from images built here, never pulled, so rebuild
+an image after changing its service: a stale one passes silently.
 
 ```bash
-docker build -t jobmatch-job-service:harness services/job-service   # the suite starts it (Day 17)
+docker build -t jobmatch-job-service:harness services/job-service                   # Day 17
+docker build -t jobmatch-matching-service:harness services/matching-service         # Day 21
+docker build -t jobmatch-application-service:harness services/application-service   # Day 25
 cd services/identity-service && ../../mvnw verify
 ```
+
+Running identity-service outside compose, on a database of your own, is in
+[`docs/system/configuration.md`](docs/system/configuration.md#running-it-by-hand).
 
 A volume from before Day 28 holds `project_db`, which is now `identity_db`: rename it once, as
 [`docs/runbooks/identity-db.md`](docs/runbooks/identity-db.md) says. A volume from before Day 20
