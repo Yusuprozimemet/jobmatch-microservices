@@ -866,7 +866,7 @@ closed and cited in [`audit-findings.md`](audit-findings.md); the maintainer's M
 - **The dashboard reads only the owner's PRs,** and stops taking criterion IDs for tracks; its
   hold was red before the day began, three Dependabot PRs being its next step.
 - **The gates report on every PR,** an applied migration or a Day 1–4 test cannot be edited, and
-  the gateway run cannot shrink below 229 tests. Making them required is the maintainer's (M-6).
+  the gateway run cannot shrink below 229 tests. The maintainer made them required after the day (M-6, 2026-10-14).
 - **identity-service has its siblings' shape:** one module, `src/` at its root, its own entry
   class; 242 source files moved as pure renames, and the contract suite stayed unedited through all of it.
 - **Haiku had been counted 25–49× low:** through 2026-10-11 its output was 2,321,219 tokens, not
