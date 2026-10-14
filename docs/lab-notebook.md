@@ -928,6 +928,61 @@ on Haiku, and review changed something in nearly all of them; once it deleted th
 not make pass. The estimates missed upward again: 12 track pull requests in the provisional specs,
 25 once rewritten, 29 taken, 14 of them on Day 17.
 
+**Read at the end of Phase 4.** Matching is out (Days 41, 21–24), in the order set after Phase 2:
+identity's profile route and the token's `sub` first, still in one process (Day 41), so Day 21's
+extraction was, for the tests, a change of URL. The phase's hardest problem was not on the plan's
+list of four: a model that hangs. It now costs at most ten requests, and the call that waits on
+it is the only one in the system that can. Across the phase `contract/` gained no edits; one word
+changed in one test outside it, by the maintainer's decision (Day 21). The rewritten specs
+planned 39 pull requests; the phase took 45, 22 of them on Day 21.
+
+The findings came from the specs first, as in Phase 3: every provisional spec was rewritten
+before its first track (#200, #206, #232, #244, #250), and the audits found a dual write
+`plan.md` rules out, a Verify that would have shown 401 for the 503 it promised, and a controller
+that could have called itself. What reading missed, breaking found: two tests that passed against
+a store they never reached (Day 22), a "no user" test still green with the call ignored (Day 41).
+And a source the earlier reads said had found nothing appeared: **reviewing the agent's code.**
+With the implementer on Haiku, review changed the draft in most tracks, once where every model
+test passed while the harness had stopped calling the model. One finding was lost between two
+tracks (Day 24), the first sign that the gaps open in hand-offs, not in tracks.
+
+**Read at the end of Phase 5.** The monolith is gone (Days 26, 27, 25, 28), in the plan's order:
+the deletion event first, then the table, then identity's own move. The phase's done-when held:
+`AccountDeletionIT` stayed green after every track, with one approved edit (Day 25: it counts in
+`apps_db` and waits for the event), and deleting a user clears every store that holds user data,
+shown live on Day 35 through real SNS and SQS. On Day 28 the Day 1–4 suite moved with identity as
+22 renames, 0 lines changed. The specs planned 33 pull requests; the phase took 46, 25 of them on
+Day 25, whose provisional spec had three tracks for what Day 21 had needed fifteen PRs for.
+
+The phase's defects were about time and loss more than logic: a relay that would have committed
+the row's delete after a failed publish (Day 26, review), failure criteria on shared 30 s queues
+that could not fail (Day 27, the audit), a track announced and never opened that the dashboard
+read as done (Day 25, found at the close). The worst near miss was the spec's own: "delete
+`backend/`" would have deleted the suite the migration is judged on (Day 28, #313). At the
+stopping point the plan-auditor on the whole plan found Phase 7's drafts still written for Azure
+and Kubernetes, and Phase 6 with nothing to move (#321). The plan the agent wrote on the first day
+was wrong about its last two phases, and it took a read of the whole plan to see it.
+
+**Read at the end of Phase 7.** The system was deployed once and destroyed (Days 42, 32, 33, 36,
+34, 35): a cleanup day, the data stores in Terraform, the code ECS needs, the services, their
+observability, and on 2026-10-11 one deployment that served the five public surfaces through one
+load balancer, passed 14 of 14 live checks after two fixes, and left only the bootstrap behind.
+Phase 6 was cut. The specs planned 46 pull requests; the phase took 53, and two fix PRs from the
+deployment. For four days everything was checked on a plan made without an account, and the
+checks had to be written to read what such a plan can show: the services declared literally in
+`local.services` (Day 36), the queue policy read from LocalStack's state (Day 32).
+
+What those checks could not see, the deployment found in a day, and both defects were the
+agent's: a deploy role that trusted an OIDC subject format GitHub no longer sends (#404), an error
+of knowledge cutoff rather than reasoning, and a live check with its own copy of the API that sent
+3 skills where the API wants 5–20 (#405). A third failed in the cloud the way its predecessor had
+on paper: the healthy-hosts alarm that replaced `UnHealthyHostCount` did not fire on a 39 s
+outage, only once the services were at 0. Review of the implementer's drafts kept finding checks
+that would have passed when they should not (Days 32, 33, 36). The five end-of-phase audits read
+the phase whole ([`audit-findings.md`](audit-findings.md)): Phase 7 delivered; the record is
+honest but cannot separate the agent from the maintainer; and the workflow was unsafe for more
+autonomy while the agent held the maintainer's admin credentials, since replaced (M-2, M-13).
+
 ## What is being measured
 
 | Question | Evidence it will be judged on |
@@ -1022,7 +1077,28 @@ rejected, with the evidence. It includes any service that should not have been e
 
 | Hypothesis or question | Verdict | Evidence |
 | --- | --- | --- |
-| The four hard parts can be migrated by an agent under written specs | — | — |
-| The binding constraint is specification quality, not model capability | — | — |
-| Each row of the measurement table | — | — |
-| Services that should not have been extracted | — | — |
+| The four hard parts can be migrated by an agent under written specs | Supported, with the maintainer deciding every fork | No tests: the Day 1–4 suite was written first and outlived the monolith with two approved changes (the first measurement row). Session auth: Day 13 passed it with no line of `contract/` changed. The three cross-module reads: interfaces on Days 8–9, zero edits. The GDPR delete: an outbox and a bus on Days 26–27, `AccountDeletionIT` green on every Phase 5 merge, and live through SNS and SQS on Day 35. "By an agent" is narrower than it reads: every architectural fork and every merge was the maintainer's, and their review is asserted, not recorded, since no merged PR has a GitHub review from them (AE-1) |
+| The binding constraint is specification quality, not model capability | Partly supported, and weaker than stated | The specs are the model's output (AE-6): the agent wrote `plan.md` and the first 37 specs, every day but one needed a spec-change PR, and its plan had the extraction order wrong until #115. What the record supports is narrower: specs the main session wrote and an auditor of the same family read were enough for Haiku to write code that review mostly fixed. H2 in [`success-criteria.md`](paper/success-criteria.md) cannot separate the spec from the agent (AE-2): counting only review finds on Days 21–28 and 41, implementation 15 against spec 9 refutes it; adding breaks and in-track finds, spec 22 against 19 supports it, and which to count was never registered. The cause labels were assigned by the session that wrote both the spec and the brief, and a fourth label, "process", crept in (AR-9). No arm ran without a spec, so there is no comparison group (AE-8) |
+| Do contract tests written against the monolith survive the split? | Supported | Zero lines changed in `contract/` through three extractions, the JWT rewrite and two moves of the whole tree, but for two changes approved in advance: `ObservabilityIT` moved out on Day 40, and `AccountDeletionIT` +13 −13 on Day 25. `support/` absorbed the change instead. It is the one result checkable from outside the record, and since #415 `scripts/invariants.py` holds it on every PR |
+| How good are day-sized estimates for agent-implemented work? | Partly supported: biased low, never far over a phase | 1.5× in each of Phases 0–2; 1.36× in track PRs over 38 days (`plan.md`); by the Day entries, Phase 4 39 → 45, Phase 5 33 → 46, Phase 7 46 → 53. The misses sit on the extraction days (Day 17 3 → 14, Day 21 15 → 22, Day 25 15 → 25). P1, 1.3× to 2.0× for Days 21–28, held at 1.31× (67 → 88, counting every PR of a day as its Day entry does) |
+| Does the agent catch defects in the system it is migrating? | Partly supported | 20 of 454 entries were in the system; 434 were in the agent's own work, caught before or soon after merge. Its most important failure is checks that could not fail (AE-5): 113 such checks and 21 Verify commands that ran nothing or something unsafe, found only by breaking the code and running it, and the deployment still found an alarm that could not fire on the outage it was for. The breaks themselves are attested, not replayed (AR-4): a `broken:` line is text in a PR, and 304 of 399 PRs at the end of Phase 7 carry none |
+| How often do specifications need revision once work starts? | Nearly always | Every worked day but one needed a spec-change PR (P2 held), and audits of rewritten specs still found 32, 30 and 22 problems on Days 19, 17 and 20. Spec and evidence integrity is observed after merge, never gated (AR-6): spec-drift's tests end in a gate since #414, but its integrity checks stay advisory, and a closing PR can still reword a criterion |
+| How much of the agent's work is redone? | Much of it, and under-recorded | 37 of 39 tracks changed in review on Days 39–41 and 17–20, counting style; 55 of 108 tracks had a defect in the draft on Days 21–35. H3 cannot be judged from the record (AE-3): no `Rewrite` line on Days 21–28, though the main session rewrote Day 26's relay and two of Day 33's five drafts. The implementer's tokens were counted from the first transcript line of each reply, 24–49× low for Haiku, until #413 (AE-4) |
+| Does the 400-line gate hold without override? | Partly supported | Eight `Oversized:` overrides, the eighth Day 43's F2 (#419, a pom merge), against forty-three splits the gate forced by Day 35. The two extraction moves could not split and stay green; both specs expected the line. It blocked merges only once `main` was protected after Phase 2 |
+| Is the finished system actually independently deployable? | Partly supported | On Day 35 each of the seven workflows pushed its own image and updated its own ECS service, and identity's and application-service's ran their own migrations first. Not shown: a push-triggered deploy of one service alone, and identity's workflow still tests every service's image. The live checks carried their own copy of the API, unchecked until deploy day (AR-10): the first live run failed 2 of 14 on a request the API rejects (#405), and nothing deploys again to run them twice |
+| Services that should not have been extracted | application-service, arguably | job-service and matching-service earned it: matching alone holds the model's key, and a hung model costs it ten requests; job-service only reads. application-service holds saved jobs and the tracker. Its move took Day 25's 25 PRs, a `postgres_fdw` bridge in the harness to keep `JobSavedCountIT` unedited, and a per-page call from search that falls back to counts of 0, and it turned a foreign-key cascade inside one transaction into an event the GDPR delete then needed. Left in identity, the bus would have had one consumer, matching's cache. Phase 6's functions were cut before they were built |
+| Can the workflow take more agent autonomy? | Not shown | The only unattended loop was built and reverted before it ran (#266, #267). Implementation behind the gates, spec bookkeeping and closing PRs could move first; plan changes, trust policy, billable cloud actions and the checkers' model should stay with the maintainer, and a denied tool call once still had its side effect (AE-7) |
+
+**How far this evidence reaches** (AE-9). The main model changed at Day 8 (Opus 5 to 5.5), on
+the day `CLAUDE.md` and the auditors arrived; the implementer arrived on Day 39 and moved from
+Haiku 4.5 to 5.5 at Day 36; the defect taxonomy starts on Day 21 and the break line on #310.
+Every trend above crosses at least one of those changes. The spec-to-code gap angle stayed near
+40° from Day 9 to Day 35, so it cannot show improvement, and most PRs carry no break evidence.
+One maintainer, one model family writing, checking and labelling, one codebase.
+
+**What would answer what this could not** (AE-8), none of it run here, since the migration ends:
+an unattended loop on a held-out day with the gates frozen and the defects labelled blind by
+another model or a person; a spec-authorship ablation, with the agent's own specs, this
+repository's and a conversational prompt under the same implementer and gates; and a blind
+planted-defect review that scores the main session, the auditor, another model family and the
+maintainer on the same seeded faults.
