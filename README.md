@@ -107,7 +107,7 @@ where it lives, so a reader can check it rather than take it on trust:
 | Practice | What it means here | Where it lives |
 | --- | --- | --- |
 | **Spec-driven** | [`plan.md`](plan.md) sets the phases; each day is a spec with a goal, scope, out-of-scope, tracks and acceptance criteria, written before the code. A wrong spec is fixed in its own pull request before the work, never worked around. | [`specs/`](specs/), [`specs/README.md`](specs/README.md) |
-| **Test-first** | The contract suite over the five public API surfaces was written in Phase 0, before anything was split, and asserts HTTP only so it survives the split unedited. Each day's Track 0 lands the tests that must pass before and after the change; every `new` criterion fails on the code as it was. | `services/identity-service/app/src/test/.../contract/` |
+| **Test-first** | The contract suite over the five public API surfaces was written in Phase 0, before anything was split, and asserts HTTP only so it survives the split unedited. Each day's Track 0 lands the tests that must pass before and after the change; every `new` criterion fails on the code as it was. | `services/identity-service/src/test/.../contract/` |
 | **Tests seen to fail** | A test that passes before and after a change proves nothing until it has failed. Before a merge the code is broken on purpose, the test's report is recorded in one line (`broken: <what> → <what it reported>`), and the break is reverted. | Every track's pull request; [`specs/README.md`](specs/README.md) |
 | **Gated** | A ladder of checks between a draft and `main`: the spec-auditor, review of the implementer's diff, tests and checkstyle, a 400-line diff limit, the pull request template, branch protection, and the maintainer's merge. | [`pr-checks.yml`](.github/workflows/pr-checks.yml), [`CLAUDE.md`](CLAUDE.md) |
 | **Reviewed by separate agents** | Two read-only auditors with their own brief and a fresh context check the plan and each day's spec against the code, so the session that implements is not the only one checking its own work. A smaller model writes the code; it never commits. | [`.claude/agents/`](.claude/agents/) |
@@ -328,7 +328,7 @@ path).
 ├── services/
 │   ├── api-gateway/          The only way in: routes, token checks, rate limits
 │   ├── identity-service/     What was the monolith: users, auth, profiles (Day 28)
-│   │   └── app/src/test/.../contract/   The Day 1–4 contract suite
+│   │   └── src/test/.../contract/       The Day 1–4 contract suite
 │   ├── job-service/          Job search and postings, over jobs_db
 │   ├── matching-service/     Top matches and scoring
 │   └── application-service/  Saved jobs and applications

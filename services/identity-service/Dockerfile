@@ -5,30 +5,21 @@
 FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /app
 
-# Dependencies first, keyed on the poms alone. Docker reuses this layer for as long as no
-# pom changes, so editing a source file no longer re-downloads the dependency tree on every
-# commit. That download is what kept tripping Maven Central's rate limit and turning the
-# build red on changes that never touched a dependency.
-#
-# The parent's pom and app's, which is every pom the reactor declares: `dependency:go-offline`
-# resolves them all, and a parent listing a module whose pom is not copied fails outright.
+# Dependencies first, keyed on the pom alone, so a source change does not download them again.
+# That download is what kept tripping Maven Central's rate limit and turning the build red on
+# changes that never touched a dependency.
 COPY pom.xml .
-COPY app/pom.xml app/
 RUN mvn -B -e dependency:go-offline
 
 # Sources last, because they change on every commit and invalidate whatever follows.
-# The whole tree rather than `app/src` alone: this copy is invalidated by every commit
-# anyway, and a path the build reads outside app/src would compile locally, where the full
-# tree is present, and then fail in the image.
-COPY . .
+COPY src src
 RUN mvn -B package -DskipTests
 
 # Stage 2: run the JAR (JRE is enough)
 FROM eclipse-temurin:25-jre
 USER 1000
 WORKDIR /app
-# `app` is the only module, and the only one that produces a jar.
-COPY --from=build /app/app/target/*.jar app.jar
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
 # The management port. Publish it only where a scraper can reach it - never to the internet.
 EXPOSE 9090

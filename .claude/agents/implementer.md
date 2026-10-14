@@ -32,7 +32,7 @@ do not guess which one is right.
 
 ## Never
 
-- Edit anything in `app/src/test/.../contract/` or the Day 01 harness self-tests, or any applied
+- Edit anything in `src/test/.../contract/` or the Day 01 harness self-tests, or any applied
   migration (`db/migration` V1–V16, or a module migration already on `main`). If the work seems
   to need it, stop and report: that is the signal the spec's premise is wrong.
 - Commit, push, open a pull request, or change branches.

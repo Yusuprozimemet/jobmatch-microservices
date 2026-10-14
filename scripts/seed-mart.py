@@ -2,7 +2,7 @@
 
 The jobs-seed task runs it from the db-setup image, with analytics_user's password in
 POSTGRES_PASSWORD. The image holds the two fixtures in /app/fixtures, copied at build time from
-services/identity-service/app/src/test/resources/fixtures.
+services/identity-service/src/test/resources/fixtures.
 
 The fixture drops and recreates the mart, so the script refuses when analytics.fct_postings already
 has rows: those are listings the pipeline published, and the fixture would replace them.

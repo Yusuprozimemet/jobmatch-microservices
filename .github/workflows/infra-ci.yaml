@@ -29,7 +29,7 @@ on:
       - "services/matching-service/**/ScoreStoreConfig.java"
       - "services/*/Dockerfile"
       - "services/*/src/main/resources/application.yaml"
-      - "services/identity-service/app/src/main/resources/application.yaml"
+      - "services/identity-service/src/main/resources/application.yaml"
       - "observability/**"
       - "services/identity-service/**/support/EventBus.java"
       - ".github/workflows/api-gateway-ci-cd.yaml"
@@ -60,7 +60,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(infra/|observability/|docker-compose\.yml$|docs/(architecture\.md|runbooks/deploy\.md)$|scripts/(bus-init/|infra-checks\.py$|infra-summary\.py$|test_infra_summary\.py$|deploy-preflight\.sh$|write-secrets\.sh$|run-once\.sh$|teardown-check\.sh$|live-checks\.py$|test_deploy_scripts\.py$)|services/(matching-service/(.+/)?ScoreStoreConfig\.java|identity-service/(app/src/main/resources/application\.yaml|(.+/)?support/EventBus\.java)|[^/]+/Dockerfile|[^/]+/src/main/resources/application\.yaml)$|\.github/workflows/((api-gateway|application-service|frontend|identity-service|job-service|matching-service)-ci-cd\.yaml|db-setup-tests\.yml|infra-ci\.yaml)$)'
+          PATHS: '^(infra/|observability/|docker-compose\.yml$|docs/(architecture\.md|runbooks/deploy\.md)$|scripts/(bus-init/|infra-checks\.py$|infra-summary\.py$|test_infra_summary\.py$|deploy-preflight\.sh$|write-secrets\.sh$|run-once\.sh$|teardown-check\.sh$|live-checks\.py$|test_deploy_scripts\.py$)|services/(matching-service/(.+/)?ScoreStoreConfig\.java|identity-service/(src/main/resources/application\.yaml|(.+/)?support/EventBus\.java)|[^/]+/Dockerfile|[^/]+/src/main/resources/application\.yaml)$|\.github/workflows/((api-gateway|application-service|frontend|identity-service|job-service|matching-service)-ci-cd\.yaml|db-setup-tests\.yml|infra-ci\.yaml)$)'
         run: |
           if [ "${{ github.event_name }}" = pull_request ]; then
             files=$(git diff --name-only HEAD^1 HEAD)

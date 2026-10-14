@@ -302,7 +302,7 @@ class DeployScriptsTest(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("live_checks", os.path.join(HERE, "live-checks.py"))
         live = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(live)
-        dto = os.path.join(HERE, "..", "services", "identity-service", "app", "src", "main", "java",
+        dto = os.path.join(HERE, "..", "services", "identity-service", "src", "main", "java",
                            "nl", "hackyourfuture", "project", "backend", "identity", "profile", "dto",
                            "UpdateProfileRequest.java")
         with open(dto, encoding="utf-8") as f:
