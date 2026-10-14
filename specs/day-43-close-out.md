@@ -420,7 +420,7 @@ git grep -n -E "identity-service/(app|identity|shared|docs|README)|-pl app" -- .
   dashboard run), public ECR's anonymous pull limit (#416) and Maven Central 502s (#418, #420).
   The maintainer reran each; the agent's token cannot rerun Actions. Locally, `npm run lint`
   fails on CRLF alone; lint an LF copy (`git -c core.autocrlf=false archive`).
-- **Left to the maintainer:** M-1, M-6 (the four new gates as required checks, `invariants`
+- **Left to the maintainer:** M-1 (done after the day, 2026-10-14), M-6 (the four new gates as required checks, `invariants`
   among them), M-9 and M-12
   (`docs/audit-findings.md`); the 34 Dependabot alerts on `data/uv.lock` and their PRs; C35.22's
   cost read (done after the day: 0.40 USD in all).
