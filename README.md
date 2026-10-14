@@ -297,8 +297,8 @@ each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
   its own image and updated its own ECS service from its own job. Not shown: a push-triggered
   deploy of one service alone; and identity's workflow still tests every service's image.
 
-Verdicts on each hypothesis are written when the last phase closes, in the lab notebook's
-[Retrospective](docs/lab-notebook.md#retrospective).
+Verdicts on each hypothesis were written when the last day closed (Day 43, #427), in the lab
+notebook's [Retrospective](docs/lab-notebook.md#retrospective).
 
 ## Running it
 

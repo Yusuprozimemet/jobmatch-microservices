@@ -419,9 +419,17 @@ git grep -n -E "identity-service/(app|identity|shared|docs|README)|-pl app" -- .
   dashboard run), public ECR's anonymous pull limit (#416) and Maven Central 502s (#418, #420).
   The maintainer reran each; the agent's token cannot rerun Actions. Locally, `npm run lint`
   fails on CRLF alone; lint an LF copy (`git -c core.autocrlf=false archive`).
-- **Left to the maintainer:** M-1, M-6 (the three new gates as required checks), M-9 and M-12
+- **Left to the maintainer:** M-1, M-6 (the four new gates as required checks, `invariants`
+  among them), M-9 and M-12
   (`docs/audit-findings.md`); the 34 Dependabot alerts on `data/uv.lock` and their PRs; C35.22's
   cost read.
 - *Estimated 13 pull requests; took 16:* the spec PR (#408), 13 track PRs (#412–#422, #426,
   #427) and the close in two (#428, #429), the gate splitting B, D1 and the close; F2
   (#419, 516 lines) took the eighth `Oversized:` line, as these Notes expected.
+- **The whole-plan audit (2026-10-14, Opus), after the close:** the plan delivered, no code
+  defects. Its record findings were fixed after the day: `plan.md`'s Epilogue (#430), and Day 01's
+  boxes, `specs/README.md`'s status column, the README's verdict line and M-6's four gates in the
+  PR that adds this item. Two of Day 28's hand-offs to the maintainer were done and never cited, so
+  the dashboard still listed them: H28.1 ("Identity Service gate" and "Application Service gate"
+  are required checks) and H28.8 (`phase-3` tags Day 20's close, #191, M-11). H28.18, someone
+  else following "Running it" from a fresh clone, is not done: the ledger carries it as M-12.

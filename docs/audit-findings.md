@@ -133,7 +133,7 @@ deployment. Done by the maintainer, by hand; ticked here when done.
 | M-3 | Require one review from an identity other than the agent's, and add CODEOWNERS (needs M-2 first) | SO-3, AR-2 | d: rejected, as SO-3 | 2026-10-11 |
 | M-4 | Deny rules and a PreToolUse hook in Claude Code's settings; auditors without Bash | SO-4 | c | 2026-10-11: deny rules and a PreToolUse guard hook |
 | M-5 | Agent commits from a separate identity; a CloudTrail trail if the account is kept | SO-7 | c | 2026-10-11: agent commits under their own name; the trail goes with M-1 |
-| M-6 | Add the gate jobs Track 43-B makes to branch protection's required checks | AR-1 | c | |
+| M-6 | Add the four gate jobs Track 43-B makes to branch protection's required checks: "Infra checks gate", "Dashboard metric tests gate", "db-setup tests gate" and "Applied migrations and the Day 1-4 tests stay unedited" (`invariants`) | AR-1 | c | |
 | M-7 | Delete the local secrets folder written for the deployment | WP-11 | c | 2026-10-11 |
 | M-8 | Remove the Google OAuth client's redirect URI that names the destroyed load balancer | WP-11 | c | 2026-10-11 |
 | M-9 | Destroy the bootstrap (state bucket and budget) once C35.22 is recorded, or keep it on purpose | WP-11, P7-7 | c | |
