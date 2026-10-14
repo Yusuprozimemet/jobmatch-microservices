@@ -28,13 +28,13 @@ a populated mart, and a logged-in user — in one annotation.
 | D | | CI: run integration tests on every PR |
 
 ## Acceptance criteria
-- [ ] A test class extending `IntegrationTest` starts with zero extra setup.
-- [ ] One Postgres container is started per run, not per test class.
-- [ ] `analytics.fct_postings` has ≥20 seeded rows with skills, cities and dates.
-- [ ] `authenticatedAs(user)` returns a client whose calls reach an authenticated endpoint.
-- [ ] Each test starts from a clean `app` schema — no leakage between tests.
-- [ ] Full suite runs in under 3 minutes locally.
-- [ ] Backend CI runs the suite and fails the PR when a test fails.
+- [x] A test class extending `IntegrationTest` starts with zero extra setup. `BackendApplicationTests` (#1)
+- [x] One Postgres container is started per run, not per test class. `TestHarnessTest.startsOneContainerForTheWholeRun` with `SecondHarnessTest.sharesTheContainerWithEveryOtherTestClass` (#1)
+- [x] `analytics.fct_postings` has ≥20 seeded rows with skills, cities and dates. 24 rows, 23 with skills, all with cities and dates: `TestHarnessTest.seedsTheMartWithPostingsCitiesAndSkills` (#1)
+- [x] `authenticatedAs(user)` returns a client whose calls reach an authenticated endpoint. `TestHarnessTest.authenticatedAsReachesAnAuthenticatedEndpoint` and `anonymousIsRejectedByAnAuthenticatedEndpoint` (#1)
+- [x] Each test starts from a clean `app` schema — no leakage between tests. `TestHarnessTest.startsFromACleanAppSchema` and `startsFromACleanAppSchemaEveryTime`, which pass together only if the reset runs between them (#1)
+- [x] Full suite runs in under 3 minutes locally. 45 s at #1, on Day 01's suite; not a lasting bound, as the suite has since grown into each service's own
+- [x] Backend CI runs the suite and fails the PR when a test fails. `./mvnw -B verify` in the backend workflow (#1), now `identity-service-ci-cd.yaml`
 
 ## Verify
 ```bash
@@ -52,3 +52,6 @@ cd backend && ./mvnw verify
   `UserBuilder` + `ProfileBuilder` → `IntegrationTest` + HTTP client → self-tests + CI + docs.
 - The exact mart column *types* came from `data/sql/job_schema.sql`, not from the dbt model:
   the model is Databricks SQL, and `sync.py` maps those types to Postgres ones on the way in.
+- **Boxes ticked late (2026-10-14, after the whole-plan audit).** PR #1 ticked each criterion
+  with its evidence in its description, but the spec's boxes were left empty; they now carry
+  #1's evidence. No break is recorded: Day 01 predates the `broken:` line.

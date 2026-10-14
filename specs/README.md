@@ -65,17 +65,17 @@ specs/
 
 | Days | Phase | Outcome | Status |
 |---|---|---|---|
-| 1–5 | 0 — make the split safe | Tests that survive the split; telemetry | ready |
-| 6–11 | 1 — modularise in place | Boundaries proven, still one process | ready |
-| 12–16 | 2 — gateway + JWT | Stateless auth behind a gateway | ready |
-| 38–40 | platform step | Grants, tracing, service credential, harness and compose | ready |
-| 17–20 | 3 — extract job-service | First independent service, own database | ready |
-| 41, 21–24 | 4 — extract matching-service | LLM isolated; scores in NoSQL | ready |
-| 25–28 | 5 — extract application-service | Events, GDPR cascade, monolith gone | ready |
-| 42 | cleanup day | What Phases 3–5 left behind, before Phase 7 | ready |
-| 32, 33, 36, 34, 35 | 7 — ECS on Fargate | Terraform, the code before ECS, the services on ECS, observability, one deployment and its teardown | ready |
+| 1–5 | 0 — make the split safe | Tests that survive the split; telemetry | done |
+| 6–11 | 1 — modularise in place | Boundaries proven, still one process | done |
+| 12–16 | 2 — gateway + JWT | Stateless auth behind a gateway | done |
+| 38–40 | platform step | Grants, tracing, service credential, harness and compose | done |
+| 17–20 | 3 — extract job-service | First independent service, own database | done |
+| 41, 21–24 | 4 — extract matching-service | LLM isolated; scores in NoSQL | done |
+| 25–28 | 5 — extract application-service | Events, GDPR cascade, monolith gone | done |
+| 42 | cleanup day | What Phases 3–5 left behind, before Phase 7 | done |
+| 32, 33, 36, 34, 35 | 7 — ECS on Fargate | Terraform, the code before ECS, the services on ECS, observability, one deployment and its teardown | done |
 | 29–31 | 6 — functions + uploads bucket | CV parsing, email off the request path | cut after Phase 7 |
-| 43 | close-out day | The end-of-Phase-7 audits' findings ([`docs/audit-findings.md`](../docs/audit-findings.md)); the last day | ready |
+| 43 | close-out day | The end-of-Phase-7 audits' findings ([`docs/audit-findings.md`](../docs/audit-findings.md)); the last day | done |
 
 ## Provisional specs
 
@@ -85,8 +85,8 @@ ready to work. Days 29–31 (Phase 6) were never reached: their line says `Statu
 (`plan.md`, Phase 7 outcome), and the dashboard leaves them out of the run order. Days 17–20 and 41, 21–24 were
 rewritten against the code when their phase reached them; Days 38–40 and 42 were written against it from the start. Days 36–37 were deleted before Phase 7 (`plan.md`, course correction before Phase 7); Day 36's number came back when Day 33 was split (same section).
 
-Expect them to change. Day 19 in particular (partial failure and fallbacks) is a design
-decision the team must agree on before anyone writes code.
+They did change: every one reached was rewritten before its day. Day 19 (partial failure and
+fallbacks) was the design decision the team had to agree on before anyone wrote code.
 
 ## Stopping points
 
