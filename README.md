@@ -286,11 +286,11 @@ published on [http://localhost:8080](http://localhost:8080/api/docs), is the onl
 sends each path to identity-, job-, matching- or application-service, none of which publishes a
 port. `/api/docs` documents identity-service's endpoints only; jobs, matches and saved jobs are
 in their services' code and the contract tests.
-[`services/identity-service/docs/architecture.md`](services/identity-service/docs/architecture.md)
-draws identity-service. Google sign-in is off until you set `GOOGLE_CLIENT_ID` and
+[`docs/architecture.md`](docs/architecture.md)
+draws the deployed system. Google sign-in is off until you set `GOOGLE_CLIENT_ID` and
 `GOOGLE_CLIENT_SECRET` in `.env`; without `LLM_API_KEY` matches rank by skill overlap; compose
 passes no mail settings, so no reset emails.
-[`services/identity-service/docs/configuration.md`](services/identity-service/docs/configuration.md)
+[`docs/system/configuration.md`](docs/system/configuration.md)
 says what each key does.
 
 Job listings come from the data pipeline, which publishes its marts into `jobs_db`, job-service's
@@ -355,11 +355,11 @@ path).
 | What | Where |
 | --- | --- |
 | The monolith's original README | [`docs/original-readme.md`](docs/original-readme.md) |
-| identity-service: architecture and configuration | [`architecture.md`](services/identity-service/docs/architecture.md) · [`configuration.md`](services/identity-service/docs/configuration.md) |
-| Every endpoint: request, response, status codes, error shapes | [`services/identity-service/docs/api.md`](services/identity-service/docs/api.md) |
-| Sign-in, tokens, Google OAuth and the password flows | [`services/identity-service/docs/auth.md`](services/identity-service/docs/auth.md) |
-| How jobs are ranked and scored against a profile | [`services/identity-service/docs/matching-profile.md`](services/identity-service/docs/matching-profile.md) |
-| The database schemas, their tables, and who owns which | [`services/identity-service/docs/schema.md`](services/identity-service/docs/schema.md) |
+| The deployed system's drawing · every setting and the local stack | [`docs/architecture.md`](docs/architecture.md) · [`docs/system/configuration.md`](docs/system/configuration.md) |
+| Every endpoint: request, response, status codes, error shapes | [`docs/system/api.md`](docs/system/api.md) |
+| Sign-in, tokens, Google OAuth and the password flows | [`docs/system/auth.md`](docs/system/auth.md) |
+| How jobs are ranked and scored against a profile | [`docs/system/matching-profile.md`](docs/system/matching-profile.md) |
+| The database schemas, their tables, and who owns which | [`docs/system/schema.md`](docs/system/schema.md) |
 | Frontend guide · Data pipeline guide | [`frontend/README.md`](frontend/README.md) · [`data/README.md`](data/README.md) |
 
 ## Credits

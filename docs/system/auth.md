@@ -5,9 +5,9 @@ Two ways into an account — a password, or Google — and one pair of token coo
 lookup, and the unique index, which is why it cannot be edited and why the Google flow works the
 way it does.
 
-Everything here lives in identity's [`auth/`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth) and
-[`token/`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token), and
-[`config/SecurityConfig`](../app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java).
+Everything here lives in identity's [`auth/`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth) and
+[`token/`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/token), and
+[`config/SecurityConfig`](../../services/identity-service/app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java).
 The endpoint-by-endpoint contract — bodies, statuses, validation — is in [`api.md`](api.md); this
 document is about how the pieces fit and what happens when they do not.
 
@@ -75,7 +75,7 @@ Three things are worth reading off that picture:
 `POST /api/auth/register` with name, email, password and `acceptedTerms: true`.
 
 The email is lowercased before anything else happens
-([`AuthenticationService.register`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/AuthenticationService.java)),
+([`AuthenticationService.register`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/AuthenticationService.java)),
 so `User@Example.com` and `user@example.com` are one account. `V9` normalised the existing rows and
 put the unique index on `lower(email)`, so the database enforces the same thing the code assumes.
 
@@ -109,7 +109,7 @@ That is the point: a wrong email, a wrong password, and an address that only exi
 account all answer the same `401 Invalid email or password`. The response cannot be used to discover
 which addresses are registered, or how they sign in.
 
-On success, [`AuthCookies.issue`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AuthCookies.java) mints an
+On success, [`AuthCookies.issue`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AuthCookies.java) mints an
 access token and issues a refresh token, and sets both as cookies ([section 5](#5-the-tokens)).
 Nothing is stored in a session. Then `completePendingGoogleLink` runs — see the next section.
 
@@ -121,7 +121,7 @@ them to the terms screen instead of the app.
 # 4. Google sign-in
 
 Enabled only when `GOOGLE_CLIENT_ID` is set.
-[`GoogleOAuth2Config`](../app/src/main/java/nl/hackyourfuture/project/backend/config/GoogleOAuth2Config.java)
+[`GoogleOAuth2Config`](../../services/identity-service/app/src/main/java/nl/hackyourfuture/project/backend/config/GoogleOAuth2Config.java)
 is `@ConditionalOnExpression` on it, and `SecurityConfig` only calls `oauth2Login(...)` when a
 `ClientRegistrationRepository` bean exists. Without credentials the routes simply do not exist and
 the app logs `Google sign-in disabled` at startup — rather than failing to boot, which is what
@@ -136,7 +136,7 @@ Both URIs sit under `/api` so the Next.js proxy forwards them and the cookie sta
 
 **Between the two, the browser holds the request.** Spring's `oauth2Login` needs the start's
 `state`, nonce, redirect URI and PKCE verifier back at the callback. It keeps them in no session:
-[`AuthorizationRequestCookie`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/AuthorizationRequestCookie.java)
+[`AuthorizationRequestCookie`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/AuthorizationRequestCookie.java)
 puts them in `google_auth_request` (`HttpOnly; SameSite=Lax; Path=/api/login/oauth2/code;
 Max-Age=300`), a JWS signed with the key access tokens are signed with, and the callback deletes it.
 `Lax`, not `Strict`: Google's redirect back is a cross-site navigation. A missing, altered or
@@ -150,7 +150,7 @@ account by email match.
 
 ## What the success handler does
 
-[`OAuth2LoginSuccessHandler`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/OAuth2LoginSuccessHandler.java)
+[`OAuth2LoginSuccessHandler`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/OAuth2LoginSuccessHandler.java)
 resolves the identity in this order:
 
 1. **Already linked** (`oauth_provider = GOOGLE` and `oauth_provider_id = sub`) → that account.
@@ -168,7 +168,7 @@ any account with a matching email, then registering `someone-elses@gmail.com` fi
 their Google identity — and with it, a permanent way in.
 
 So the identity waits instead.
-[`PendingGoogleLinks`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/PendingGoogleLinks.java)
+[`PendingGoogleLinks`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/auth/PendingGoogleLinks.java)
 saves the provider id in `identity.pending_google_links` for the account the email belongs to, for
 ten minutes, and hands the browser a random code in `pending_google_link` (`HttpOnly; SameSite=Lax;
 Path=/api/auth; Max-Age=600`); the table keeps only the code's SHA-256. No one is signed in, and the
@@ -221,7 +221,7 @@ message.
 # 5. The tokens
 
 Two cookies since Day 13, set at login, at a password change and by Google sign-in
-([`AuthCookies`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AuthCookies.java)):
+([`AuthCookies`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AuthCookies.java)):
 
 | Cookie | Holds | Attributes | Lives |
 | --- | --- | --- | --- |
@@ -235,7 +235,7 @@ because `plan.md` asks for it there.
 **Every request brings its access token.** The session policy is `STATELESS`. The resource server
 reads `access_token` and verifies it in process against the key identity signs with (Day 12's
 `JWT_PRIVATE_KEY_FILE`), checking `iss` and `aud` as well as the times
-([`AccessTokenAuthentication`](../identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AccessTokenAuthentication.java)). The
+([`AccessTokenAuthentication`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/token/AccessTokenAuthentication.java)). The
 principal it builds is the token's `email` claim, the same plain string the session used to hold,
 so every controller reads the user as before. A backend restart signs no one out.
 
@@ -247,7 +247,7 @@ login, from the job list and from the refresh itself.
 **Refresh.** `POST /api/auth/refresh` needs no access token. It spends the refresh cookie — revoked
 in the same statement that finds it, so two requests cannot both use one — and sets both cookies
 anew. A spent, expired or unknown refresh token gets `401` and both cookies deleted. The frontend
-([`frontend/src/lib/api.ts`](../../../frontend/src/lib/api.ts)) calls it once when an API call outside
+([`frontend/src/lib/api.ts`](../../frontend/src/lib/api.ts)) calls it once when an API call outside
 `/api/auth/` answers `401`, sharing one refresh between calls made at the same time, and retries the
 call once; if the refresh fails, the user is signed out.
 
@@ -278,7 +278,7 @@ above the broader `permitAll()` lines they carve out of.
 CSRF, HTTP Basic and form login are disabled: this is a JSON API behind a same-origin proxy.
 
 **The gateway applies the same table first** (Day 15,
-[`Security.java`](../../../services/api-gateway/src/main/java/nl/hackyourfuture/project/gateway/Security.java)).
+[`Security.java`](../../services/api-gateway/src/main/java/nl/hackyourfuture/project/gateway/Security.java)).
 It verifies the `access_token` against the key set at `/.well-known/jwks.json`, with the same issuer
 and audience, and answers a private route without a valid token with 401 before the backend sees
 it. A stale cookie reads as none there too, so login, refresh and the public routes still work. The
@@ -295,14 +295,14 @@ it never reaches `GlobalExceptionHandler`.
 ## Service tokens and `/internal/**`
 
 Day 39. `/internal/**` is for services calling each other, and has a filter chain of its own in
-[`SecurityConfig`](../app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java),
+[`SecurityConfig`](../../services/identity-service/app/src/main/java/nl/hackyourfuture/project/backend/config/SecurityConfig.java),
 ordered before the application chain. It takes a service token in `Authorization: Bearer` and
 nothing else: the `access_token` cookie is never read there, and a user token in the header fails
 on its key, `iss` and `aud`. Either gets `401`.
 
 A service token is RS256, `aud` = `jobmatch-internal`, and lives at most 5 minutes. Its `iss` picks
 the key set it is verified with from the trusted issuers
-([`InternalCallers`](../app/src/main/java/nl/hackyourfuture/project/backend/config/InternalCallers.java)):
+([`InternalCallers`](../../services/identity-service/app/src/main/java/nl/hackyourfuture/project/backend/config/InternalCallers.java)):
 whatever `app.internal.trusted-issuers` lists as `{name, key-set-url}` entries, empty by default.
 Set via environment as `APP_INTERNAL_TRUSTEDISSUERS_0_NAME` and
 `APP_INTERNAL_TRUSTEDISSUERS_0_KEYSETURL`; compose lists `jobmatch-matching-service` (Day 21) and
@@ -318,7 +318,7 @@ The gateway does not route `/internal/**`, and the public OpenAPI does not list 
 
 **The deleted-user rule.** An access token outlives its user by up to 15 minutes (section 8).
 application-service refuses that user through its own
-[`CurrentUserIdResolver`](../../application-service/src/main/java/nl/hackyourfuture/project/applicationservice/CurrentUserIdResolver.java),
+[`CurrentUserIdResolver`](../../services/application-service/src/main/java/nl/hackyourfuture/project/applicationservice/CurrentUserIdResolver.java),
 which looks the user up by the token's email on every request (404 on saved jobs), and `matching`,
 since Day 41, through the existence call `GET /internal/users/{id}` (422 on matches). A service
 that trusts `sub` has no `users` table to look in, so before it acts for a user it asks identity,
@@ -420,8 +420,8 @@ asks identity instead: the deleted-user rule, in section 5.
 # 9. Configuration
 
 All of it reads an environment variable with a local-development fallback; see
-[`application.yaml`](../app/src/main/resources/application.yaml) and
-[`.env.example`](../.env.example).
+[`application.yaml`](../../services/identity-service/app/src/main/resources/application.yaml) and
+[`.env.example`](../../services/identity-service/.env.example).
 
 | Variable | Default | What it does |
 | --- | --- | --- |
@@ -446,7 +446,7 @@ All of it reads an environment variable with a local-development fallback; see
    `http://localhost:3000/api/login/oauth2/code/google` locally,
    `https://c55c.hyf.dev/api/login/oauth2/code/google` in production. Add both if one client serves
    both.
-3. Put the id and secret in `backend/.env`; `docker-compose.yml` passes both through to the
+3. Put the id and secret in `services/identity-service/.env`; `docker-compose.yml` passes both through to the
    container.
 4. Restart and check the startup log for `Google sign-in enabled at ...`, which prints the redirect
    URI the app will actually use.
@@ -499,7 +499,7 @@ changing it.
 | `/login?error=oauth` | The failure handler. Most often the Google account's email is not verified; check the log |
 | Every browser call answers 401 even though login succeeded | The `fetch` is missing `credentials: "include"`, or a proxy strips `Set-Cookie` |
 | Signed out about 15 minutes after signing in | The refresh failed: `refresh_token` is not reaching `/api/auth/refresh` (its path is `/api/auth`), or it was revoked by a password change or reset elsewhere |
-| The backend will not start, naming `JWT_PRIVATE_KEY_FILE` or `JWT_PRIVATE_KEY` | No signing key for user tokens. Compose writes one on first start; elsewhere run `scripts/jwt-key.sh backend/.jwt/private.pem` and point the variable at it |
+| The backend will not start, naming `JWT_PRIVATE_KEY_FILE` or `JWT_PRIVATE_KEY` | No signing key for user tokens. Compose writes one on first start; elsewhere run `scripts/jwt-key.sh services/identity-service/.jwt/private.pem` and point the variable at it |
 | Login answers 401 for an account the user is sure exists | It may be a Google-only account: no credentials row, so the password path cannot find it |
 | Reset email never arrives | `MAIL_USERNAME` / `MAIL_PASSWORD` unset — the startup log warns, and `forgot-password` still answers 200 by design |
 | `Invalid or expired password reset token` on a fresh link | Older than 15 minutes, already used, or a newer link was requested — requesting one deletes the previous token |

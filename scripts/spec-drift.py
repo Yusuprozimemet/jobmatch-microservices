@@ -77,7 +77,8 @@ GREP_OR_ECHO = re.compile(r"^(grep\s.+?)\s*\|\|\s*echo\b", re.M)
 MOVED = [(174, "backend/jobs", "services/job-service"),  # Day 17 D1
          (224, "backend/matching", "services/matching-service"),  # Day 21 E1a
          (296, "backend/applications", "services/application-service"),  # Day 25 E1a
-         (315, "backend", "services/identity-service")]  # Day 28 A1
+         (315, "backend", "services/identity-service"),  # Day 28 A1
+         (416, "services/identity-service/docs", "docs/system")]  # Day 43 D1
 # The most lines of one check's finds on main that the page lists.
 FOUND_SHOWN = 10
 # "Day 17", "Days 18-19", "Days 19, 21 and 24": the days a sentence names.

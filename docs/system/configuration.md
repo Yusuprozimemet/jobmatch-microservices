@@ -1,7 +1,9 @@
 # Configuration
 
-Every setting the three services read, where it comes from, and what breaks without it. One page, so
-that "why does it work on my machine" has somewhere to be answered.
+Every setting identity-service, the frontend and the data pipeline read, the local stack that runs
+them beside the other services, where each value comes from, and what breaks without it. The
+gateway's and the other services' own settings are in their `application.yaml`. One page, so that
+"why does it work on my machine" has somewhere to be answered.
 
 The rule everywhere: **each value reads an environment variable and falls back to a
 local-development default**, so a fresh clone runs with nothing configured, and every environment
@@ -27,10 +29,10 @@ past that one is a list of overrides rather than an edited file.
 
 | File | Read by | Committed? |
 | --- | --- | --- |
-| [`.env`](../../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
-| [`backend/.env`](../.env.example) | Loaded by hand for `../mvnw spring-boot:run`. **Not** read by compose: the backend service has no `env_file` | No |
-| [`frontend/.env.local`](../../../frontend/.env.example) | Next, in local development | No |
-| [`data/.env`](../../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
+| [`.env`](../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
+| [`services/identity-service/.env`](../../services/identity-service/.env.example) | Loaded by hand for `../../mvnw spring-boot:run`. **Not** read by compose: the `identity-service` service has no `env_file` | No |
+| [`frontend/.env.local`](../../frontend/.env.example) | Next, in local development | No |
+| [`data/.env`](../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
 
 **Spring Boot does not read `.env` by itself.** Running the backend outside Docker means loading it
 yourself — `set -a; source .env; set +a`, an IDE plugin, or `--env-file` — or setting the variables
@@ -77,17 +79,17 @@ scripts/dev-up.sh          # docker compose up -d db backend api-gateway fronten
 | --- | --- | --- |
 | `db` | 5432 | `postgres:18.4-alpine`, volume `db-data`, `pg_isready` healthcheck |
 | `jwt-key` | — | Runs and exits. Writes the token signing key into the `jwt-keys` volume on the first start, then keeps it until `down -v` |
-| `backend` | — | Built from `./backend`. Listens on 8080 inside the network only (Day 16). Waits for the database to be healthy and for `jwt-key` to finish |
+| `identity-service` | — | Built from `./services/identity-service`. Listens on 8080 inside the network only (Day 16). Waits for the database to be healthy and for `jwt-key` to finish |
 | `job-service` | — | Built from `./services/job-service` (Day 17). Job search and the postings routes. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Needs its image built first when the harness runs it: `docker build -t jobmatch-job-service:harness services/job-service` |
 | `matching-service` | — | Built from `./services/matching-service` (Day 21). Top matches, and the only service with the model's key. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Its harness image: `docker build -t jobmatch-matching-service:harness services/matching-service` |
 | `application-service` | — | Built from `./services/application-service` (Day 25). Saved jobs and the tracker, on `apps_db`. Listens on 8080 inside the network only; healthcheck on `/actuator/health/readiness` (management port 9090). Its harness image: `docker build -t jobmatch-application-service:harness services/application-service` |
-| `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. Healthcheck on `/actuator/health/readiness` (management port 9090, inside the network). `depends_on: backend` |
+| `api-gateway` | 8080 | Built from `./services/api-gateway`. Listens on 8081, published on 8080. Healthcheck on `/actuator/health/readiness` (management port 9090, inside the network). `depends_on: identity-service` |
 | `frontend` | 3000 | Built from `./frontend`. Waits for the gateway to be healthy (`condition: service_healthy`), so `up --wait` returns once the gateway is ready |
 | `pipeline` | — | Under the `data` profile, so `up` never starts it. It runs and exits: `docker compose run --rm pipeline` |
 
 The browser only ever talks to port 3000. Next rewrites `/api/*` to `BACKEND_API_URL`
-([`proxy.ts`](../../../frontend/src/proxy.ts)), the gateway, which is what keeps the auth cookies on one
-origin; the gateway refuses every cross-origin preflight. [`architecture.md`](architecture.md) draws
+([`proxy.ts`](../../frontend/src/proxy.ts)), the gateway, which is what keeps the auth cookies on one
+origin; the gateway refuses every cross-origin preflight. [`architecture.md`](../architecture.md) draws
 the path before and after the gateway.
 
 The gateway's settings, all with defaults that suit compose:
@@ -117,7 +119,7 @@ job-service's settings (Day 17), as compose sets them:
 | `TRACING_EXPORT_ENABLED`, `OTEL_TRACES_ENDPOINT`, `TRACING_PROBABILITY` | `false`, local Tempo, `1.0` | As the backend's |
 
 matching-service's settings (Day 21), in its
-[`application.yaml`](../../../services/matching-service/src/main/resources/application.yaml):
+[`application.yaml`](../../services/matching-service/src/main/resources/application.yaml):
 
 | Variable | Default | |
 | --- | --- | --- |
@@ -147,7 +149,7 @@ At most ten scoring calls run at once (a bulkhead, Day 21); an eleventh request 
 skill overlap at once rather than waiting.
 
 application-service's settings (Day 25), in its
-[`application.yaml`](../../../services/application-service/src/main/resources/application.yaml):
+[`application.yaml`](../../services/application-service/src/main/resources/application.yaml):
 
 | Variable | Default | |
 | --- | --- | --- |
@@ -174,7 +176,7 @@ straight to the published 8080 before the gateway is ready.
 
 # 3. Backend
 
-All of it in [`application.yaml`](../app/src/main/resources/application.yaml).
+All of it in [`application.yaml`](../../services/identity-service/app/src/main/resources/application.yaml).
 
 ## Database
 
@@ -190,7 +192,7 @@ All of it in [`application.yaml`](../app/src/main/resources/application.yaml).
 | `MIGRATE_ONLY` | `false` | Apply the owner's then identity's migrations, start no web server, exit 0 (non-zero when a migration fails). For a one-off migrate task before the service starts (Day 33). Needs only the two logins |
 | `MIGRATE_ON_START` | `true` | `false` starts without migrating, for when a MIGRATE_ONLY run has done it |
 
-There is no schema setting since Day 11: the owner's Flyway migrates `app` (V1–V14), and each
+There is no schema setting since Day 11: the owner's Flyway migrates `app` (V1–V16), and each
 module's Flyway migrates its own schema as its own login.
 
 ## Application
@@ -199,7 +201,7 @@ module's Flyway migrates its own schema as its own login.
 | --- | --- | --- |
 | `APP_BASE_URL` | `http://localhost:3000` | The public address. Every OAuth redirect and the password-reset link are built from it. **No trailing slash** |
 | `SESSION_COOKIE_SECURE` | `false` | Despite the name, no session cookie since Day 14: `Secure` on the two token cookies and the Google flow's two, `google_auth_request` and `pending_google_link`. Must be `true` on HTTPS |
-| `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with: a PEM, PKCS#8 file of at least 2048 bits. **Required**, in every profile; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh backend/.jwt/private.pem` |
+| `JWT_PRIVATE_KEY_FILE` | none | The RSA key tokens are signed with: a PEM, PKCS#8 file of at least 2048 bits. **Required**, in every profile; the backend never makes one. Compose sets it to the key its `jwt-key` service writes; outside compose, `scripts/jwt-key.sh services/identity-service/.jwt/private.pem` |
 | `JWT_PRIVATE_KEY` | none | The same key's PEM itself, in place of `JWT_PRIVATE_KEY_FILE`: ECS hands a secret to a task as a variable, not a file. Set exactly one of the two; with both or neither the backend does not start |
 | `SPRING_PROFILES_ACTIVE` | none | `dev` or `prod`. The Docker image sets `SPRING_PROFILES_DEFAULT=prod` |
 
@@ -238,7 +240,7 @@ deliberate: in production, defaulting to a local database is a worse outcome tha
 No profile is active unless you ask for one:
 
 ```bash
-../mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+../../mvnw spring-boot:run -Dspring-boot.run.profiles=dev   # from services/identity-service
 ```
 
 ---
@@ -251,7 +253,7 @@ One variable.
 | --- | --- | --- |
 | `BACKEND_API_URL` | `http://localhost:8080` — `http://api-gateway:8081` in the image | Where the proxy and the server components send `/api` traffic: the gateway |
 
-It is read at **runtime**, not baked in at build: [`config.ts`](../../../frontend/src/lib/config.ts) is
+It is read at **runtime**, not baked in at build: [`config.ts`](../../frontend/src/lib/config.ts) is
 a plain `process.env` read, and the Dockerfile sets a default that compose overrides. So the same
 image works in any environment.
 
@@ -268,7 +270,7 @@ container name and listen on the wrong interface. Node 24 is required (`engines`
 # 5. Data pipeline
 
 The pipeline has its own, much longer configuration, documented where it belongs:
-[`data/.env.example`](../../../data/.env.example) and [`data/README.md`](../../../data/README.md). The
+[`data/.env.example`](../../data/.env.example) and [`data/README.md`](../../data/README.md). The
 groups, so you know what you are looking at:
 
 | Group | Examples | |
@@ -289,12 +291,12 @@ The one that matters to the backend team is **`BACKEND_PG_PUBLISH_SCHEMA`** — 
 
 # 6. The database: schemas and roles
 
-[`scripts/db-setup.py`](../../../scripts/db-setup.py) creates the production-like arrangement: three
+[`scripts/db-setup.py`](../../scripts/db-setup.py) creates the production-like arrangement: three
 databases, seven schemas, and one login role per owner.
 
 | Database | Schema | Owner role | Written by | Read by |
 | --- | --- | --- | --- | --- |
-| `identity_db` | `app` | `app_user` | the backend's migrations, V1–V14; since V12–V14 it holds only Flyway's history | nobody else |
+| `identity_db` | `app` | `app_user` | the backend's migrations, V1–V16; since V12–V14 it holds only Flyway's history | nobody else |
 | `identity_db` | `identity`, `applications`, `matching` | `identity_user`, `applications_user`, `matching_user` | that backend module, as its own login (Day 11). `applications` is empty since V16, and only `identity_user` may connect here (Day 42) | its owner only (Day 38) |
 | `apps_db` | `applications` | `applications_user` | application-service (Day 25) | nobody else: no other role may connect |
 | `jobs_db` | `analytics` | `analytics_user` | the scheduled pipeline | `jobs_user` (job-service) and `analytics_dev_user`, read-only |
@@ -307,15 +309,14 @@ had those grants; each module's own migration revokes them. Only `identity_user`
 `identity_db` (Day 42); `app_user`, which runs the migrations, connects as its member, and
 `db-setup.py` revokes what earlier runs granted the others. Only `jobs_user` and the two analytics
 roles may connect to `jobs_db` (Day 20); a `project_db` set up before then keeps its analytics
-schemas until [the runbook](../../../docs/runbooks/jobs-db.md) drops them. **The separation is
+schemas until [the runbook](../../docs/runbooks/jobs-db.md) drops them. **The separation is
 enforced by grants, not by agreement** — that is the whole point, and it is what makes "the backend
 cannot corrupt the marts" a fact rather than a promise.
 
 The third schema exists so a trainee building a mart never needs the credential that owns
 production. The script is idempotent, so a failed run can be repeated.
 
-The plain single-container setup in [`backend/README.md`](../README.md) skips all of this: one
-`admin` superuser, one schema. Fine for development, wrong for anything shared.
+A plain single-container setup skips all of this: one `admin` superuser. Fine for development, wrong for anything shared.
 
 ---
 
@@ -383,7 +384,7 @@ container, use `host.docker.internal`. Under compose, use the service name — `
 does not match what Google has registered, and the failure appears at Google rather than in your
 logs.
 
-**Compose never reads `backend/.env`.** Setting a variable there and wondering why the compose
+**Compose never reads `services/identity-service/.env`.** Setting a variable there and wondering why the compose
 backend ignores it is the usual version of this: only the `environment:` block reaches it.
 
 **`data/.env` is optional to compose** (`required: false`) on purpose: without
@@ -391,7 +392,7 @@ it, older Compose versions read every service's `env_file` while loading the pro
 inactive profile — and `docker compose up -d db` failed on a clean clone before anyone had written
 `data/.env`.
 
-**Two kinds of migration, two logins.** `DB_USER` migrates `app` (V1–V14, in
+**Two kinds of migration, two logins.** `DB_USER` migrates `app` (V1–V16, in
 `app/src/main/resources/db/migration`); each module's Flyway migrates its own schema as that module's
 login (`<module>/src/main/resources/db/<module>`, baselined at 0). A login that does not own the
 schema its Flyway points at fails startup with `permission denied for schema`.

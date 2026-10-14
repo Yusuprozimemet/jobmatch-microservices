@@ -513,6 +513,11 @@ class RemovalTest(unittest.TestCase):
         self.assertEqual(sd.follow("backend", moves[:1]), ["services/job-service", "backend"])
         self.assertEqual(sd.follow("docker-compose.yml", moves), ["docker-compose.yml"])
 
+    def test_the_day_43_move_of_identity_docs_follows_them_to_docs_system(self):
+        moves = [(old, new) for _, old, new in sd.MOVED]
+        self.assertEqual(sd.follow("backend/docs", moves), ["docs/system"])
+        self.assertEqual(sd.follow("backend/docs/api.md", moves), ["docs/system/api.md"])
+
     def test_a_check_reads_moved_code_counts_its_files_and_lists_its_lines_on_the_last_merge(self):
         repo = Repo().merge({"backend/jobs/src/A.java": "class A {}\n", "backend/app/src/B.java": "class B {}\n"})
         repo.merge({"backend/jobs/src/A.java": None, "services/job-service/src/A.java": "// TODO day-01 here\n"})
