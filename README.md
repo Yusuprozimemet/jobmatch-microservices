@@ -19,14 +19,16 @@ before Day 32. The [phase table](#the-migration-plan) gives the order they ran i
 > **This repository is an engineering experiment.** Its migration metrics are experimental
 > diagnostic signals, not optimization targets or standard measures of quality.
 
-> **Where it stands (Day 33):** Phase 7, ECS on Fargate with Terraform, is under way. The
-> monolith is gone; five services run in Docker Compose behind the gateway, and none is deployed
-> to AWS yet. See the [known limits](#known-limits).
+> **Where it ended:** the monolith is gone; five services run in Docker Compose behind the
+> gateway. Phase 7 deployed them once to ECS on Fargate (Day 35, 2026-10-11), checked them live,
+> and destroyed them. Phase 6 was cut, and the close-out day (Day 43) was the last. See the
+> [known limits](#known-limits).
 >
-> **Status:** in progress. The [migration dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/) shows the current day
-> and the next step; it is rebuilt from the repository after every merge. The full record, day by
+> **Status:** finished. The [migration dashboard](https://yusuprozimemet.github.io/jobmatch-microservices/) shows every day and
+> its measurements; it is rebuilt from the repository after every merge. The full record, day by
 > day, is the [lab notebook](docs/lab-notebook.md); the short version is in
-> [Findings so far](#findings-so-far).
+> [Findings](#findings). What the final audits found, and what became of each finding, is in
+> [`docs/audit-findings.md`](docs/audit-findings.md).
 
 ---
 
@@ -36,8 +38,8 @@ before Day 32. The [phase table](#the-migration-plan) gives the order they ran i
 - [The system being migrated](#the-system-being-migrated)
 - [Method](#method)
 - [The migration plan](#the-migration-plan)
-- [What runs today, and where it is going](#what-runs-today-and-where-it-is-going)
-- [Findings so far](#findings-so-far)
+- [What runs today](#what-runs-today)
+- [Findings](#findings)
 - [Running it](#running-it)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
@@ -174,8 +176,9 @@ anything that requires a network.
 | **4 — Extract matching-service** | 21–24 | Isolates the 20-second LLM timeout from job search; match scores move to NoSQL with a native TTL. | done (tag `phase-4`) |
 | **5 — Extract application-service** | 25–28 | Message bus with a transactional outbox and the `user.deleted` cascade first, then saved jobs to its own store; identity-service is what remains of the monolith. Ended at Day 28, where the work stopped to be evaluated. | done (tag `phase-5`) |
 | **Cleanup day** | 42 | What Phases 3–5 left behind and no day owns: identity's unused service issuer and seam code, the role-setup copies, logging, application-service's metrics. Added by the course correction after Phase 5. | done |
-| **7 — ECS on Fargate** | 32–36 | Terraform for the data stores, the services behind an ALB with task roles and secrets, observability, then one deployment and `terraform destroy`. Rewritten from the Kubernetes drafts after Day 28; Day 37 dropped, and Day 36 (the services on ECS) split from Day 33 to run before Day 34. | in progress: Days 32, 33, 36 and 34 done, Day 35 next |
-| **6 — Functions + uploads** | 29–31 | CV parsing and mail off the request path; direct uploads. Deferred until after Phase 7, and cut if it still adds only features. | deferred |
+| **7 — ECS on Fargate** | 32–36 | Terraform for the data stores, the services behind an ALB with task roles and secrets, observability, then one deployment and `terraform destroy`. Rewritten from the Kubernetes drafts after Day 28; Day 37 dropped, and Day 36 (the services on ECS) split from Day 33 to run before Day 34. Day 35 deployed it once and destroyed it. | done (tag `phase-7`) |
+| **6 — Functions + uploads** | 29–31 | CV parsing and mail off the request path; direct uploads. Deferred until after Phase 7, then cut: it added only features, and nothing deploys again. | cut |
+| **Close-out day** | 43 | The end-of-Phase-7 audits' findings, each fixed, accepted as a known limit, left to the maintainer, or rejected ([`docs/audit-findings.md`](docs/audit-findings.md)); identity-service takes the other services' shape. The last day. | done |
 
 Two phases stand on their own as stopping points. **Day 16** leaves a working monolith with a
 real test suite and stateless auth behind a gateway — valuable even if nothing further is built.
@@ -183,12 +186,13 @@ real test suite and stateless auth behind a gateway — valuable even if nothing
 Phase 2 the plan was corrected (#115): Phases 3–5 built each seam before extracting, after a
 platform step, and stopped at Day 28 to be evaluated. That review corrected it again (#321): a
 cleanup day, then Phase 7 for ECS, with Phase 6 deferred (`plan.md`, "Course correction after
-Phase 5").
+Phase 5"). After Phase 7, Phase 6 was cut and one close-out day ended the migration (`plan.md`,
+"Phase 7 outcome").
 
-## What runs today, and where it is going
+## What runs today
 
-At Day 28 the monolith is gone: five services run in Docker Compose, and the gateway is the only
-way in.
+Since Day 28 the monolith is gone: five services run in Docker Compose, and the gateway is the
+only way in.
 
 ```mermaid
 flowchart LR
@@ -214,30 +218,58 @@ flowchart LR
 The three Postgres databases share one container locally; DynamoDB and SNS/SQS run as local
 stand-ins. `docker compose --profile obs` adds Prometheus, Grafana and Tempo.
 
-**Where it is going.** Phase 7 deploys the same services to ECS on Fargate behind an ALB, with
-Terraform for the data stores, task roles and secrets, then one deployment and
-`terraform destroy`. Decisions recorded as deliberately **not** taken, with reasons, in
-[`plan.md`](plan.md): no self-run Postgres and no Kubernetes, no separate profile-service, no
-managed API gateway, and one IaC tool, not Terraform and Pulumi both.
+**What ran on AWS.** Phase 7 described the same services on ECS on Fargate behind one load
+balancer, with Terraform (`infra/terraform`) for the data stores, network, task roles, secrets,
+collectors and alarms. Day 35 deployed it once, on 2026-10-11 in eu-west-1: each service's
+workflow pushed its own image and updated its own ECS service, the migrations ran as tasks that
+exit, and the five API surfaces answered through the load balancer. Then `terraform destroy`
+removed all 151 resources; only the bootstrap's state bucket and budget remain. Nothing deploys
+again: the workflows push to GHCR while the repository variable `DEPLOY_ENABLED` is off.
+[`docs/architecture.md`](docs/architecture.md) draws the deployed system, and
+[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md) is the deployment, step by step.
+
+Decisions recorded as deliberately **not** taken, with reasons, in [`plan.md`](plan.md): no
+self-run Postgres and no Kubernetes, no separate profile-service, no managed API gateway, and one
+IaC tool, not Terraform and Pulumi both.
 
 ### Known limits
 
-What a production reader should know before trusting the system, as of Day 33:
+What a production reader should know before trusting the system. Each limit an end-of-Phase-7
+audit found carries its ID in [`docs/audit-findings.md`](docs/audit-findings.md), with its
+reason. All were accepted, not fixed: the deployment was one run, and it was destroyed.
 
-- **Rate limiting is in memory.** The gateway limits the credential routes per client (Day 15),
-  in its own memory: correct for one gateway replica; more than one needs a shared store.
+- **The rollback was never shown** (P7-12). Day 35's bad-image rollback and matching-service's
+  `desired_count` drift were not exercised live.
+- **No password-reset mail when deployed** (WP-2). The deployed identity-service had no mail
+  settings; Phase 6's mailer was the route, and it is cut. Compose passes none either.
+- **The data stores cannot be recovered** (SO-6). RDS and DynamoDB had no backups, no deletion
+  protection and no point-in-time recovery.
+- **Images are not pinned** (SO-8). ECR tags are mutable, deploys use `latest`, and the image
+  scans returned nothing.
+- **The build is not pinned** (SO-9). Actions are pinned by tag, not by commit; build jobs hold
+  `id-token: write`; pip packages and base images are unpinned.
+- **identity-service runs as the owner role** (SO-10). Its database user is `app_user`, which
+  inherits every module's role.
+- **No per-caller check inside** (SO-11, AR-11). `/internal/**` needs a service token but not a
+  particular caller, and the tasks share one security group that admits each other on every
+  port: there is no network boundary between services.
+- **A thin edge** (SO-15). No load balancer access logs, no WAF, no security headers, and no
+  per-user limit on LLM calls.
+- **A self-signed certificate.** With no domain, the load balancer served a certificate
+  Terraform generates; clients need `--insecure` to accept it.
+- **One gateway task, rate limiting in its memory.** The gateway limits the credential routes per
+  client (Day 15) in its own memory: correct for the one task Phase 7 runs; more need a shared
+  store.
+- **A profile edit reaches matching up to 10 s late.** matching-service caches a profile for
+  `PROFILE_CACHE_WINDOW` (10 s by default, Day 24).
+- **The alarm topic's name is out of date.** The load balancer's alarms send to the bus module's
+  topic, still named `user-deleted-dlq-alarms` (Day 32); renaming it replaces its email
+  subscription.
 - **Account deletion is eventual.** identity-service records `user.deleted` in a transactional
   outbox, and SNS/SQS carries it to matching- and application-service. Their copies of the
   user's data go shortly after the request, not inside it.
-- **Nothing runs on AWS yet.** DynamoDB and SNS/SQS are local stand-ins, and Day 32's Terraform
-  has been planned without an account and applied only to LocalStack.
-- **Secrets are local placeholders.** Day 33 makes every key and password load from the
-  environment, so ECS can pass them in from Secrets Manager; until Phase 7 deploys, the only
-  secrets are `.env.example`'s.
-- **Phase 6 is deferred, and may be cut.** The app has no uploads or CV parsing yet for it to
-  move, and mail is already sent off the request thread; compose passes no mail settings.
 
-## Findings so far
+## Findings
 
 Recorded as they happen, including the ones that make the method look worse. The evidence for
 each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
@@ -261,8 +293,9 @@ each, and every day's own entry, is in the [lab notebook](docs/lab-notebook.md).
   three before Day 3, two for the moves of whole modules their specs had planned, one to move this
   README's day-by-day record into the lab notebook, and one on Day 32 for a single new checking
   script, my choice over a split.
-- **Not yet answered:** whether the services are independently deployable. Each builds and tests
-  from its own workflow; none deploys until Phase 7.
+- **The services deployed independently, once.** On Day 35 each of the seven workflows pushed
+  its own image and updated its own ECS service from its own job. Not shown: a push-triggered
+  deploy of one service alone; and identity's workflow still tests every service's image.
 
 Verdicts on each hypothesis are written when the last phase closes, in the lab notebook's
 [Retrospective](docs/lab-notebook.md#retrospective).
@@ -312,8 +345,10 @@ cd services/identity-service && ../../mvnw verify
 Running identity-service outside compose, on a database of your own, is in
 [`docs/system/configuration.md`](docs/system/configuration.md#running-it-by-hand).
 
-A volume from before Day 28 holds `project_db`, which is now `identity_db`: rename it once, as
-[`docs/runbooks/identity-db.md`](docs/runbooks/identity-db.md) says. A volume from before Day 20
+A volume from before Day 28 holds `project_db`, which is now `identity_db`. Rename it once:
+`docker compose stop identity-service`, then `docker compose exec -T db psql -U admin -d postgres
+-c "ALTER DATABASE project_db RENAME TO identity_db"`, set `POSTGRES_DB=identity_db` in `.env`,
+and `docker compose up -d`. A volume from before Day 20
 has no `jobs_db`. Add it once, without deleting anything (never `down -v`): `docker compose up -d
 db`, so the container has the analytics passwords, then `docker compose exec -T db sh -c 'sh
 /docker-entrypoint-initdb.d/20-jobs-db.sh'` (quoted, so Git Bash on Windows does not rewrite the
@@ -335,7 +370,9 @@ path).
 ├── frontend/           Next.js web app (unchanged)
 ├── data/               Data pipeline (unchanged)
 ├── observability/      Prometheus, Grafana and Tempo for `docker compose --profile obs`
-├── docs/               The lab notebook, defects, runbooks, the dashboard, the original README
+├── infra/              Terraform for AWS (ECS on Fargate, RDS, DynamoDB, SNS/SQS) and its checks
+├── docs/               The lab notebook, defects, audit findings, runbooks, the dashboard
+│   └── system/               How the system works: API, auth, schemas, configuration
 ├── scripts/            Local development scripts and the migration measurement
 ├── .claude/agents/     The auditors' and the implementer's briefs
 ├── mvnw, checkstyle.xml  The Maven wrapper and style rules every service builds with

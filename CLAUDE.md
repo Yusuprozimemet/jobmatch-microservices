@@ -7,6 +7,10 @@ land. The spec rules are in [`specs/README.md`](specs/README.md) and the templat
 [`specs/_template.md`](specs/_template.md). This file is the working order and the lessons the
 rules do not state. [`docs/workflow.md`](docs/workflow.md) draws it.
 
+**Source of truth, when they disagree:** the code on `main` for what the system does; the merged
+spec for what a day promised; `plan.md` for the goal. The dashboard, Jira and memory only record
+the others: correct them, never the other way round.
+
 ## Starting
 
 A person or an agent new to this repository: read `plan.md`, then `specs/README.md`; run
