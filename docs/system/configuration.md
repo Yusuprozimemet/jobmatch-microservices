@@ -265,6 +265,12 @@ with its own endpoints only. The API reference is at `/api/docs` and the OpenAPI
 `/api/docs/openapi.yaml`, built at runtime from the controllers' annotations, so there is no
 `openapi.yaml` in the repository to edit.
 
+Each merge to `main` also publishes the image, `ghcr.io/yusuprozimemet/jobmatch-microservices/identity-service:latest`.
+It sets `SPRING_PROFILES_DEFAULT=prod`, so it needs the `prod` variables of
+[section 3](#3-backend), its key file mounted read-only, and `host.docker.internal`, not
+`localhost`, for a database on your own machine. Pass credentials with `--env-file`, never on
+the command line.
+
 The tests never use this database: `../../mvnw verify` starts its own Postgres and the other
 services' containers, so Docker has to be running and the harness images of job-, matching- and
 application-service built first (the root README's "Running it"; the harness never pulls them).
