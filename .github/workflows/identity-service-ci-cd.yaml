@@ -20,8 +20,10 @@ on:
       # IdentityDbConnectTest reads both to compare the three role-setup copies (Day 42).
       - "scripts/db-init/**"
       - "scripts/db-setup.py"
-      # The docs' link check below (Day 42).
+      # The docs' link check below reads the root README and docs/system/ (Day 42; moved Day 43).
       - "scripts/check-links.py"
+      - "README.md"
+      - "docs/system/**"
       - ".github/workflows/identity-service-ci-cd.yaml"
   # Every pull request, so the gate below always reports: a required check that never starts
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
@@ -59,7 +61,7 @@ jobs:
           # identity's suite runs on the other services' changes, but its image changes only with its own
           # directory, so it is pushed only on these paths (Day 35).
           OWN: '^(services/identity-service/|\.github/workflows/identity-service-ci-cd\.yaml$)'
-          PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|scripts/db-init/|scripts/db-setup\.py$|scripts/check-links\.py$|\.github/workflows/identity-service-ci-cd\.yaml$)'
+          PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|scripts/db-init/|scripts/db-setup\.py$|scripts/check-links\.py$|README\.md$|docs/system/|\.github/workflows/identity-service-ci-cd\.yaml$)'
         run: |
           if [ "${{ github.event_name }}" = workflow_dispatch ]; then
             echo run=true >> "$GITHUB_OUTPUT"; echo own=true >> "$GITHUB_OUTPUT"; exit 0
@@ -78,9 +80,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Every relative link in identity's README and docs points at a file that exists (Day 42).
+      # Every relative link in the root README and in docs/system/ points at a file that exists (Day 42;
+      # moved Day 43).
       - name: Check the docs' links
-        run: python3 scripts/check-links.py services/identity-service/README.md services/identity-service/docs/*.md
+        run: python3 scripts/check-links.py README.md docs/system/*.md
 
       - name: Set up JDK
         uses: actions/setup-java@v5
