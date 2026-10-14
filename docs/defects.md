@@ -1,6 +1,6 @@
 # Defects found during the migration
 
-Every defect the migration has filed, Days 1–42, grouped by kind. Until Day 27 these were kept as one
+Every defect the migration has filed, Days 1–43, grouped by kind. Until Day 27 these were kept as one
 running list in the README's measurement table; this page holds it in full and the README keeps the
 counts. The kinds were assigned by reading each entry's wording, so a borderline entry could sit in a
 neighbouring kind; the totals per side (system versus the agent's own work) are firmer than the
@@ -42,9 +42,9 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 20: 1 container path Git Bash rewrote
 - Day 36: 1 Docker Hub pull limit, then a timeout, that kept a check red through three runs
 
-## In the agent's own work (434)
+## In the agent's own work (455)
 
-### Spec and plan premises wrong about the code, or work they missed (163)
+### Spec and plan premises wrong about the code, or work they missed (172)
 
 - Days 1-13: 8 specs that could not be met
 - Days 1-13: 1 plan that missed a cross-module read
@@ -189,8 +189,14 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 35: 1 no-domain draft that read identity's task definition as known in a plan
 - Day 35: 1 deploy role trusting the mutable OIDC subject; GitHub sends this repository the immutable one (#404)
 - Day 35: 1 premise that `user.deleted` removes matching's scores, which name no user since Day 27
+- Day 43: 4 red-today counts the first draft got wrong (C43.13, C43.14, C43.20, C43.27)
+- Day 43: 1 track order that put F3 before the README that names its files
+- Day 43: 1 criterion that would have un-ignored the signing key
+- Day 43: 1 count of 21 ledger rows with a reason and no PR, where there were 20 (C43.27)
+- Day 43: 1 README that said the contract suite needs job-service's image alone, not all three
+- Day 43: 1 Google setup step that sent the id and secret to identity's own `.env`, which compose does not read
 
-### Spec checks that could not fail, could not pass, or proved the wrong thing (113)
+### Spec checks that could not fail, could not pass, or proved the wrong thing (116)
 
 - Days 1-13: 1 spec check that could not fail
 - Days 1-13: 1 gate that does not pin what its spec says
@@ -289,8 +295,11 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 35: 1 key exemption that missed `tls_self_signed_cert`'s copy of the key
 - Day 35: 1 pair of checks (C36.5, C36.9) whose no-domain halves never ran
 - Day 35: 1 healthy-hosts alarm (2 × 60 s) that a 39 s task replacement cannot trip
+- Day 43: 1 `broken:` placeholder the dashboard read as a break
+- Day 43: 1 live hand-off check the spec would have ticked by naming the ID
+- Day 43: 1 hold (C43.6) red on `main` before any change, three Dependabot PRs being the next step
 
-### Code drafts that review or a break changed, and lost work (87)
+### Code drafts that review or a break changed, and lost work (91)
 
 - Day 38: 1 metric tag unlike the backend's
 - Day 40: 1 default interval that made a wait slow
@@ -373,8 +382,12 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 35: 1 fixture label that named C35.17 for what it does not check
 - Day 35: 1 live check that saved three skills where the API wants 5–20, found on the first live run (#405)
 - Day 35: 1 test with fixed secret values that GitGuardian flagged
+- Day 43: 1 draft that missed the live C32 case and kept an unused constant
+- Day 43: 1 draft with two dead `workflow_dispatch` branches
+- Day 43: 1 draft that left one `app/` path (`db/identity/README.md`)
+- Day 43: 1 draft whose javadoc said the `backend` packages would move
 
-### Tests a spec would break without naming, or behaviour it left untested (32)
+### Tests a spec would break without naming, or behaviour it left untested (36)
 
 - Days 1-13: 2 protected behaviours with no test behind them
 - Days 1-13: 1 missing claim that would have made a test flaky
@@ -395,6 +408,8 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 25: 1 grants test a revoke broke that no spec named
 - Day 42: 1 track that would have copied four tests that already had twins
 - Day 32: 1 harness copy of the bus left uncompared
+- Day 43: 3 infra checks Track B would have broken without naming them
+- Day 43: 1 test file the spec asked for that no workflow ran (`test_token_usage.py`)
 
 ### Spec Verify commands that ran nothing, the wrong thing, or something unsafe (21)
 
@@ -418,7 +433,7 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 32: 1 compose check that `-p` would not have isolated from the maintainer's stack
 - Day 34: 1 draft that cited `--repo-root`, which `infra-checks.py` does not have
 
-### Bugs in the migration's own tooling (dashboard, commit keys) (18)
+### Bugs in the migration's own tooling (dashboard, commit keys) (19)
 
 - Day 39: 1 dashboard that could not read a split track
 - Day 17: 1 dashboard that could not read a three-way split
@@ -437,4 +452,5 @@ From Day 21 each day's Notes also tag every defect with where it was found and i
 - Day 33: 1 dashboard next step that read tracks A1 and B1 as all of A and B, twice
 - Day 36: 1 dashboard next step that skipped a split track, and again read a criterion id as a track
 - Day 34: 1 dashboard next step that again read a criterion id as a track, and named a split track's sibling as next
-- Day 35: 1 dashboard next step that read `C32.5` in #394's body as a Track C32, still unfixed
+- Day 35: 1 dashboard next step that read `C32.5` in #394's body as a Track C32, fixed on Day 43 (#412)
+- Day 43: 1 dashboard that read a split close's first part as the close ("Every day is done.")
