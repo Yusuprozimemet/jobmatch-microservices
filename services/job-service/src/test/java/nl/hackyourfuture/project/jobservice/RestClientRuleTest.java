@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClient;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
- * Day 38's rule, {@code ModuleBoundariesTest.restClientsComeFromSpring}, for this module: that one
+ * Day 38's rule, identity's {@code RestClientRuleTest.restClientsComeFromSpring}, for this module: that one
  * analyses the monolith's classes only, so job-service's own client ({@code SavedJobCountsClient},
  * Day 19) has never been checked by it. The package covers both of this module's roots,
  * {@code jobservice} and the {@code backend} packages it kept from the monolith.

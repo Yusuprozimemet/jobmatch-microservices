@@ -129,7 +129,7 @@ implementer never commits or pushes.
 
 - **Migrations:** in `services/identity-service/` (the monolith's remainder since Day 28),
   `app/src/main/resources/db/migration` holds V1–V16, applied as the owner (`DB_USER`). Each
-  module's own migrations are in `<module>/src/main/resources/db/<module>`, applied by that
+  module's own migrations are in `<module>/src/main/resources/db/<module>` (identity's are in `app/src/main/resources/db/identity`), applied by that
   module's Flyway as its role, baselined at 0, so the first is `V1__*.sql`
   (`app/.../config/Migrations.java`).
 - **Database roles:** each module connects as `<module>_user` with its own schema as the search

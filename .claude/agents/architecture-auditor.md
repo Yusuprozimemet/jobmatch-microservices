@@ -29,7 +29,7 @@ auditors run beside you. Do not read their reports: your findings must be your o
   migrations never change, `scripts/infra-checks.py`, `scripts/live-checks.py`,
   `scripts/teardown-check.sh`.
 - The boundaries as code: the Day 1–4 contract tests
-  (`services/identity-service/app/src/test/.../contract/`), `ModuleBoundariesTest`, the per-module
+  (`services/identity-service/app/src/test/.../contract/`), identity's `RestClientRuleTest`, the per-module
   database roles and schemas, the gateway's routes, the bus and its message contracts, the
   Terraform modules.
 - The measurements: `scripts/spec-drift.py` (gap, name coverage, Jaccard, criteria states) and its

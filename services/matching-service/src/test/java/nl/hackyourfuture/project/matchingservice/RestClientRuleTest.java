@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClient;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
- * Day 38's rule, {@code ModuleBoundariesTest.restClientsComeFromSpring}, for this module: that one
+ * Day 38's rule, identity's {@code RestClientRuleTest.restClientsComeFromSpring}, for this module: that one
  * analyses the monolith's classes only, so matching's clients leave its reach when they move here.
  */
 @AnalyzeClasses(packages = "nl.hackyourfuture.project", importOptions = ImportOption.DoNotIncludeTests.class)

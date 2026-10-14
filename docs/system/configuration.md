@@ -427,7 +427,7 @@ inactive profile — and `docker compose up -d db` failed on a clean clone befor
 
 **Two kinds of migration, two logins.** `DB_USER` migrates `app` (V1–V16, in
 `app/src/main/resources/db/migration`); each module's Flyway migrates its own schema as that module's
-login (`<module>/src/main/resources/db/<module>`, baselined at 0). A login that does not own the
+login (`<module>/src/main/resources/db/<module>`, identity's in `app/src/main/resources/db/identity`, baselined at 0). A login that does not own the
 schema its Flyway points at fails startup with `permission denied for schema`.
 
 **Restarting the backend signs no one out** since Day 13: the login is a token the browser holds,

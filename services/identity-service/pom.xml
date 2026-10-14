@@ -13,17 +13,9 @@
 	<version>1.0.0-SNAPSHOT</version>
 	<packaging>pom</packaging>
 
-	<!-- One module per future service, plus the two that are not services:
-	     `shared`, which every module may depend on, and `app`, which is the only thing
-	     that boots and the only thing that produces an image.
-
-	     The feature modules are empty today. Day 07 moves the code into them, and the
-	     point of creating them first is that the dependency rule can be enforced before
-	     there is anything to enforce it against: no feature module may depend on another,
-	     only on `shared`. -->
+	<!-- identity-service is one module, `app`. The shared/identity split from Day 07 folded
+	     back into it on Day 43, since identity is the only service left in this directory. -->
 	<modules>
-		<module>shared</module>
-		<module>identity</module>
 		<module>app</module>
 	</modules>
 
@@ -51,39 +43,10 @@
 		</dependencies>
 	</dependencyManagement>
 
-	<!-- Inherited by every module. spring-boot-maven-plugin is deliberately not here:
-	     it belongs to `app` alone, or every module tries to produce an executable jar. -->
+	<!-- Inherited by `app`, the only module. spring-boot-maven-plugin is deliberately not
+	     here: it belongs to `app` alone, the one thing that produces an executable jar. -->
 	<build>
 		<plugins>
-			<!-- The dependency rule, as a build failure rather than a convention. A feature
-			     module may depend on shared and on nothing else of ours; the moment one needs
-			     another, that is a boundary being crossed and the build says so. `app` is the
-			     exception and switches this off, because it is what assembles them all. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-enforcer-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>feature-modules-depend-only-on-shared</id>
-						<goals>
-							<goal>enforce</goal>
-						</goals>
-						<configuration>
-							<rules>
-								<bannedDependencies>
-									<excludes>
-										<exclude>nl.hackyourfuture.project:*</exclude>
-									</excludes>
-									<includes>
-										<include>nl.hackyourfuture.project:shared</include>
-									</includes>
-									<message>A feature module may depend on shared and on nothing else of ours. Needing another module is a boundary being crossed - publish an interface instead.</message>
-								</bannedDependencies>
-							</rules>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

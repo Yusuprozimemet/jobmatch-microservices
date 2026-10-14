@@ -51,7 +51,7 @@ class SigningKeyStartupTest {
                     assertThat(started).hasNotFailed();
                     SigningKey key = started.getBean(SigningKey.class);
                     assertThat(key.keyId()).isEqualTo(fromFile[0]);
-                    // What JwksController serves; it is package-private in the identity module.
+                    // What JwksController serves; it is package-private in the identity package.
                     assertThat(new JWKSet(key.publicJwk()).getKeyByKeyId(fromFile[0])).isNotNull();
                 });
     }
