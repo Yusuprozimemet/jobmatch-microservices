@@ -22,7 +22,28 @@ changes their order and scope.
 
 Phases 3–5 are done too (Day 28): five services, no monolith. Phase 7 is done (Day 35): the
 system was deployed once to AWS, served the five public surfaces, and was destroyed. Phase 6 is
-cut. One close-out day remains, then the migration ends (*Phase 7 outcome*, below).
+cut. The close-out day, Day 43, closed on 2026-10-14, and the plan-auditor then read the whole
+plan: the migration has ended (*Epilogue*, below).
+
+---
+
+## Epilogue
+
+Day 43 closed every row of [`docs/audit-findings.md`](docs/audit-findings.md): fixed in a track,
+a known limit with its reason, the maintainer's own action, or rejected by the maintainer.
+identity-service took the other services' shape (one `pom.xml`, one `src/`,
+`identityservice.IdentityServiceApplication`), with the contract suite and V1–V16 moved as pure
+renames, and `scripts/invariants.py` now fails any PR that edits them. The plan-auditor then read
+the whole plan against the code (2026-10-14, on Opus) and found it delivered, with no code
+defects: what this plan asked of Phases 0–5 and 7 is built, Phase 6 is cut, and the one
+deployment was made and destroyed.
+
+- **What is left is outside the repository or the maintainer's:** M-1, M-6 (the four gates
+  Day 43 added, `invariants` among them, as required checks), M-9 and M-12 in the ledger;
+  Day 35's cost read (C35.22), which M-1 and M-9 wait on; the Dependabot alerts on
+  `data/uv.lock`, which this plan never owned (`data/` is unchanged).
+- **Pace:** 268 track PRs against 198 estimated over 39 days (1.35×). Day 43 took 16 against 13, the
+  gate splitting three of them.
 
 ---
 
@@ -143,7 +164,8 @@ Day 28 was the stopping point. The plan-auditor read the whole plan against the 
     V12–V15 raise or grant without them. A fresh RDS in Phase 7 may start from a consolidated
     baseline instead.
   - Services keep their `nl.hackyourfuture.project.backend.*` packages, and identity keeps
-    its three Maven modules: renaming moves every file and changes no behaviour.
+    its three Maven modules: renaming moves every file and changes no behaviour. (The modules
+    went on Day 43, as renames; the packages stay. *Phase 7 outcome*.)
   - Service-token code is copied by hand across services, and no test compares the copies.
   - Only identity-service's workflow runs the contract suite and builds every image.
   - `/api/docs` documents identity's endpoints only.
@@ -219,7 +241,8 @@ is part of what the repository measures, not a silent drift.
 - **ECS on Fargate, not Kubernetes.** Phase 7 shrinks: no Helm, no Argo CD, no External
   Secrets, no cluster add-ons.
 - **Emulators for tests, one real deployment at the end.** Compose and CI run DynamoDB, SQS,
-  SNS, S3 and Lambda against local emulators; no test needs an AWS account. ECS, the load
+  SNS, S3 and Lambda against local emulators (S3 and Lambda were Phase 6's, cut, and never
+  built); no test needs an AWS account. ECS, the load
   balancer, IAM and CloudWatch need a real one: Phase 7 deploys once, under a budget alarm,
   and tears down. The teardown is a criterion, not a courtesy.
 
@@ -227,8 +250,8 @@ is part of what the repository measures, not a silent drift.
 |---|---|---|---|
 | Score store with a TTL | DynamoDB | `amazon/dynamodb-local` | 22–23 |
 | `user.deleted` to two consumers | SNS topic → one SQS queue per consumer | emulator | 26–27 |
-| Uploads bucket, direct browser upload | S3, presigned PUT URLs | emulator | 29 |
-| `cv-parse`, `mailer` | Lambda (S3 event, SQS), SES | emulator | 30–31 |
+| Uploads bucket, direct browser upload | S3, presigned PUT URLs | emulator | 29, cut |
+| `cv-parse`, `mailer` | Lambda (S3 event, SQS), SES | emulator | 30–31, cut |
 | Postgres | RDS for PostgreSQL | the compose Postgres | 32 |
 | Services | ECS on Fargate behind an ALB, images in ECR | compose | 36 |
 | Secrets | Secrets Manager, ECS task roles | environment variables | 33, 36 |
@@ -239,7 +262,7 @@ is part of what the repository measures, not a silent drift.
 Observability needs no code change: Day 5 made the services export OTLP, and only the
 collector's destination differs. Phase 7 is Days 32–36 (course correction after Phase 5;
 Day 36 is split from Day 33 and runs before Day 34);
-Phase 6 keeps Days 29–31 and runs after it.
+Phase 6 kept Days 29–31 to run after it, and was cut (*Phase 7 outcome*).
 
 ---
 
@@ -262,6 +285,9 @@ data/                   unchanged
 
 Each service: own `Dockerfile`, own `pom.xml`, own Flyway migrations, own database,
 own CI workflow (the repo already has per-area workflows — copy that pattern).
+
+As built: everything above except `functions/` and the uploads bucket (Phase 6, cut). Each
+service has one `pom.xml` and one `src/` since Day 43, when identity-service lost its modules.
 
 ---
 
@@ -335,7 +361,8 @@ foreign key that deletes saved jobs with their user still exists; then the table
   its user by up to 15 minutes.
 - **Done when:** deleting a user clears every store that holds user data, and
   `AccountDeletionIT` stays green through every day of the phase.
-- **Day 28 (identity-service) is the stopping point.** Evaluate before Phase 6.
+- **Day 28 (identity-service) is the stopping point.** Evaluate before Phase 6 (done: *Course
+  correction after Phase 5*).
 
 ### Phase 6 — Functions + uploads bucket
 **Cut** after Phase 7 (*Phase 7 outcome*): it adds only features, and nothing deploys again.
@@ -413,18 +440,19 @@ did on Day 16.
 
 Measured so far: 1.5× the estimated track PRs in each of Phases 0–2. From the platform step on,
 the README's Day entries record two estimates, the provisional spec's and the rewritten one's
-(Day 20: 3 and 5; took 5). At the end of Phase 7: 1.36× over 38 days (*Phase 7 outcome*).
+(Day 20: 3 and 5; took 5). At the end of Phase 7: 1.36× over 38 days (*Phase 7 outcome*); at
+the end, after the close-out day: 1.35× over 39 days (*Epilogue*).
 
 ---
 
 ## Day-by-day specs
 
-All seven phases, the platform step and the cleanup day are broken into 41 day specs in
-[`specs/`](specs/). Read [`specs/README.md`](specs/README.md) for the workflow.
+All seven phases, the platform step, the cleanup day and the close-out day are broken into 42
+day specs in [`specs/`](specs/). Read [`specs/README.md`](specs/README.md) for the workflow.
 
-Days 1-28, 32-36 and 38-42 (Phases 0-5 and 7, the platform step and the cleanup day) are done.
-Days 29-31 (Phase 6) are cut: Azure drafts written before the course corrections, never
-rewritten. The close-out day is the last. Days keep their numbers, so history and links hold;
+Days 1-28, 32-36 and 38-43 (Phases 0-5 and 7, the platform step, the cleanup day and the
+close-out day) are done. Days 29-31 (Phase 6) are cut: Azure drafts written before the course
+corrections, never rewritten. The close-out day, Day 43, is the last. Days keep their numbers, so history and links hold;
 they ran in this order, and the dashboard follows it:
 
 1. The record fix and the platform step (new day specs, numbered from 38).
@@ -436,5 +464,6 @@ they ran in this order, and the dashboard follows it:
 6. Phase 7 for ECS on Fargate, in this order: Days 32, 33 (the code before ECS),
    36 (the services on ECS), 34, 35; done.
 7. Phase 6 (Days 29–31): **cut** after Phase 7 (*Phase 7 outcome*).
-8. The close-out day, numbered after the last: the end-of-Phase-7 audits' findings
-   (`docs/audit-findings.md`). Then the plan-auditor reads the whole plan, and the migration ends.
+8. The close-out day, Day 43: the end-of-Phase-7 audits' findings
+   (`docs/audit-findings.md`); done. Then the plan-auditor read the whole plan, and the
+   migration ended (*Epilogue*).
