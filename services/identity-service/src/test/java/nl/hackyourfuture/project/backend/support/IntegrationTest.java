@@ -1,6 +1,6 @@
 package nl.hackyourfuture.project.backend.support;
 
-import nl.hackyourfuture.project.backend.BackendApplication;
+import nl.hackyourfuture.project.identityservice.IdentityServiceApplication;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -33,7 +33,7 @@ import java.util.Map;
  * never to an application bean. These tests are the safety net for the split, so they have to
  * keep passing when the beans behind an endpoint move into another service.
  */
-@SpringBootTest(classes = BackendApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = IdentityServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 public abstract class IntegrationTest {
 

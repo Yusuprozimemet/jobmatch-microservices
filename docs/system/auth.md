@@ -421,7 +421,7 @@ asks identity instead: the deleted-user rule, in section 5.
 
 All of it reads an environment variable with a local-development fallback; see
 [`application.yaml`](../../services/identity-service/src/main/resources/application.yaml) and
-[`.env.example`](../../services/identity-service/.env.example).
+[configuration](configuration.md#3-backend).
 
 | Variable | Default | What it does |
 | --- | --- | --- |
@@ -446,7 +446,7 @@ All of it reads an environment variable with a local-development fallback; see
    `http://localhost:3000/api/login/oauth2/code/google` locally,
    `https://c55c.hyf.dev/api/login/oauth2/code/google` in production. Add both if one client serves
    both.
-3. Put the id and secret in `services/identity-service/.env`; `docker-compose.yml` passes both through to the
+3. Put the id and secret in the root `.env`; `docker-compose.yml` passes both through to the
    container.
 4. Restart and check the startup log for `Google sign-in enabled at ...`, which prints the redirect
    URI the app will actually use.

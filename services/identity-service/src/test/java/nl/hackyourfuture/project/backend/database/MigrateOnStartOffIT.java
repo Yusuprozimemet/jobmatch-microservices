@@ -1,6 +1,6 @@
 package nl.hackyourfuture.project.backend.database;
 
-import nl.hackyourfuture.project.backend.BackendApplication;
+import nl.hackyourfuture.project.identityservice.IdentityServiceApplication;
 import nl.hackyourfuture.project.backend.support.ApiClient;
 import nl.hackyourfuture.project.backend.support.IntegrationTest;
 import nl.hackyourfuture.project.backend.support.PostgresContainer;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Not an IntegrationTest: its database properties would win over this class's, and the
  * context would start on identity_db, migrated already, where nothing here could fail.
  */
-@SpringBootTest(classes = BackendApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = IdentityServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class MigrateOnStartOffIT {
 
