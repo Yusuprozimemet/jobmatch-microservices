@@ -34,6 +34,27 @@ Each step has a **Check**. Do the check before the next step. If a check fails, 
 found on the way gets its own PR, `day-35/fix-<slug>`, titled `Day 35 fix: <what was wrong>`. Merge
 it, then run the step again.
 
+## Outside the repository
+
+The deployment needs these, and the repository holds none of them. Nothing in git restores them:
+whoever deploys again sets each one by hand.
+
+| Setting | Where | Set in | State after Day 35 |
+|---|---|---|---|
+| `DEPLOY_ENABLED` | GitHub repository variable | step 6 (`true`), step 14 (`false`) | `false`: the workflows push to GHCR and deploy nothing |
+| `AWS_DEPLOY_ROLE_ARN` | GitHub repository variable | step 4 | set; names a role the destroy removed |
+| Branch protection on `main` | GitHub repository settings | by hand | pull requests only, admins included; the required checks are "Diff stays reviewable", "Description uses the template" and the five service gates |
+| The redirect URI `https://<load balancer>/api/login/oauth2/code/google` | Google OAuth client, Google Cloud console | step 4 | removed (M-8) |
+| The state bucket and the budget (20 USD, `jobmatch-monthly-budget`) | AWS, made by `infra/terraform/bootstrap` | steps 2 and 3 | kept; the maintainer removes them |
+| The bootstrap's state, `infra/terraform/bootstrap/terraform.tfstate` | the deployer's machine (gitignored) | step 2 | kept with the bootstrap |
+| `infra/terraform/deploy.tfvars` (`alert_email`) | the deployer's machine (gitignored) | step 1 | not needed until the next deployment |
+| The alarm topic's email subscription | the alert address's mailbox, confirmed by hand | step 5 | gone with the topic |
+| The local secrets folder, `$HOME/jobmatch-secrets` | the deployer's machine, outside the repository | step 7 | deleted (M-7) |
+| AWS credentials, the alert address, the Google client and the LLM key | the maintainer | Before you start | the maintainer's |
+
+Which of these the maintainer has removed since is in
+[`docs/audit-findings.md`](../audit-findings.md) (its M rows).
+
 ## 1. Preflight
 
 ```bash
