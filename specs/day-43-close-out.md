@@ -413,8 +413,9 @@ git grep -n -E "identity-service/(app|identity|shared|docs|README)|-pl app" -- .
   read (F3).
 - **Defect** — found: the close · cause: tooling · once part 1 of the close (#428) merged, the
   dashboard's next step read "Every day is done." with C43.1–C43.26 unticked: spec-drift takes a
-  merged `day-NN/close-the-day` branch as the close, and this one was split. Not fixed; #429,
-  the second part, ends the day.
+  merged `day-NN/close-the-day` branch as the close, and this one was split. #429, the second
+  part, ended the day. Fixed after the day (KAN-172): a close titled "part N" ends a day only once
+  every box is ticked.
 - **CI failures that were not the code:** a GitHub incident (HTTP 502/504 on `gh pr list`, #414's
   dashboard run), public ECR's anonymous pull limit (#416) and Maven Central 502s (#418, #420).
   The maintainer reran each; the agent's token cannot rerun Actions. Locally, `npm run lint`

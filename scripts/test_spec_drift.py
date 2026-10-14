@@ -684,9 +684,10 @@ class OwnerAndCaveatTest(unittest.TestCase):
         self.assertTrue(any("test" in c and "tooling" in c and "0.433" in c for c in sd.CAVEATS))
 
 
-def a_day(n, ticked=1, total=1, kinds=()):
+def a_day(n, ticked=1, total=1, kinds=(), titles=()):
     return dict(day=n, status="provisional", criteria=dict(ticked=ticked, total=total),
-                prs=[dict(kind=k) for k in kinds], tracks=["A"], tracks_merged=[], track_work={"A": "work"})
+                prs=[dict(kind=k, title=t) for k, t in zip(kinds, list(titles) + [""] * len(kinds))],
+                tracks=["A"], tracks_merged=[], track_work={"A": "work"})
 
 
 class RoadmapTest(unittest.TestCase):
@@ -773,6 +774,14 @@ Days keep their numbers; they run in this order:
     def test_a_finished_day_with_boxes_open_is_closed_not_done(self):
         days = sd.settle([a_day(1, ticked=0, total=7), a_day(2), a_day(3, kinds=["code"])], [1, 2, 3])
         self.assertEqual([d["status"] for d in days], ["closed", "done", "active"])
+
+    def test_a_split_close_ends_the_day_only_with_its_last_part(self):
+        part1 = a_day(43, ticked=1, total=27, kinds=["close"], titles=["Day 43 close, part 1: the ledger"])
+        self.assertEqual(sd.settle([part1], [43])[0]["status"], "active")  # #428: boxes still open
+        part2 = a_day(43, ticked=27, total=27, kinds=["close", "close"], titles=["Day 43 close, part 1", "Day 43 close, part 2"])
+        self.assertEqual(sd.settle([part2], [43])[0]["status"], "done")
+        whole = a_day(5, ticked=5, total=7, kinds=["close"], titles=["Day 05: tick the boxes"])
+        self.assertEqual(sd.settle([whole], [5])[0]["status"], "closed")  # one close, boxes left open
 
     def test_the_next_step_is_the_platform_then_the_stop(self):
         days = sd.settle([a_day(16, kinds=["close"]), a_day(17)], [16, sd.PLATFORM, 17])
