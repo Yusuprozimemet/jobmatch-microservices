@@ -70,6 +70,9 @@ web_modules/
 .env.*
 !.env.example
 
+# The token signing key scripts/jwt-key.sh writes for identity-service run outside compose (Day 12)
+.jwt/
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

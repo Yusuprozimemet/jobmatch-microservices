@@ -13,7 +13,7 @@ past that one is a list of overrides rather than an edited file.
 
 ## Table of contents
 
-- [1. Four env files, and who reads them](#1-four-env-files-and-who-reads-them)
+- [1. Three env files, and who reads them](#1-three-env-files-and-who-reads-them)
 - [2. The local stack](#2-the-local-stack)
 - [3. Backend](#3-backend)
 - [4. Frontend](#4-frontend)
@@ -25,24 +25,24 @@ past that one is a list of overrides rather than an edited file.
 
 ---
 
-# 1. Four env files, and who reads them
+# 1. Three env files, and who reads them
 
 | File | Read by | Committed? |
 | --- | --- | --- |
 | [`.env`](../../.env.example) | `docker-compose.yml`, for `${...}` substitution — the Postgres container's credentials, and Google's if you put them there | No. `.env.example` is |
-| [`services/identity-service/.env`](../../services/identity-service/.env.example) | Loaded by hand for `../../mvnw spring-boot:run` ([running it by hand](#running-it-by-hand)). **Not** read by compose: the `identity-service` service has no `env_file` | No |
 | [`frontend/.env.local`](../../frontend/.env.example) | Next, in local development | No |
 | [`data/.env`](../../data/.env.example) | The pipeline scripts and `astro dev start` | No |
 
-**Spring Boot does not read `.env` by itself.** Running the backend outside Docker means loading it
-yourself — `set -a; source .env; set +a`, an IDE plugin, or `--env-file` — or setting the variables
-in the run configuration.
+**Spring Boot does not read `.env` by itself**, and identity-service has none of its own (Day 43):
+running it outside Docker means setting its variables yourself — in the shell, from a gitignored
+file you `source`, or in the IDE's run configuration ([running it by hand](#running-it-by-hand)).
+[Section 3](#3-backend) lists them, with the defaults that make most of them optional.
 
 Under compose, identity-service gets exactly what its `environment:` block names and nothing
 else. Since Day 28 that includes `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from the root
 `.env`, empty by default, so Google sign-in is off (its routes are 404) until you set them. It
 does not name the mail settings, so there are no reset emails — see
-[section 7](#7-what-degrades-without-which-key). Run the service by hand with its own `.env` for
+[section 7](#7-what-degrades-without-which-key). Run the service by hand with them set for
 those. The model's key is matching-service's alone since Day 21: compose passes `LLM_API_KEY` from
 the root `.env` to it and to nothing else, and without it matching ranks by skill overlap.
 
@@ -397,7 +397,7 @@ What must be set beyond the defaults, in one place:
 - [ ] The pipeline publishing to `analytics`, not `analytics_dev`
 
 Never in a `docker run` command: use `--env-file` with a gitignored file, or the host's secret
-manager. And never commit any of it — `.env` is gitignored in all four places, `.env.example` is what
+manager. And never commit any of it — `.env` is gitignored wherever it sits, `.env.example` is what
 belongs in the repository.
 
 ---
@@ -417,8 +417,8 @@ container, use `host.docker.internal`. Under compose, use the service name — `
 does not match what Google has registered, and the failure appears at Google rather than in your
 logs.
 
-**Compose never reads `services/identity-service/.env`.** Setting a variable there and wondering why the compose
-backend ignores it is the usual version of this: only the `environment:` block reaches it.
+**Compose gives identity-service only what its `environment:` block names.** A `.env` beside its
+code, or a variable exported in your shell that the block does not name, never reaches the container.
 
 **`data/.env` is optional to compose** (`required: false`) on purpose: without
 it, older Compose versions read every service's `env_file` while loading the project — even for an
