@@ -560,17 +560,29 @@ def out_of_order(order):
     return [d for d in days if d not in keep]
 
 
+# A closing PR the gate split, "Day 43 close, part 1": one part of the close, not all of it.
+CLOSE_PART = re.compile(r"\bpart \d+\b", re.I)
+
+
+def closes(day):
+    """Whether a day's own closing PR has merged. A part of a split close (#428) ends the day only
+    once every box is ticked: until the last part merges, its boxes are still open."""
+    c = day["criteria"]
+    return any(p["kind"] == "close" and not (CLOSE_PART.search(p.get("title", "")) and c["ticked"] < c["total"])
+               for p in day["prs"])
+
+
 def settle(days, order):
     """Each day's status. A day is finished once a day later in the run order has code merged, or
     its own closing PR has; finished with every box ticked is done, with boxes open is closed
-    (Day 01 never ticked its boxes; Day 05 left two open). The first unfinished day is active."""
+    (Day 05 left two open). The first unfinished day is active."""
     pos = {d: i for i, d in enumerate(order)}
     worked = max((pos[d["day"]] for d in days if d["day"] in pos
                   and any(p["kind"] in ("code", "close") for p in d["prs"])), default=-1)
     for d in days:
         at = pos.get(d["day"], len(order))
         c = d["criteria"]
-        if at < worked or (at == worked and any(p["kind"] == "close" for p in d["prs"])):
+        if at < worked or (at == worked and closes(d)):
             d["status"] = "done" if c["total"] and c["ticked"] == c["total"] else "closed"
         elif d["status"] == "done":
             d["status"] = "ready"
