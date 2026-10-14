@@ -176,7 +176,7 @@ straight to the published 8080 before the gateway is ready.
 
 # 3. Backend
 
-All of it in [`application.yaml`](../../services/identity-service/app/src/main/resources/application.yaml).
+All of it in [`application.yaml`](../../services/identity-service/src/main/resources/application.yaml).
 
 ## Database
 
@@ -426,8 +426,8 @@ inactive profile — and `docker compose up -d db` failed on a clean clone befor
 `data/.env`.
 
 **Two kinds of migration, two logins.** `DB_USER` migrates `app` (V1–V16, in
-`app/src/main/resources/db/migration`); each module's Flyway migrates its own schema as that module's
-login (`<module>/src/main/resources/db/<module>`, identity's in `app/src/main/resources/db/identity`, baselined at 0). A login that does not own the
+`src/main/resources/db/migration`); each module's Flyway migrates its own schema as that module's
+login (`<module>/src/main/resources/db/<module>`, identity's in `src/main/resources/db/identity`, baselined at 0). A login that does not own the
 schema its Flyway points at fails startup with `permission denied for schema`.
 
 **Restarting the backend signs no one out** since Day 13: the login is a token the browser holds,

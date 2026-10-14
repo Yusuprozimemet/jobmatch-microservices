@@ -16,8 +16,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "invariants.py")
 
 IDENTITY = "services/identity-service"
-TESTS = IDENTITY + "/app/src/test/java/nl/hackyourfuture/project/backend"
-MIGRATION = IDENTITY + "/app/src/main/resources/db/migration/V1__init.sql"
+TESTS = IDENTITY + "/src/test/java/nl/hackyourfuture/project/backend"
+MIGRATION = IDENTITY + "/src/main/resources/db/migration/V1__init.sql"
 CONTRACT = TESTS + "/contract/LoginContractTest.java"
 HARNESS = TESTS + "/support/TestHarnessTest.java"
 APP_TESTS = TESTS + "/BackendApplicationTests.java"
@@ -100,7 +100,7 @@ class InvariantsTest(unittest.TestCase):
         self.assertIn(f"modified: {APP_TESTS}", result.stdout)
 
     def test_a_new_migration_passes(self):
-        added = IDENTITY + "/app/src/main/resources/db/migration/V2__more.sql"
+        added = IDENTITY + "/src/main/resources/db/migration/V2__more.sql"
         write(self.repo, added, "CREATE TABLE jobs (id BIGINT PRIMARY KEY);\n")
         self.commit("add V2")
         result = self.run_script()
@@ -108,16 +108,17 @@ class InvariantsTest(unittest.TestCase):
         self.assertIn("OK", result.stdout)
 
     def test_a_pure_rename_of_the_whole_tree_passes(self):
-        # Moves the app/src tree one level up, contents identical: every file is R100.
-        os.rename(os.path.join(self.repo, IDENTITY, "app", "src"),
-                  os.path.join(self.repo, IDENTITY, "src"))
-        self.commit("move app/src up one level")
+        # Moves the src tree one level down, contents identical: every file is R100.
+        os.makedirs(os.path.join(self.repo, IDENTITY, "app"))
+        os.rename(os.path.join(self.repo, IDENTITY, "src"),
+                  os.path.join(self.repo, IDENTITY, "app", "src"))
+        self.commit("move src down one level")
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("OK", result.stdout)
 
     def test_a_rename_with_an_edit_fails_and_names_the_old_path(self):
-        moved = IDENTITY + "/app/src/main/resources/db/V1__init.sql"
+        moved = IDENTITY + "/src/main/resources/db/V1__init.sql"
         os.makedirs(os.path.dirname(os.path.join(self.repo, *moved.split("/"))), exist_ok=True)
         os.rename(os.path.join(self.repo, *MIGRATION.split("/")),
                   os.path.join(self.repo, *moved.split("/")))

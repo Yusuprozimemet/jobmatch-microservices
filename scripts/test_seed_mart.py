@@ -7,7 +7,7 @@ and the second must refuse and leave them. jobs_user, which reads the mart, coun
 It needs the image, named by SEED_IMAGE, and a Postgres that the container can reach:
 
     PW=$(python -c "import secrets; print(secrets.token_hex(16))")
-    docker build --build-context fixtures=services/identity-service/app/src/test/resources/fixtures \
+    docker build --build-context fixtures=services/identity-service/src/test/resources/fixtures \
       -t jobmatch-db-setup:ci -f scripts/db-setup.Dockerfile scripts
     docker network create seedtest
     docker run -d --name seedtest-pg --network seedtest -e POSTGRES_PASSWORD=$PW -p 55433:5432 postgres:18.4-alpine

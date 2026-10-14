@@ -35,7 +35,7 @@ class IdentityDbConnectTest {
 
     @Test
     void shellScriptHasExactlyOneGrantConnectLine() throws IOException {
-        String content = Files.readString(Path.of("../../../scripts/db-init/10-module-roles.sh"));
+        String content = Files.readString(Path.of("../../scripts/db-init/10-module-roles.sh"));
         long count = content.lines()
                 .filter(line -> line.contains("GRANT CONNECT ON DATABASE") && line.contains("identity_db"))
                 .count();
@@ -43,7 +43,7 @@ class IdentityDbConnectTest {
     }
 
     private List<String> rolesFromShellScript() throws IOException {
-        String content = Files.readString(Path.of("../../../scripts/db-init/10-module-roles.sh"));
+        String content = Files.readString(Path.of("../../scripts/db-init/10-module-roles.sh"));
         Pattern pattern = Pattern.compile(
                 "GRANT CONNECT ON DATABASE :\"identity_db\" TO ([^;]+);", Pattern.MULTILINE);
         Matcher matcher = pattern.matcher(content);
@@ -52,7 +52,7 @@ class IdentityDbConnectTest {
     }
 
     private List<String> rolesFromPythonScript() throws IOException {
-        String content = Files.readString(Path.of("../../../scripts/db-setup.py"));
+        String content = Files.readString(Path.of("../../scripts/db-setup.py"));
         Pattern pattern = Pattern.compile(
                 "IDENTITY_DB_ROLES = \\(([^)]*)\\)");
         Matcher matcher = pattern.matcher(content);

@@ -545,7 +545,7 @@ def bus_expected(repo_root: Path) -> tuple[str, set[str], int, str]:
     Returns (topic_name, set of queue names, max_receive_count, dlq_suffix).
     Raises ValueError if constants are missing.
     """
-    event_bus_path = repo_root / "services" / "identity-service" / "app" / "src" / "test" / \
+    event_bus_path = repo_root / "services" / "identity-service" / "src" / "test" / \
                      "java" / "nl" / "hackyourfuture" / "project" / "backend" / "support" / "EventBus.java"
 
     try:
@@ -2047,7 +2047,7 @@ def check_c35_4(plan: dict, repo_root: Path) -> list[str]:
     if not re.search(r"^COPY seed-mart\.py ", text, re.M):
         failures.append("C35.4 scripts/db-setup.Dockerfile: does not copy seed-mart.py")
 
-    fixtures = "services/identity-service/app/src/test/resources/fixtures"
+    fixtures = "services/identity-service/src/test/resources/fixtures"
     workflow_path = repo_root / ".github" / "workflows" / "db-setup-tests.yml"
     if not workflow_path.is_file():
         return failures + ["C35.4 .github/workflows/db-setup-tests.yml: missing"]
@@ -3016,7 +3016,7 @@ def check_c34_8(repo_root: Path) -> list[str]:
 
     for service in C34_JVM_SERVICES:
         if service == "identity-service":
-            rel = "services/identity-service/app/src/main/resources/application.yaml"
+            rel = "services/identity-service/src/main/resources/application.yaml"
         else:
             rel = f"services/{service}/src/main/resources/application.yaml"
         path = repo_root / rel

@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 require_cmd docker
 
-FIXTURES="$REPO_ROOT/services/identity-service/app/src/test/resources/fixtures"
+FIXTURES="$REPO_ROOT/services/identity-service/src/test/resources/fixtures"
 DB_USER="${POSTGRES_USER:-admin}"
 
 cd "$REPO_ROOT"

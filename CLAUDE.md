@@ -119,7 +119,7 @@ implementer never commits or pushes.
 
 ## Stop and ask, do not patch
 
-- A Day 1–4 test (`services/identity-service/app/src/test/.../contract/`, or the Day 01 harness
+- A Day 1–4 test (`services/identity-service/src/test/.../contract/`, or the Day 01 harness
   self-tests) needs an edit. That is the signal the spec's premise is wrong. Changes to `support/`
   are allowed.
 - A migration that has run needs an edit. Never edit V1–V16 or any applied migration; add a new one.
@@ -128,10 +128,10 @@ implementer never commits or pushes.
 ## Where things live
 
 - **Migrations:** in `services/identity-service/` (the monolith's remainder since Day 28),
-  `app/src/main/resources/db/migration` holds V1–V16, applied as the owner (`DB_USER`). Each
-  module's own migrations are in `<module>/src/main/resources/db/<module>` (identity's are in `app/src/main/resources/db/identity`), applied by that
+  `src/main/resources/db/migration` holds V1–V16, applied as the owner (`DB_USER`). Each
+  module's own migrations are in `<module>/src/main/resources/db/<module>` (identity's are in `src/main/resources/db/identity`), applied by that
   module's Flyway as its role, baselined at 0, so the first is `V1__*.sql`
-  (`app/.../config/Migrations.java`).
+  (`src/.../config/Migrations.java`).
 - **Database roles:** each module connects as `<module>_user` with its own schema as the search
   path; `jobs_user` only reads. The roles come from `scripts/db-setup.py` (production),
   `scripts/db-init/` (a fresh compose volume) and the test harness. A migration never creates a

@@ -21,8 +21,8 @@ on:
       - scripts/test_db_setup.py
       - scripts/seed-mart.py
       - scripts/test_seed_mart.py
-      - services/identity-service/app/src/test/resources/fixtures/analytics-schema.sql
-      - services/identity-service/app/src/test/resources/fixtures/analytics-seed.sql
+      - services/identity-service/src/test/resources/fixtures/analytics-schema.sql
+      - services/identity-service/src/test/resources/fixtures/analytics-seed.sql
       - .github/workflows/db-setup-tests.yml
   workflow_dispatch:
 
@@ -47,7 +47,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(scripts/(db-setup\.py|db-setup\.Dockerfile|test_db_setup\.py|seed-mart\.py|test_seed_mart\.py)$|services/identity-service/app/src/test/resources/fixtures/analytics-(schema|seed)\.sql$|\.github/workflows/db-setup-tests\.yml$)'
+          PATHS: '^(scripts/(db-setup\.py|db-setup\.Dockerfile|test_db_setup\.py|seed-mart\.py|test_seed_mart\.py)$|services/identity-service/src/test/resources/fixtures/analytics-(schema|seed)\.sql$|\.github/workflows/db-setup-tests\.yml$)'
         run: |
           if [ "${{ github.event_name }}" = pull_request ]; then
             files=$(git diff --name-only HEAD^1 HEAD)
@@ -92,7 +92,7 @@ jobs:
           POSTGRES_HOST: localhost
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ${{ format('dbsetup-{0}-{1}', github.run_id, github.run_attempt) }}
-      - run: docker build --build-context fixtures=services/identity-service/app/src/test/resources/fixtures -t jobmatch-db-setup:ci -f scripts/db-setup.Dockerfile scripts
+      - run: docker build --build-context fixtures=services/identity-service/src/test/resources/fixtures -t jobmatch-db-setup:ci -f scripts/db-setup.Dockerfile scripts
       - run: python -m pytest -q scripts/test_seed_mart.py
         env:
           POSTGRES_HOST: localhost

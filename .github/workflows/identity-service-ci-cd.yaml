@@ -139,7 +139,7 @@ jobs:
       - name: Run the suite through the gateway
         working-directory: ./services/identity-service
         run: >-
-          ../../mvnw -B verify -pl app -am -Dharness.gateway=true
+          ../../mvnw -B verify -Dharness.gateway=true
           -Dtest='nl.hackyourfuture.project.backend.contract.*IT,StaleCookieIT,RefreshIT,GatewayHarnessIT,ServiceRoutingIT,ObservabilityIT,JobServiceHarnessIT,JobServiceObservedIT,HungModelIT,TopMatchesTracedIT,GoogleLinkClaimIT,PendingGoogleLinksIT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
