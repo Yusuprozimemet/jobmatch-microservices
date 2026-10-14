@@ -433,11 +433,16 @@ and C2b before D1b; F1 then F2, after E (2026-10-11; F2's runbook names F1's var
       `DEPLOY_ENABLED` set to `false`; `teardown-check: nothing left`, exit 0; `aws acm
       list-certificates` → `[]`.
       broken: `teardown-check.sh` run while the deployment is up → `teardown-check: 18 kinds left`, exit 1
-- [ ] C35.22 **new** — Cost: Cost Explorer's daily cost for each day of the deployment, by service,
+- [x] C35.22 **new** — Cost: Cost Explorer's daily cost for each day of the deployment, by service,
       recorded against the per-hour estimate, and the first full day after the destroy shows no ECS,
       ELB, RDS, EC2 or VPC charge. Red today: no account.
-      Pending. Cost Explorer lags about 24 h; the first full day after the destroy is 2026-10-12, so
-      the check is completed after Cost Explorer shows that day, expected around 2026-10-13.
+      Partly met, one departure (the maintainer's). Read by the maintainer in Cost Explorer on
+      2026-10-14: the deployment cost 0.40 USD in all, against the per-hour estimate of about
+      0.26 USD (the dashboard's 0.227 plus Day 34's metrics), so well under the 20 USD budget. The
+      daily cost by service and the first full day after the destroy (2026-10-12) were not
+      recorded line by line: the maintainer read the total, and the agent does not use the AWS
+      account after the destroy (M-1).
+      broken: none → read by hand in the AWS console; nothing in the repository runs this check
 
 ## Verify
 ```bash
@@ -539,7 +544,8 @@ scripts/teardown-check.sh
   maintainer's three secrets in a test, and GitGuardian flagged one; the test now makes them per
   run, and the commit was amended.
 - **Departures (the maintainer's):** C35.19's healthy-hosts alarm and C35.20's bad-image rollback,
-  as their ticks say; nothing after Phase 7 deploys again, so both stay unverified.
+  as their ticks say; nothing after Phase 7 deploys again, so both stay unverified. C35.22's cost
+  was read as a total, 0.40 USD (2026-10-14, after Day 43 closed), not by day and service.
 - **Windows:** under Git Bash the AWS CLI needs `MSYS_NO_PATHCONV=1` (otherwise `run-once.sh`'s
   `--log-group-name /ecs/jobmatch/...` becomes a Windows path and `GetLogEvents` refuses it) and
   `PYTHONIOENCODING=utf-8` (otherwise printing a task's log fails on `charmap`). Not in the runbook.

@@ -39,8 +39,8 @@ defects: what this plan asked of Phases 0–5 and 7 is built, Phase 6 is cut, an
 deployment was made and destroyed.
 
 - **What is left is outside the repository or the maintainer's:** M-1, M-6 (the four gates
-  Day 43 added, `invariants` among them, as required checks), M-9 and M-12 in the ledger;
-  Day 35's cost read (C35.22), which M-1 and M-9 wait on; the Dependabot alerts on
+  Day 43 added, `invariants` among them, as required checks), M-9 and M-12 in the ledger
+  (Day 35's cost, C35.22, which M-1 and M-9 waited on, was 0.40 USD in all); the Dependabot alerts on
   `data/uv.lock`, which this plan never owned (`data/` is unchanged).
 - **Pace:** 268 track PRs against 198 estimated over 39 days (1.35×). Day 43 took 16 against 13, the
   gate splitting three of them.

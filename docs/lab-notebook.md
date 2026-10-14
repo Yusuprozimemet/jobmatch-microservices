@@ -840,7 +840,8 @@ destroyed the same day (2026-10-11).
   "unsafe" for more autonomy while the agent holds the maintainer's admin credentials. Review
   changed six of the thirteen implementer drafts.
 - *Estimated 13 pull requests; took 15,* the gate splitting C2a and D1a, plus two fix PRs from the
-  deployment. C35.22, the cost, waits for Cost Explorer's first full day after the destroy.
+  deployment. C35.22, the cost, waited for Cost Explorer: 0.40 USD in all, read by the maintainer on
+  2026-10-14 as a total, not by day and service.
 
 **The dashboard's measurement, corrected (outside the days).** Found by reproducing the page's
 numbers from `main` with the script's own functions; every figure below recomputes all of history.
