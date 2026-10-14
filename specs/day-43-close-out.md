@@ -265,10 +265,16 @@ where F2's grep sees it. F1, F2, F3 run in order, each moving what the one befor
 
 ### The closing PR
 
-- [ ] C43.27 **new** — In the ledger's five audit tables, every row whose Owner names `43-` cites
+- [x] C43.27 **new** — In the ledger's five audit tables, every row whose Owner names `43-` cites
       in *Closed by* the PR that closed it (`#NNN`), and every row with outcome c names its M row.
       Red today: 23 rows owned by 43 have an empty *Closed by*, 21 more hold a reason without a
       PR, and no c row names an M row.
+      Met (#428). A check reading the five tables (in the PR) gives 54 red rows on `origin/main`
+      at `cdcbc2a` (23 empty, 20 with a reason and no PR, 11 c rows with no M row; the spec's 21st
+      is P7-11, which already cited #406 for its notebook part) and 0 on the branch. The rows that
+      said "this PR" now name #407, the plan change that wrote them; the M rows done are dated.
+      broken: AR-8's `#412` removed → `AR-8: owned by 43, Closed by has no PR: ''` (#428)
+      broken: SO-7's `M-5` removed → `SO-7: outcome c, Closed by names no M row: ''` (#428)
 
 ## Verify
 ```bash
