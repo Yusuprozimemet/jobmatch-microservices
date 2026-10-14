@@ -10,21 +10,16 @@ WORKDIR /app
 # commit. That download is what kept tripping Maven Central's rate limit and turning the
 # build red on changes that never touched a dependency.
 #
-# Every module's pom, not just the parent's: `dependency:go-offline` resolves what the
-# reactor declares, and a parent listing modules that are not there fails outright. Listing
-# them one by one rather than with a wildcard is deliberate - a wildcard silently skips a
-# new module, and the first symptom would be the full download quietly coming back.
+# The parent's pom and app's, which is every pom the reactor declares: `dependency:go-offline`
+# resolves them all, and a parent listing a module whose pom is not copied fails outright.
 COPY pom.xml .
-COPY shared/pom.xml shared/
-COPY identity/pom.xml identity/
 COPY app/pom.xml app/
 RUN mvn -B -e dependency:go-offline
 
 # Sources last, because they change on every commit and invalidate whatever follows.
-# The whole tree rather than a list of module source directories: this copy is invalidated
-# by every commit anyway, so naming the modules buys nothing and costs a broken build the
-# first time one of them gains code. It already did - `COPY app/src` alone compiled locally,
-# where the full tree is present, and failed in the image the moment shared had sources.
+# The whole tree rather than `app/src` alone: this copy is invalidated by every commit
+# anyway, and a path the build reads outside app/src would compile locally, where the full
+# tree is present, and then fail in the image.
 COPY . .
 RUN mvn -B package -DskipTests
 
@@ -32,7 +27,7 @@ RUN mvn -B package -DskipTests
 FROM eclipse-temurin:25-jre
 USER 1000
 WORKDIR /app
-# Only `app` produces a Spring Boot jar; the rest are plain module jars inside it.
+# `app` is the only module, and the only one that produces a jar.
 COPY --from=build /app/app/target/*.jar app.jar
 EXPOSE 8080
 # The management port. Publish it only where a scraper can reach it - never to the internet.

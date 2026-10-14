@@ -5,7 +5,7 @@ only input `GET /api/jobs/top-matches` has, and every design decision in it — 
 `text[]`, why there is a five-skill floor, why the stored spelling is kept — is a decision about
 matching.
 
-Code: [`profile/`](../../services/identity-service/identity/src/main/java/nl/hackyourfuture/project/backend/identity/profile), in
+Code: [`profile/`](../../services/identity-service/app/src/main/java/nl/hackyourfuture/project/backend/identity/profile), in
 the monolith, and [`matching/`](../../services/matching-service/src/main/java/nl/hackyourfuture/project/backend/matching), in matching-service since Day 21, which asks identity for
 the profile and job-service for the shortlist over HTTP. Request and response shapes are in
 [`api.md`](api.md).
