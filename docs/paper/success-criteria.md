@@ -79,3 +79,36 @@ make the migration fail; it is reported as a miss.
 The tokens spent per day and per model (`docs/dashboard/token-usage.json`), the context read per
 reply, calendar days per spec day, and the hand-offs from earlier days that were dropped. These
 are described, not judged.
+
+## Amendment, 2026-10-16: scope, and the taxonomy as practised
+
+Drafted 2026-10-15 and applied 2026-10-16, after the end point and after Days 21–28 were scored.
+It changes no threshold, so it cannot change a verdict. It records how the paper treats two things
+the sections above did not foresee.
+
+**Scope.** Phase 6 (Days 29–31) was cut
+([#407](https://github.com/Yusuprozimemet/jobmatch-microservices/pull/407)). The cleanup day
+(Day 42), Phase 7 (Days 32–36) and the close-out day (Day 43) ran after the end point. They are
+reported as an extension, as "Where the study ends" says, but described rather than scored: every
+threshold above names Days 21–28, Phases 4 and 5, or the end point, and none says how it would
+apply to days after it.
+
+**Taxonomy.** The Notes of Days 21–28 used two causes and four `found:` values that
+"Classification" does not list. They are scored as follows.
+
+| `found:` in the Notes | Stage |
+|---|---|
+| `auditor`, `spec-change PR` | before any code |
+| `review`, `break on purpose`, `self`, the name of a track | before merge |
+| `close`, `dashboard`, a later day's review | escape |
+
+| `cause:` in the Notes | Scored as |
+|---|---|
+| `spec` | spec |
+| `implementation` | implementation |
+| `tooling` | environment |
+| `process` (the workflow and the record around the code) | neither; H2 counts it for neither side |
+
+**Thresholds unchanged.** Two readings the paper had to choose after the data are not part of this
+amendment: which track "after the track merged" refers to, and a reading of M3 and M4 under which
+they hold. The paper reports both as chosen after the data.
