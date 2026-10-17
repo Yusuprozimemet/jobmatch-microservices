@@ -35,6 +35,13 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
     or `broken: none → <why>` in a PR that broke nothing. The PR that ran the break carries it
     in its description; the closing PR copies it under the criterion it ticks. `spec-drift.py`
     reads no other wording as a break (from #310 on).
+  - A grep is broken both ways: once with the thing it looks for put back (it must find it),
+    once with a near miss it must not match (a longer name, a fully qualified form, a comment).
+    Two of the paper's escapes were greps that matched too much or too little (D22-017, D23-028).
+  - The closing PR copies breaks; it does not run the first one. A criterion whose only
+    `broken:` lines the close itself ran was a check no track had shown can fail: record it as a
+    `Defect` (`found: close`). Four of the paper's six spec escapes were these. After the merge,
+    the dashboard lists them under "Criteria first broken at the close".
 - **Tracks inside a day run in parallel. Days run in order.** Day N assumes N-1 is merged.
 - **Record every defect in the day's *Notes* when it is found**, from Day 21 on, one `Defect`
   line each, with three fields:

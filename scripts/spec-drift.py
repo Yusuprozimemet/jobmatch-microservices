@@ -266,6 +266,21 @@ def broke(text):
     return any(w.lower() != "none" for w in BREAK_LINE.findall(text or ""))
 
 
+def broke_in(text):
+    """The PRs the `broken:` lines in text cite, for the breaks they record (not `none`)."""
+    return sorted({int(n) for m in BREAK_LINE.finditer(text or "") if m.group(1).lower() != "none"
+                   for n in CITED_PR.findall(text[m.start():].split("\n", 1)[0])})
+
+
+def broken_at_close(day):
+    """A day's ticked criteria whose every break cites its closing PR: the check was first seen
+    red at the close, not in the PR that wrote it. Four of the paper's six spec escapes were these
+    (docs/paper, Appendix F). A criterion whose break lines cite no PR is not judged."""
+    closing = {p["number"] for p in day["prs"] if p["kind"] == "close"}
+    return [c["id"] or c["claim"] for c in day["evidence"]
+            if c["ticked"] and closing and c["broke_in"] and set(c["broke_in"]) <= closing]
+
+
 def break_state(body, number):
     """What a PR description says about breaking the code on purpose: "recorded", "none" (only
     `broken: none → <why>`), "silent", or "not measured" for a PR from before the line."""
@@ -663,7 +678,7 @@ def criteria(section_text):
                         ticked=block.startswith("- [x]"), kind=tag.group(1) if tag else None,
                         claim=claim, prs=sorted({int(n) for n in CITED_PR.findall(block)}),
                         tests=sorted({c + ("." + m if m else "") for c, m in EVIDENCE_TEST.findall(block)}),
-                        red=broke(block)))
+                        red=broke(block), broke_in=broke_in(block)))
     return out
 
 
@@ -775,6 +790,7 @@ def roadmap(snaps, prs, blobs):
                          evidence_format=in_evidence_format(ev),
                          break_format=any(p["number"] >= BREAK_LINE_FROM_PR for p in mine),
                          evidence=ev, removal_checks=removal_checks(text)))
+        days[-1]["broken_at_close"] = broken_at_close(days[-1])
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])
     return evidence(settle(days, order), snaps, blobs), order, stop
 
