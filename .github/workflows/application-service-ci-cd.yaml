@@ -13,6 +13,10 @@ on:
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
   workflow_dispatch:
+  # Nightly on main, so the suite runs even when no merge has touched its paths. Tests only: the
+  # build job, which pushes the image and deploys, is skipped on a schedule.
+  schedule:
+    - cron: "17 3 * * *"
 
 concurrency:
   group: docker-build-application-service-${{ github.ref }}
@@ -68,7 +72,7 @@ jobs:
 
   build:
     needs: [changes, lint-and-test]
-    if: needs.changes.outputs.run == 'true'
+    if: needs.changes.outputs.run == 'true' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read

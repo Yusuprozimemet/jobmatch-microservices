@@ -11,6 +11,10 @@ on:
       - "frontend/**"
       - ".github/workflows/frontend-ci-cd.yaml"
   workflow_dispatch:
+  # Nightly on main: npm ci and the linter, so a dependency that breaks shows without a merge. The
+  # build job, which pushes the image and deploys, is skipped on a schedule.
+  schedule:
+    - cron: "17 3 * * *"
 
 # Cancel previous runs on new pushes
 concurrency:
@@ -40,6 +44,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: lint
+    if: github.event_name != 'schedule'
     permissions:
       contents: read
       packages: write

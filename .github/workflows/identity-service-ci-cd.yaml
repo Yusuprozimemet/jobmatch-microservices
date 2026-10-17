@@ -29,6 +29,10 @@ on:
   # blocks the merge. The changes job decides whether the real jobs have anything to do.
   pull_request:
   workflow_dispatch:
+  # Nightly on main, so the suite runs even when no merge has touched its paths. Tests only: the
+  # build job, which pushes the image and deploys, is skipped on a schedule.
+  schedule:
+    - cron: "17 3 * * *"
 
 # Cancel previous runs on new pushes
 concurrency:
@@ -54,7 +58,7 @@ jobs:
           fetch-depth: 2
 
       # The same paths as the push trigger's filter, which has already decided on a push. A manual run
-      # deploys whatever is on main, so it always runs.
+      # deploys whatever is on main, so it always runs, and so does a nightly one.
       - name: Compare with the base
         id: diff
         env:
@@ -63,7 +67,7 @@ jobs:
           OWN: '^(services/identity-service/|\.github/workflows/identity-service-ci-cd\.yaml$)'
           PATHS: '^(checkstyle\.xml$|mvnw$|\.mvn/|services/(identity-service|api-gateway|job-service|matching-service|application-service)/|scripts/db-init/|scripts/db-setup\.py$|scripts/check-links\.py$|README\.md$|docs/system/|\.github/workflows/identity-service-ci-cd\.yaml$)'
         run: |
-          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+          if [ "${{ github.event_name }}" = workflow_dispatch ] || [ "${{ github.event_name }}" = schedule ]; then
             echo run=true >> "$GITHUB_OUTPUT"; echo own=true >> "$GITHUB_OUTPUT"; exit 0
           fi
           files=$(git diff --name-only HEAD^1 HEAD)
@@ -171,7 +175,7 @@ jobs:
   # those paths; a pull request always builds, and the suite above covers the rest.
   build:
     needs: [changes, lint-and-test]
-    if: needs.changes.outputs.run == 'true' && (github.event_name == 'pull_request' || needs.changes.outputs.own == 'true')
+    if: needs.changes.outputs.run == 'true' && (github.event_name == 'pull_request' || needs.changes.outputs.own == 'true') && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read

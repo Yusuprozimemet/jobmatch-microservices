@@ -40,6 +40,8 @@ on:
       - ".github/workflows/job-service-ci-cd.yaml"
       - ".github/workflows/matching-service-ci-cd.yaml"
       - ".github/workflows/infra-ci.yaml"
+  # By hand, on any branch or tag: runs every check; only a push writes the summary the dashboard reads.
+  workflow_dispatch:
 
 permissions:
   contents: read
