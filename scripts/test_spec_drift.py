@@ -342,6 +342,17 @@ class EvidenceTest(unittest.TestCase):
                      "Red again with the migration's revoke removed. broken: x → y"]:
             self.assertFalse(red(text), text)
 
+    def test_a_criterion_whose_every_break_cites_the_close_was_first_broken_at_the_close(self):
+        crit = sd.criteria("- [x] C28.1 **hold** — X.\n      broken: the guard removed → 1 of 3 (#40)\n"
+                           "- [x] C28.2 **new** — Y.\n      broken: a → b (#40)\n      broken: c → d (#38)\n"
+                           "- [x] C28.3 **new** — Z.\n      broken: a → b, as #38 showed\n"
+                           "- [x] C28.4 **new** — W. #40\n      broken: none → the grep is the check\n")
+        self.assertEqual([c["broke_in"] for c in crit], [[40], [38, 40], [38], []])
+        day = dict(prs=[dict(number=38, kind="code"), dict(number=40, kind="close")], evidence=crit)
+        # C28.2 was also broken in its track; C28.3 in a track; C28.4 records no break to judge.
+        self.assertEqual(sd.broken_at_close(day), ["C28.1"])
+        self.assertEqual(sd.broken_at_close(dict(day, prs=day["prs"][:1])), [])
+
     def test_a_spec_with_no_criterion_tagged_predates_the_evidence_format(self):
         self.assertFalse(sd.in_evidence_format(sd.criteria("- [x] Login returns 200.\n- [x] Logout clears it.\n")))
         self.assertTrue(sd.in_evidence_format(sd.criteria("- [x] Login returns 200.\n- [x] **hold** — X.\n")))

@@ -667,6 +667,10 @@ function drawEvidence() {
     .map(([t, s]) => `<li>Day ${dd(d.day)}: <code>${esc(t)}</code> ${s === "retired" ? "is retired: a later day's spec names it and its PR removed it" : `is ${s}`} · ${md(c.claim)}</li>`)));
   document.getElementById("evidence-gaps").innerHTML = `<h3>Named tests not running on main</h3>` +
     (gaps.length ? `<ul>${gaps.join("")}</ul>` : `<p>None: every test a finished day names is on <code>main</code>, and none can be skipped.</p>`);
+  // A check first seen red in the closing PR waited a whole day to be shown it can fail.
+  const late = days.flatMap(d => (d.broken_at_close || []).map(id => `<li>Day ${dd(d.day)}: ${md(id)}</li>`));
+  document.getElementById("evidence-gaps").innerHTML += `<h3>Criteria first broken at the close</h3>` +
+    (late.length ? `<ul>${late.join("")}</ul>` : `<p>None: every ticked criterion whose break cites a PR was broken before its day's closing PR.</p>`);
   // A check's state at one merge: found lines, read no files (so its nothing proves nothing), or clean.
   // Since is the merge where the state on main began; problems sort first.
   const REMOVAL = { found: [0, "var(--code)"], empty: [1, "var(--muted)"], clean: [2, "var(--close)"] };
