@@ -1,6 +1,6 @@
 name: PR checks
 
-# Three gates on every pull request:
+# Four gates on every pull request:
 #
 # 1. The description uses the template. GitHub only auto-fills the template in
 #    the web "compose" form and in `gh pr create` with no --body. A pull request
@@ -17,6 +17,10 @@ name: PR checks
 #    has run is never changed, and the Day 1-4 suite is what shows the monolith
 #    still behaves after a split. Additions and pure renames pass, so a move stays
 #    possible; an edit or a delete fails and names the file (scripts/invariants.py).
+#
+# 4. Every service is wired: built in compose with a healthcheck that allows its start, and
+#    scraped by Prometheus on its management port (scripts/service-wiring.py). Each extraction
+#    day repeated this by hand, and two dropped the scrape job.
 #
 # Recovery is automatic for the first two: editing the description fires the `edited`
 # event and re-runs these checks. No new commit needed.
@@ -132,3 +136,15 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/invariants.py "$BASE_SHA" "$HEAD_SHA"
+
+  service-wiring:
+    name: Every service is wired into compose and Prometheus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - run: python scripts/test_service_wiring.py
+      - run: python scripts/service-wiring.py
