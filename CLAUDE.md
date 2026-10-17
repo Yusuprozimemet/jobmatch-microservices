@@ -34,7 +34,11 @@ maintainer, and nothing starts after a phase ends until they say so.
 3. **A closing PR:** `day-NN/close-the-day`. Tick each criterion with its evidence (test or
    command, and the PR it landed in), add Notes to the spec, and update the Day entry and measurement
    table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings). Run `python scripts/token-usage.py` and commit the refreshed
-   `docs/dashboard/token-usage.json`: CI cannot read the transcripts it counts.
+   `docs/dashboard/token-usage.json`: CI cannot read the transcripts it counts. Then relabel the
+   day's defects blind: `python scripts/relabel.py blind specs/day-NN-*.md --out <dir>`, give
+   `<dir>/blind.md` to the **defect-rater** agent, save its JSON as `<dir>/labels.json`, run
+   `python scripts/relabel.py compare <dir>`, and put its lines in the PR with a decision on each
+   disagreement: the tag kept, and why, or changed in the Notes.
 4. **After opening any PR, stop and wait for the maintainer to say "merged".** Do not start the
    next step, and do not start a new phase, until told.
 5. **After every "merged", refresh the dashboard before the next step:** the merge rebuilds the
@@ -76,6 +80,7 @@ own specs: in this repository that session has read past its own errors more tha
 | a phase's last day has closed | plan-auditor | What did the phase change that the next one must know? |
 | a stopping point `plan.md` names, before going on | plan-auditor, on the whole plan | Is `plan.md` still the right plan, and what has piled up that no day owns? |
 | the end of Phase 7, before `terraform destroy` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
+| every close, after the Notes are written | defect-rater, on `relabel.py`'s blind file | Does a reader who did not write the day tag its defects the same way? |
 | any time, by hand | either | "use the plan-auditor on Phase 3" |
 
 Both check hand-offs: what earlier days' Notes and test comments defer to a later day. Nothing
