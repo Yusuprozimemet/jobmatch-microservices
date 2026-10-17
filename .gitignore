@@ -248,3 +248,6 @@ tfplan
 *.tfplan
 ci_override.tf
 infra/terraform/deploy.tfvars
+
+# scripts/break.py: present only while a break on purpose is in.
+.break-active

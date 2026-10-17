@@ -34,7 +34,8 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
   - The record is one line of its own: `broken: <what was broken> → <what the check reported>`,
     or `broken: none → <why>` in a PR that broke nothing. The PR that ran the break carries it
     in its description; the closing PR copies it under the criterion it ticks. `spec-drift.py`
-    reads no other wording as a break (from #310 on).
+    reads no other wording as a break (from #310 on). `scripts/break.py` runs one break and
+    prints the line.
   - A grep is broken both ways: once with the thing it looks for put back (it must find it),
     once with a near miss it must not match (a longer name, a fully qualified form, a comment).
     Two of the paper's escapes were greps that matched too much or too little (D22-017, D23-028).
