@@ -132,7 +132,8 @@ implementer never commits or pushes.
 ## Stop and ask, do not patch
 
 - A Day 1–4 test (`services/identity-service/src/test/.../contract/`, or the Day 01 harness
-  self-tests) needs an edit. That is the signal the spec's premise is wrong. Changes to `support/`
+  self-tests) needs an edit, its timing included: a new or longer wait, poll bound or timeout
+  (`specs/README.md`). That is the signal the spec's premise is wrong. Changes to `support/`
   are allowed.
 - A migration that has run needs an edit. Never edit V1–V16 or any applied migration; add a new one.
 - A criterion cannot be met as written. Record the departure; do not deviate silently.
