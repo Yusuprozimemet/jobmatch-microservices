@@ -37,11 +37,23 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
     reads no other wording as a break (from #310 on).
 - **Tracks inside a day run in parallel. Days run in order.** Day N assumes N-1 is merged.
 - **Record every defect in the day's *Notes* when it is found**, from Day 21 on, one `Defect`
-  line each: where it was found and its cause, exactly one of `spec` (wrong, missing a case, or
-  not meetable as written), `implementation` (the spec was right, the code did not do it) or
-  `environment` (tooling, CI, the machine, a library). A track whose code the main session
+  line each, with three fields:
+  - `found:` where, exactly one of `auditor`, `spec-change PR` (before any code); `review`,
+    `break on purpose`, `self`, `Track <X>` (before merge); `close`, `dashboard`,
+    `Day <NN> review` (after the track merged: an escape).
+  - `cause:` exactly one of `spec` (wrong, missing a case, or not meetable as written),
+    `implementation` (the spec was right, the code did not do it), `process` (the workflow and
+    the record around the code: branch names, Jira keys, a break run wrong, a track announced
+    and never opened) or `environment` (tooling, CI, the machine, a library).
+  - `made:` the day whose merged work holds the defect (`Day 21`, or `none` for work outside any
+    day). When it is not this day, the defect is an escape from that day, whatever `found:` says.
+
+  One line per problem: the same kind of problem in two PRs is two lines, and a review of seven
+  drafts is as many lines as it finds problems. The paper had to decide all three of these after
+  the data (its §5.3); deciding them on the day is cheaper. A track whose code the main session
   rewrote beyond review fixes gets a `Rewrite` line. These are the counts
-  [`docs/paper/success-criteria.md`](../docs/paper/success-criteria.md) judges H1–H3 by.
+  [`docs/paper/success-criteria.md`](../docs/paper/success-criteria.md) judges H1–H3 by; its
+  amendment maps `process` and the `found:` values above.
 - **IDs, from Day 28's spec change on.** Each criterion starts with its ID, `C28.3` for Day
   28's third, and keeps it when others are added or dropped. Each item a day leaves for later is
   a `Hand-off` line in its Notes with an ID, `H28.1`, and the day or the maintainer it goes to.
