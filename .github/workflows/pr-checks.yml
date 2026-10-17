@@ -1,6 +1,6 @@
 name: PR checks
 
-# Four gates on every pull request:
+# Five gates on every pull request:
 #
 # 1. The description uses the template. GitHub only auto-fills the template in
 #    the web "compose" form and in `gh pr create` with no --body. A pull request
@@ -22,7 +22,12 @@ name: PR checks
 #    scraped by Prometheus on its management port (scripts/service-wiring.py). Each extraction
 #    day repeated this by hand, and two dropped the scrape job.
 #
-# Recovery is automatic for the first two: editing the description fires the `edited`
+# 5. The branch, the title, the commits and the Jira keys agree (scripts/pr-names.py). The dashboard
+#    reads a day's progress from branch names and Jira from the keys; three PRs that disagreed
+#    showed a wrong state after they merged (a `track-b` branch for track B1, KAN-5 against KAN-6,
+#    a `claude/...` branch).
+#
+# Recovery is automatic for the first two and the fifth's title and description: editing the description fires the `edited`
 # event and re-runs these checks. No new commit needed.
 
 on:
@@ -148,3 +153,23 @@ jobs:
       - run: pip install pyyaml
       - run: python scripts/test_service_wiring.py
       - run: python scripts/service-wiring.py
+
+  names:
+    name: Branch, title, commits and Jira keys agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/test_pr_names.py
+      - name: Compare the names
+        env:
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python scripts/pr-names.py "$BASE_SHA" "$HEAD_SHA"
