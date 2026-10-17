@@ -43,6 +43,18 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
     `broken:` lines the close itself ran was a check no track had shown can fail: record it as a
     `Defect` (`found: close`). Four of the paper's six spec escapes were these. After the merge,
     the dashboard lists them under "Criteria first broken at the close".
+- **A contract test's timing is part of what it expects.** A `contract/` test is frozen in its
+  expected values and in when it expects them. One that asserted an effect at once and now waits
+  for it, or waits longer than it did, expects something else, even with every value unedited.
+  Day 25 did this to `AccountDeletionIT`: the saved jobs came to go by the `user.deleted` event,
+  the test came to poll apps_db for 10 s, and deletion became eventually consistent through the
+  public API, a `savedCount` that counts a deleted user's saves for a few seconds. The edit was
+  approved, but read as values only, and no test asserted that count until #441 (paper, §4.1).
+  So a new or longer wait, poll bound or timeout in a contract test is a departure: the
+  spec-change PR names it before the work, with the bound and what the API shows until it
+  passes; the maintainer approves it; and a test outside `contract/` pins that public effect
+  within the bound, as `SavedCountAfterDeletionIT` does. A wait raised to quiet a flaky test is
+  the same change.
 - **Tracks inside a day run in parallel. Days run in order.** Day N assumes N-1 is merged.
 - **Record every defect in the day's *Notes* when it is found**, from Day 21 on, one `Defect`
   line each, with three fields:
