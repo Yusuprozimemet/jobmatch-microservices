@@ -62,6 +62,13 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
   rewrote beyond review fixes gets a `Rewrite` line. These are the counts
   [`docs/paper/success-criteria.md`](../docs/paper/success-criteria.md) judges H1–H3 by; its
   amendment maps `process` and the `found:` values above.
+
+  At the close, a reader who wrote none of it labels them again, blind
+  ([`scripts/relabel.py`](../scripts/relabel.py), the `defect-rater` agent): the tagger has also
+  written the work, and on Days 21–28 a blind rater disagreed with 11 of 82 causes and 16 stages,
+  mostly defects made on one day and found on another. The closing PR lists each disagreement
+  and decides it: the tag kept, with the reason, or changed in the Notes. A tag is never changed
+  without a line in the PR.
 - **IDs, from Day 28's spec change on.** Each criterion starts with its ID, `C28.3` for Day
   28's third, and keeps it when others are added or dropped. Each item a day leaves for later is
   a `Hand-off` line in its Notes with an ID, `H28.1`, and the day or the maintainer it goes to.
